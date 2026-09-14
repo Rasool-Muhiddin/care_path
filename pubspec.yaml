@@ -1,0 +1,33 @@
+name: care_path
+description: تطبيق يربط المريض والطبيب والمهندس حول الأجهزة العلاجية
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # إدارة الحالة
+  flutter_riverpod: ^2.5.1
+
+  # التوجيه (Router) مع دعم redirect حسب الدور
+  go_router: ^14.2.0
+
+  # التواصل مع الـ API
+  dio: ^5.5.0
+
+  # تخزين آمن للتوكنات — يدعم Android/iOS/macOS/Windows/Linux
+  flutter_secure_storage: ^9.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

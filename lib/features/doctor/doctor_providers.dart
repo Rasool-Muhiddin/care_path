@@ -22,9 +22,15 @@ final patientsListProvider = FutureProvider.autoDispose<List<PatientModel>>((ref
   return ref.read(doctorRepositoryProvider).fetchPatients();
 });
 
-/// قائمة الأجهزة — تُستخدم بشاشة إنشاء حالة جديدة
-final devicesListProvider = FutureProvider.autoDispose<List<DeviceModel>>((ref) async {
-  return ref.read(doctorRepositoryProvider).fetchDevices();
+/// قائمة الأجهزة المتاحة — تُستخدم بشاشة إنشاء/تعديل حالة.
+/// مرّر null عند إنشاء حالة جديدة، أو caseId الحالي عند تعديل حالة
+/// موجودة (حتى يبقى جهازها الحالي ضمن القائمة رغم أنه "مرتبط" بها).
+final devicesListProvider =
+    FutureProvider.autoDispose.family<List<DeviceModel>, int?>((ref, excludeCaseId) async {
+  return ref.read(doctorRepositoryProvider).fetchDevices(
+        availableOnly: true,
+        excludeCaseId: excludeCaseId,
+      );
 });
 
 /// جلسات حالة معيّنة — لعرض تاريخ الجلسات بشاشة تفاصيل الحالة

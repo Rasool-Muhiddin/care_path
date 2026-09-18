@@ -120,7 +120,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
   @override
   Widget build(BuildContext context) {
     final patientsAsync = ref.watch(patientsListProvider);
-    final devicesAsync = ref.watch(devicesListProvider);
+    final devicesAsync = ref.watch(devicesListProvider(null));
     final authState = ref.watch(authStateProvider);
     final doctorDisplayName =
         authState is AuthAuthenticated ? authState.user.username : '';

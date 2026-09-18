@@ -38,11 +38,22 @@ class DoctorRepository {
     }
   }
 
-  /// كل الأجهزة — لاختيار الجهاز عند إنشاء حالة جديدة
-  /// (device_type_setup_schema يحدد شكل نافذة الإعدادات لكل جهاز)
-  Future<List<DeviceModel>> fetchDevices() async {
+  /// الأجهزة لاختيار الجهاز عند إنشاء/تعديل حالة.
+  /// [availableOnly]: إذا true يستثني أي جهاز مرتبط فعلياً بأي حالة أخرى
+  /// (جهاز واحد لكل مريض). [excludeCaseId]: عند تعديل حالة موجودة، يبقي
+  /// جهاز تلك الحالة نفسها ضمن القائمة رغم كونه "مرتبطاً" بها.
+  Future<List<DeviceModel>> fetchDevices({
+    bool availableOnly = false,
+    int? excludeCaseId,
+  }) async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.devices);
+      final response = await _client.raw.get(
+        ApiEndpoints.devices,
+        queryParameters: {
+          if (availableOnly) 'available': 'true',
+          if (excludeCaseId != null) 'exclude_case': excludeCaseId,
+        },
+      );
       return _extractList(response.data, DeviceModel.fromJson);
     } on DioException catch (e) {
       throw _client.mapError(e);

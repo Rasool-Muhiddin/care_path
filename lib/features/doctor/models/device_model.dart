@@ -11,6 +11,7 @@ class DeviceModel {
   final Map<String, dynamic> deviceTypeSetupSchema;
   final String? clinicName;
   final String status;
+  final bool isAvailable;
 
   const DeviceModel({
     required this.id,
@@ -21,6 +22,7 @@ class DeviceModel {
     required this.deviceTypeSetupSchema,
     this.clinicName,
     required this.status,
+    required this.isAvailable,
   });
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,9 @@ class DeviceModel {
           (json['device_type_setup_schema'] as Map<String, dynamic>?) ?? const {},
       clinicName: json['clinic_name'] as String?,
       status: json['status'] as String,
+      // الـ backend يرجع is_available دائماً، لكن نتعامل بأمان مع القيمة
+      // المفقودة (مثلاً استجابات قديمة مخزّنة) باعتبار الجهاز متاحاً
+      isAvailable: json['is_available'] as bool? ?? true,
     );
   }
 }

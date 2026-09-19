@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Case
+from .models import Case, CaseProgressNote, CaseStatus
 
 
 class CaseSerializer(serializers.ModelSerializer):
@@ -64,13 +64,35 @@ class CaseSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        المريض لا يجب أن يستطيع تعديل حقول الحالة السريرية (status, doctor,
-        treatment_plan, initial_evaluation, device_setup_parameters,
-        weekly_episode_count, episode_duration_minutes,
-        current_medications, total_sessions_planned) حتى لو أرسلها ضمن
-        الطلب. هذا فحص إضافي على مستوى الـ Serializer فوق فحص الصلاحيات
-        في الـ View.
+        1. منع إنشاء أكثر من حالة (Case) نشطة واحدة لنفس المريض. المريض
+           يجب أن يرتبط بجهاز واحد فقط، والجهاز مرتبط بالمريض عبر
+           Case.device — فلو صار عنده حالتين نشطتين بجهازين مختلفين،
+           تُسجَّل جلساته أحياناً على هذا الجهاز وأحياناً على ذاك حسب أي
+           حالة يرجعها fetchMyCase() بالواجهة. هذا الفحص يمنع المشكلة من
+           جذرها بدل معالجة أعراضها بالواجهة.
+        2. المريض لا يجب أن يستطيع تعديل حقول الحالة السريرية (status,
+           doctor, treatment_plan, initial_evaluation,
+           device_setup_parameters, weekly_episode_count,
+           episode_duration_minutes, current_medications,
+           total_sessions_planned) حتى لو أرسلها ضمن الطلب. هذا فحص
+           إضافي على مستوى الـ Serializer فوق فحص الصلاحيات في الـ View.
         """
+        if self.instance is None:
+            # فحص فقط عند الإنشاء (POST)، وليس عند التعديل (PATCH/PUT)
+            patient = attrs.get("patient")
+            if patient is not None:
+                has_active_case = (
+                    Case.objects.filter(patient=patient)
+                    .exclude(status=CaseStatus.CLOSED)
+                    .exists()
+                )
+                if has_active_case:
+                    raise serializers.ValidationError(
+                        "هذا المريض لديه حالة نشطة بالفعل. أغلق حالته "
+                        "الحالية (status=closed) أولاً قبل إنشاء حالة "
+                        "جديدة له."
+                    )
+
         request = self.context.get("request")
         if request and request.user.role == "patient":
             clinical_fields = {
@@ -95,3 +117,60 @@ class CaseSerializer(serializers.ModelSerializer):
                     f"لا يمكن للمريض تعديل الحقول التالية: {', '.join(forbidden)}"
                 )
         return attrs
+
+
+class CaseProgressNoteSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CaseProgressNote
+        fields = [
+            "id",
+            "case",
+            "author",
+            "author_name",
+            "note",
+            "sessions_completed_snapshot",
+            "total_sessions_planned_snapshot",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "author",
+            "sessions_completed_snapshot",
+            "total_sessions_planned_snapshot",
+            "created_at",
+        ]
+
+    def get_author_name(self, obj):
+        if not obj.author:
+            return None
+        return obj.author.get_full_name() or obj.author.username
+
+    def validate(self, attrs):
+        """
+        الطبيب يقدر يضيف ملاحظة فقط لحالة هو المسؤول عنها (case.doctor).
+        المريض ممنوع بالكامل من هذا الـ endpoint (يُمنع أصلاً على مستوى
+        الصلاحيات بالـ view، وهذا فحص إضافي احترازي).
+        """
+        request = self.context.get("request")
+        case = attrs.get("case")
+        if request and case is not None:
+            if request.user.role == "doctor" and case.doctor_id != request.user.id:
+                raise serializers.ValidationError(
+                    "لا يمكنك إضافة ملاحظة تطور لحالة لا تخصك."
+                )
+            if request.user.role == "patient":
+                raise serializers.ValidationError(
+                    "لا يمكن للمريض إضافة ملاحظات تطور."
+                )
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        case = validated_data["case"]
+        validated_data["author"] = request.user
+        # لقطة تلقائية لعدد الجلسات وقت الكتابة — الطبيب لا يدخلها يدوياً
+        validated_data["sessions_completed_snapshot"] = case.sessions.count()
+        validated_data["total_sessions_planned_snapshot"] = case.total_sessions_planned
+        return super().create(validated_data)

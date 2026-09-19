@@ -56,7 +56,7 @@ class SessionModel {
 enum PatientFeeling {
   excellent('ممتاز'),
   normal('عادي'),
-  difficult('صعب');
+  difficult('سيء');
 
   const PatientFeeling(this.label);
   final String label;

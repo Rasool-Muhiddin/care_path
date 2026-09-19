@@ -108,3 +108,44 @@ class Case(models.Model):
 
     def __str__(self) -> str:
         return f"Case #{self.pk} - {self.patient} ({self.get_diagnosis_type_display()})"
+
+
+class CaseProgressNote(models.Model):
+    """
+    ملاحظة تطور دوريّة يكتبها الطبيب عند فحص المريض بعد عدد من الجلسات
+    (مثال: "بعد 5 من أصل 15 جلسة، لاحظنا..."). سجل متعدد عبر الزمن —
+    كل فحص يضيف إدخال جديد بدل استبدال النص السابق، حتى يقدر الطبيب
+    يرجع يقارن كيف تطورت الحالة من فحص للثاني.
+
+    sessions_completed_snapshot / total_sessions_planned_snapshot: لقطة
+    تلقائية لعدد الجلسات وقت كتابة الملاحظة (وليس وقت القراءة لاحقاً)،
+    حتى تبقى دقيقة تاريخياً حتى لو تغيّر total_sessions_planned بعدين.
+    """
+
+    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="progress_notes")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="case_progress_notes_written",
+        help_text="الطبيب الذي كتب هذه الملاحظة",
+    )
+
+    note = models.TextField(help_text="نص حر يكتبه الطبيب لوصف التطور الملاحَظ")
+
+    sessions_completed_snapshot = models.PositiveIntegerField(
+        help_text="عدد الجلسات المكتملة وقت كتابة الملاحظة (لقطة تلقائية)"
+    )
+    total_sessions_planned_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="العدد الإجمالي المخطط وقت كتابة الملاحظة (لقطة تلقائية)",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Progress note on Case #{self.case_id} @ {self.created_at:%Y-%m-%d}"

@@ -25,6 +25,7 @@ class ApiEndpoints {
 
   // cases
   static const String cases = '$api/cases/';
+  static const String caseProgressNotes = '$api/case-progress-notes/';
 
   // treatments
   static const String sessions = '$api/sessions/';

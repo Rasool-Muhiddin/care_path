@@ -4,6 +4,7 @@ import '../../core/auth/auth_state.dart';
 import '../patient/models/session_model.dart';
 import 'data/doctor_repository.dart';
 import 'models/case_model.dart';
+import 'models/case_progress_note_model.dart';
 import 'models/device_model.dart';
 import 'models/patient_model.dart';
 
@@ -37,4 +38,10 @@ final devicesListProvider =
 final caseSessionsProvider =
     FutureProvider.autoDispose.family<List<SessionModel>, int>((ref, caseId) async {
   return ref.read(doctorRepositoryProvider).fetchSessionsForCase(caseId);
+});
+
+/// ملاحظات تطور حالة معيّنة — لعرض/إضافة سجل التطور بشاشة تفاصيل الحالة
+final caseProgressNotesProvider =
+    FutureProvider.autoDispose.family<List<CaseProgressNoteModel>, int>((ref, caseId) async {
+  return ref.read(doctorRepositoryProvider).fetchProgressNotes(caseId);
 });

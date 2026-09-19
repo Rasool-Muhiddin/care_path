@@ -7,6 +7,7 @@ import '../../chat/logic/chat_notifier.dart';
 import '../../patient/models/session_model.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
+import '../models/case_progress_note_model.dart';
 
 /// Case details screen — opened by tapping a case in the doctor's home
 /// screen. Shows full case info, lets the doctor edit status / treatment
@@ -25,8 +26,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
   late final TextEditingController _treatmentPlanController;
   late final TextEditingController _initialEvaluationController;
   late final TextEditingController _totalSessionsController;
+  final _newProgressNoteController = TextEditingController();
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
+  bool _isAddingProgressNote = false;
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     _treatmentPlanController.dispose();
     _initialEvaluationController.dispose();
     _totalSessionsController.dispose();
+    _newProgressNoteController.dispose();
     super.dispose();
   }
 
@@ -81,10 +85,31 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     }
   }
 
+  Future<void> _addProgressNote() async {
+    final text = _newProgressNoteController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _isAddingProgressNote = true);
+    try {
+      await ref.read(doctorRepositoryProvider).createProgressNote(
+            NewCaseProgressNotePayload(caseId: widget.caseModel.id, note: text),
+          );
+      ref.invalidate(caseProgressNotesProvider(widget.caseModel.id));
+      _newProgressNoteController.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isAddingProgressNote = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.caseModel;
     final sessionsAsync = ref.watch(caseSessionsProvider(c.id));
+    final progressNotesAsync = ref.watch(caseProgressNotesProvider(c.id));
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForThisCase = unreadByCase[c.id] ?? 0;
 
@@ -124,11 +149,11 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                     ),
                     if (c.diagnosisType.hasClinicalDetails) ...[
                       _InfoRow(
-                        label: 'Episodes / week',
+                        label: 'attack / week',
                         value: c.weeklyEpisodeCount?.toString() ?? '—',
                       ),
                       _InfoRow(
-                        label: 'Episode duration',
+                        label: 'attack duration',
                         value: c.episodeDurationMinutes != null
                             ? '${c.episodeDurationMinutes} min'
                             : '—',
@@ -234,6 +259,63 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 );
               },
             ),
+
+            const SizedBox(height: 28),
+            Text('Progress Notes', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Record what you observe at each follow-up exam (e.g. "after 5 of 15 sessions...")',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _newProgressNoteController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Describe the progress observed at this exam...',
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isAddingProgressNote ? null : _addProgressNote,
+                icon: _isAddingProgressNote
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_circle_outline),
+                label: const Text('Add Progress Note'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            progressNotesAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Failed to load progress notes: $e',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+              data: (notes) {
+                if (notes.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No progress notes recorded yet.'),
+                  );
+                }
+                return Column(
+                  children: notes.map((n) => _ProgressNoteTile(note: n)).toList(),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -256,6 +338,46 @@ class _InfoRow extends StatelessWidget {
           SizedBox(width: 130, child: Text(label, style: const TextStyle(color: Colors.grey))),
           Expanded(child: Text(value)),
         ],
+      ),
+    );
+  }
+}
+
+class _ProgressNoteTile extends StatelessWidget {
+  const _ProgressNoteTile({required this.note});
+  final CaseProgressNoteModel note;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = note.createdAt;
+    final dateLabel =
+        '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+    final sessionsLabel = note.totalSessionsPlannedSnapshot != null
+        ? '${note.sessionsCompletedSnapshot} / ${note.totalSessionsPlannedSnapshot} sessions'
+        : '${note.sessionsCompletedSnapshot} sessions';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(dateLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(sessionsLabel, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            if (note.authorName.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text('Dr. ${note.authorName}', style: Theme.of(context).textTheme.bodySmall),
+            ],
+            const SizedBox(height: 6),
+            Text(note.note),
+          ],
+        ),
       ),
     );
   }

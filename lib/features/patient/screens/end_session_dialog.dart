@@ -5,16 +5,23 @@ import '../models/session_model.dart';
 import '../patient_providers.dart';
 
 /// نافذة "إنهاء الجلسة" — اختيار سريع لرد الفعل + ملاحظة اختيارية.
-Future<bool?> showEndSessionDialog(BuildContext context, int caseId) {
+/// [durationMinutes]: المدة المحسوبة تلقائياً من عداد "بدء الجلسة" بالشاشة
+/// الرئيسية (null لو المريض ضغط "إنهاء الجلسة" مباشرة بدون بدء عداد).
+Future<bool?> showEndSessionDialog(
+  BuildContext context,
+  int caseId, {
+  int? durationMinutes,
+}) {
   return showDialog<bool>(
     context: context,
-    builder: (context) => _EndSessionDialog(caseId: caseId),
+    builder: (context) => _EndSessionDialog(caseId: caseId, durationMinutes: durationMinutes),
   );
 }
 
 class _EndSessionDialog extends ConsumerStatefulWidget {
-  const _EndSessionDialog({required this.caseId});
+  const _EndSessionDialog({required this.caseId, this.durationMinutes});
   final int caseId;
+  final int? durationMinutes;
 
   @override
   ConsumerState<_EndSessionDialog> createState() => _EndSessionDialogState();
@@ -49,6 +56,7 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
               caseId: widget.caseId,
               feeling: _selectedFeeling!,
               note: _noteController.text,
+              durationMinutes: widget.durationMinutes,
             ),
           );
       ref.invalidate(mySessionsProvider);
@@ -74,6 +82,13 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
               const SizedBox(height: 12),
             ],
             const Text('كيف كانت تجربتك بهذي الجلسة؟'),
+            if (widget.durationMinutes != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'مدة الجلسة: ${widget.durationMinutes} دقيقة',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

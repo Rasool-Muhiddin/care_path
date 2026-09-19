@@ -73,6 +73,13 @@ class Case(models.Model):
         blank=True, help_text="الأدوية المستخدمة حالياً (نص حر)"
     )
 
+    # العدد الإجمالي المخطط لجلسات العلاج لهذه الحالة — يحدده الطبيب.
+    # يُترك فارغاً (None) إلى أن يُحدَّد؛ عندها تُحسب "الجلسات المتبقية"
+    # للمريض كـ (total_sessions_planned - عدد الجلسات المسجَّلة فعلياً).
+    total_sessions_planned = models.PositiveIntegerField(
+        null=True, blank=True, help_text="العدد الإجمالي المخطط لجلسات العلاج"
+    )
+
     # بيانات الكفيل/المرافق المسؤول عن شراء الجهاز — مطلوبة لأن الجهاز
     # يُباع للمريض بضمان كفيل يتحمل المسؤولية المالية/الإدارية
     guarantor_name = models.CharField(

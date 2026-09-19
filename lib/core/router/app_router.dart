@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,40 +12,15 @@ import '../../features/engineer/screens/engineer_home_screen.dart';
 import '../../features/patient/screens/patient_home_screen.dart';
 import '../auth/auth_state.dart';
 import '../permissions/route_guard.dart';
-
-/// Minimum time the Splash Screen must remain visible, independent of how
-/// quickly session restoration finishes. This does NOT replace or duplicate
-/// [authStateProvider] — it's a separate, explicit "has the splash had
-/// enough time on screen?" signal that the router's redirect combines with
-/// the existing auth state.
-const Duration _kSplashMinDuration = Duration(seconds: 20);
-
-/// Emits `false` until [_kSplashMinDuration] has elapsed since this
-/// provider was first created (i.e. since app launch), then emits `true`.
-class _SplashMinDurationNotifier extends Notifier<bool> {
-  Timer? _timer;
-
-  @override
-  bool build() {
-    _timer = Timer(_kSplashMinDuration, () => state = true);
-    ref.onDispose(() => _timer?.cancel());
-    return false;
-  }
-}
-
-final splashMinDurationProvider =
-    NotifierProvider<_SplashMinDurationNotifier, bool>(
-  _SplashMinDurationNotifier.new,
-);
+import 'splash_gate.dart';
 
 /// يحوّل تغيّرات Riverpod إلى إشعارات يفهمها GoRouter (refreshListenable)
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
     ref.listen(authStateProvider, (previous, next) => notifyListeners());
-    // Re-run the redirect once the minimum splash duration elapses, so a
-    // session that resolved early doesn't get "stuck" waiting for some
-    // unrelated future auth change to trigger the next redirect check.
-    ref.listen(splashMinDurationProvider, (previous, next) => notifyListeners());
+    // أعد تقييم الـ redirect فور ضغط المستخدم على "Enter" بشاشة الترحيب،
+    // حتى لو كانت حالة الـ auth استقرت قبل ذلك بفترة.
+    ref.listen(splashEnteredProvider, (previous, next) => notifyListeners());
   }
 }
 
@@ -99,16 +72,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
-      final splashMinDurationElapsed = ref.read(splashMinDurationProvider);
+      final hasEnteredSplash = ref.read(splashEnteredProvider);
       final location = state.matchedLocation;
 
       final authSettled =
           authState is AuthAuthenticated || authState is AuthUnauthenticated;
 
-      // 1. أثناء استعادة الجلسة، أو قبل انتهاء الحد الأدنى لمدة شاشة
-      //    الترحيب: أبقِ المستخدم في شاشة الانتظار. المغادرة تتطلب
-      //    اكتمال الشرطين معاً.
-      if (!splashMinDurationElapsed || !authSettled) {
+      // 1. إلى أن يضغط المستخدم "Enter" بشاشة الترحيب، أو إلى أن تستقر
+      //    حالة الـ auth (أيهما أبطأ): أبقِه بشاشة الانتظار. لا يوجد حد
+      //    زمني تلقائي — البقاء هنا بالكامل بيد المستخدم.
+      if (!hasEnteredSplash || !authSettled) {
         return location == '/splash' ? null : '/splash';
       }
 

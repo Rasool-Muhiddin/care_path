@@ -1,24 +1,26 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/router/splash_gate.dart';
 
 /// Splash Screen
 ///
-/// Visual-only redesign. This widget intentionally contains NO navigation,
-/// timer, or authentication logic — the original file didn't have any
-/// either, which means startup/session routing already lives elsewhere
-/// (most likely a router/redirect listening to `authStateProvider`).
-/// This screen simply renders while that existing logic decides what to
-/// show next, and stays visible for exactly as long as it's kept on
-/// screen by the caller.
-class SplashScreen extends StatefulWidget {
+/// No auto-navigation and no timer of its own. Tapping "Enter" sets
+/// [splashEnteredProvider] to true; the actual navigation away from
+/// `/splash` is decided entirely by app_router.dart's redirect (which
+/// waits for both this flag AND authStateProvider to settle before
+/// leaving splash). This screen never navigates directly — it only
+/// flips the flag the router is watching.
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   // One-shot entrance animation (mark, title, subtitle).
   late final AnimationController _introController;
@@ -30,6 +32,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _titleFade;
   late final Animation<Offset> _titleSlide;
   late final Animation<double> _subtitleFade;
+  late final Animation<double> _buttonFade;
 
   @override
   void initState() {
@@ -74,6 +77,11 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _introController,
       curve: const Interval(0.55, 1.0, curve: Curves.easeOut),
     );
+
+    _buttonFade = CurvedAnimation(
+      parent: _introController,
+      curve: const Interval(0.75, 1.0, curve: Curves.easeOut),
+    );
   }
 
   @override
@@ -81,6 +89,12 @@ class _SplashScreenState extends State<SplashScreen>
     _introController.dispose();
     _ambientController.dispose();
     super.dispose();
+  }
+
+  void _enter() {
+    // لا تنقّل مباشر هنا — فقط نرفع العلم، والـ router (app_router.dart)
+    // هو من يقرر الوجهة الصحيحة بناءً على حالة الـ auth الحالية.
+    ref.read(splashEnteredProvider.notifier).state = true;
   }
 
   @override
@@ -210,6 +224,11 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 36),
+                  FadeTransition(
+                    opacity: _buttonFade,
+                    child: _EnterButton(onPressed: _enter),
+                  ),
                 ],
               ),
             ),
@@ -260,6 +279,54 @@ class _BrandMark extends StatelessWidget {
         Icons.graphic_eq_rounded,
         size: 40,
         color: _AppPalette.iceBlue,
+      ),
+    );
+  }
+}
+
+class _EnterButton extends StatelessWidget {
+  const _EnterButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(30),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            gradient: const LinearGradient(
+              colors: [_AppPalette.cyan, _AppPalette.teal],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _AppPalette.cyan.withOpacity(0.35),
+                blurRadius: 24,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: _AppPalette.navyDeep,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded, size: 20, color: _AppPalette.navyDeep),
+            ],
+          ),
+        ),
       ),
     );
   }

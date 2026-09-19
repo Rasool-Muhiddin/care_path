@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_state.dart';
@@ -11,8 +12,9 @@ import 'add_patient_dialog.dart';
 
 /// New case screen — the doctor selects a patient from the registered
 /// list, an optional device, diagnosis type, clinical details (when
-/// applicable), guarantor info, and writes an initial evaluation and
-/// treatment plan.
+/// applicable), and writes an initial evaluation and treatment plan.
+/// Guarantor / device-purchase info is handled separately by the
+/// engineer's device purchase screen (not built yet), not here.
 ///
 /// Device setup section: built dynamically from device_type_setup_schema
 /// of the selected device. setup_schema is currently empty ({}) for all
@@ -34,10 +36,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
   final _weeklyEpisodeCountController = TextEditingController();
   final _episodeDurationController = TextEditingController();
   final _medicationsController = TextEditingController();
-  final _guarantorNameController = TextEditingController();
-  final _guarantorAddressController = TextEditingController();
-  final _guarantorPhoneController = TextEditingController();
-  final _guarantorEmailController = TextEditingController();
+  final _totalSessionsController = TextEditingController();
 
   PatientModel? _selectedPatient;
   DeviceModel? _selectedDevice;
@@ -51,10 +50,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
     _weeklyEpisodeCountController.dispose();
     _episodeDurationController.dispose();
     _medicationsController.dispose();
-    _guarantorNameController.dispose();
-    _guarantorAddressController.dispose();
-    _guarantorPhoneController.dispose();
-    _guarantorEmailController.dispose();
+    _totalSessionsController.dispose();
     super.dispose();
   }
 
@@ -86,10 +82,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   : null,
               currentMedications:
                   _selectedDiagnosis.hasClinicalDetails ? _medicationsController.text.trim() : '',
-              guarantorName: _guarantorNameController.text.trim(),
-              guarantorAddress: _guarantorAddressController.text.trim(),
-              guarantorPhoneNumber: _guarantorPhoneController.text.trim(),
-              guarantorEmail: _guarantorEmailController.text.trim(),
+              totalSessionsPlanned: int.tryParse(_totalSessionsController.text.trim()),
               initialEvaluation: _initialEvaluationController.text.trim(),
               treatmentPlan: _treatmentPlanController.text.trim(),
             ),
@@ -223,6 +216,8 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   .toList(),
               onChanged: (value) => setState(() => _selectedDiagnosis = value!),
             ),
+            const SizedBox(height: 12),
+            _DiagnosisSpecificFieldsSection(diagnosisType: _selectedDiagnosis),
 
             // --- Clinical details (epilepsy/migraine only) ---
             if (_selectedDiagnosis.hasClinicalDetails) ...[
@@ -235,6 +230,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                     child: TextFormField(
                       controller: _weeklyEpisodeCountController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         labelText: 'Episodes / week',
@@ -246,6 +242,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                     child: TextFormField(
                       controller: _episodeDurationController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         labelText: 'Episode duration (min)',
@@ -267,57 +264,6 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
             ],
             const SizedBox(height: 20),
 
-            // --- Guarantor info ---
-            Text('Guarantor Information', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(
-              'Required for device purchase — the person financially/administratively responsible',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _guarantorNameController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Guarantor Name',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _guarantorAddressController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Guarantor Address',
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _guarantorPhoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Phone Number',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _guarantorEmailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Email',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
             // --- Initial evaluation ---
             Text('Initial Evaluation', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
@@ -331,8 +277,39 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
             ),
             const SizedBox(height: 20),
 
+            // --- Total sessions planned (optional) ---
+            Text('Total Sessions Planned (optional)', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Used to show the patient how many sessions remain — leave blank if not decided yet',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _totalSessionsController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'e.g. 20',
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // --- Treatment plan ---
-            Text('Treatment Plan', style: Theme.of(context).textTheme.titleSmall),
+            Row(
+              children: [
+                Text('Treatment Plan', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(width: 6),
+                Text(
+                  '(visible to patient)',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _treatmentPlanController,
@@ -357,6 +334,30 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// حقول خاصة بكل نوع تشخيص (مثلاً: الشقيقة، الصرع...) — فارغة حالياً
+/// كـ placeholder إلى أن تُحدَّد الحقول المطلوبة لكل مرض، عندها تُستبدل
+/// هذي الدالة بحقول فعلية حسب النوع دون تغيير بنية الشاشة.
+class _DiagnosisSpecificFieldsSection extends StatelessWidget {
+  const _DiagnosisSpecificFieldsSection({required this.diagnosisType});
+  final DiagnosisType diagnosisType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Fields specific to "${diagnosisType.label}" — to be added later',
+        style: Theme.of(context).textTheme.bodySmall,
       ),
     );
   }

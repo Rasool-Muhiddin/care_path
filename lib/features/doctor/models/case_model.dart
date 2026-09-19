@@ -49,6 +49,9 @@ class CaseModel {
   final int? weeklyEpisodeCount;
   final int? episodeDurationMinutes;
   final String currentMedications;
+  final int? totalSessionsPlanned;
+  final int completedSessionsCount;
+  final int? remainingSessionsCount;
   final String guarantorName;
   final String guarantorAddress;
   final String guarantorPhoneNumber;
@@ -72,6 +75,9 @@ class CaseModel {
     this.weeklyEpisodeCount,
     this.episodeDurationMinutes,
     this.currentMedications = '',
+    this.totalSessionsPlanned,
+    this.completedSessionsCount = 0,
+    this.remainingSessionsCount,
     this.guarantorName = '',
     this.guarantorAddress = '',
     this.guarantorPhoneNumber = '',
@@ -98,6 +104,9 @@ class CaseModel {
       weeklyEpisodeCount: json['weekly_episode_count'] as int?,
       episodeDurationMinutes: json['episode_duration_minutes'] as int?,
       currentMedications: json['current_medications'] as String? ?? '',
+      totalSessionsPlanned: json['total_sessions_planned'] as int?,
+      completedSessionsCount: json['completed_sessions_count'] as int? ?? 0,
+      remainingSessionsCount: json['remaining_sessions_count'] as int?,
       guarantorName: json['guarantor_name'] as String? ?? '',
       guarantorAddress: json['guarantor_address'] as String? ?? '',
       guarantorPhoneNumber: json['guarantor_phone_number'] as String? ?? '',
@@ -120,6 +129,7 @@ class NewCasePayload {
   final int? weeklyEpisodeCount;
   final int? episodeDurationMinutes;
   final String currentMedications;
+  final int? totalSessionsPlanned;
   final String guarantorName;
   final String guarantorAddress;
   final String guarantorPhoneNumber;
@@ -136,6 +146,7 @@ class NewCasePayload {
     this.weeklyEpisodeCount,
     this.episodeDurationMinutes,
     this.currentMedications = '',
+    this.totalSessionsPlanned,
     this.guarantorName = '',
     this.guarantorAddress = '',
     this.guarantorPhoneNumber = '',
@@ -153,6 +164,7 @@ class NewCasePayload {
         if (weeklyEpisodeCount != null) 'weekly_episode_count': weeklyEpisodeCount,
         if (episodeDurationMinutes != null) 'episode_duration_minutes': episodeDurationMinutes,
         'current_medications': currentMedications,
+        if (totalSessionsPlanned != null) 'total_sessions_planned': totalSessionsPlanned,
         'guarantor_name': guarantorName,
         'guarantor_address': guarantorAddress,
         'guarantor_phone_number': guarantorPhoneNumber,
@@ -168,16 +180,19 @@ class CaseUpdatePayload {
   final CaseStatus status;
   final String treatmentPlan;
   final String initialEvaluation;
+  final int? totalSessionsPlanned;
 
   const CaseUpdatePayload({
     required this.status,
     required this.treatmentPlan,
     required this.initialEvaluation,
+    this.totalSessionsPlanned,
   });
 
   Map<String, dynamic> toJson() => {
         'status': status.apiValue,
         'treatment_plan': treatmentPlan,
         'initial_evaluation': initialEvaluation,
+        if (totalSessionsPlanned != null) 'total_sessions_planned': totalSessionsPlanned,
       };
 }

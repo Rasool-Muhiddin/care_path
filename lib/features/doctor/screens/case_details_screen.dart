@@ -24,6 +24,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
   late CaseStatus _status;
   late final TextEditingController _treatmentPlanController;
   late final TextEditingController _initialEvaluationController;
+  late final TextEditingController _totalSessionsController;
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
 
@@ -33,8 +34,11 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     _status = widget.caseModel.status;
     _treatmentPlanController = TextEditingController(text: widget.caseModel.treatmentPlan);
     _initialEvaluationController = TextEditingController(text: widget.caseModel.initialEvaluation);
+    _totalSessionsController =
+        TextEditingController(text: widget.caseModel.totalSessionsPlanned?.toString() ?? '');
     _treatmentPlanController.addListener(_markChanged);
     _initialEvaluationController.addListener(_markChanged);
+    _totalSessionsController.addListener(_markChanged);
   }
 
   void _markChanged() {
@@ -45,6 +49,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
   void dispose() {
     _treatmentPlanController.dispose();
     _initialEvaluationController.dispose();
+    _totalSessionsController.dispose();
     super.dispose();
   }
 
@@ -57,6 +62,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
               status: _status,
               treatmentPlan: _treatmentPlanController.text.trim(),
               initialEvaluation: _initialEvaluationController.text.trim(),
+              totalSessionsPlanned: int.tryParse(_totalSessionsController.text.trim()),
             ),
           );
       ref.invalidate(myCasesProvider);
@@ -110,6 +116,12 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   children: [
                     _InfoRow(label: 'Diagnosis', value: c.diagnosisType.label),
                     _InfoRow(label: 'Device', value: c.deviceTypeName ?? '—'),
+                    _InfoRow(
+                      label: 'Sessions completed',
+                      value: c.remainingSessionsCount != null
+                          ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
+                          : '${c.completedSessionsCount}',
+                    ),
                     if (c.diagnosisType.hasClinicalDetails) ...[
                       _InfoRow(
                         label: 'Episodes / week',
@@ -137,36 +149,6 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // --- Guarantor info (read-only) ---
-            if (c.guarantorName.isNotEmpty || c.guarantorPhoneNumber.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Guarantor', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      _InfoRow(label: 'Name', value: c.guarantorName.isNotEmpty ? c.guarantorName : '—'),
-                      _InfoRow(
-                        label: 'Phone',
-                        value: c.guarantorPhoneNumber.isNotEmpty ? c.guarantorPhoneNumber : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Address',
-                        value: c.guarantorAddress.isNotEmpty ? c.guarantorAddress : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Email',
-                        value: c.guarantorEmail.isNotEmpty ? c.guarantorEmail : '—',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
             // --- Editable section ---
             Text('Status', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
@@ -182,6 +164,18 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   _hasUnsavedChanges = true;
                 });
               },
+            ),
+            const SizedBox(height: 20),
+
+            Text('Total Sessions Planned', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _totalSessionsController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'e.g. 20',
+              ),
             ),
             const SizedBox(height: 20),
 

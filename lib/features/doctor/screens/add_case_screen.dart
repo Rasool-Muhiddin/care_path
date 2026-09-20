@@ -233,7 +233,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'Episodes / week',
+                        labelText: 'attack / week',
                       ),
                     ),
                   ),
@@ -245,7 +245,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'Episode duration (min)',
+                        labelText: 'attack duration (min)',
                       ),
                     ),
                   ),

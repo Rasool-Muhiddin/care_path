@@ -26,9 +26,11 @@ class CaseSerializer(serializers.ModelSerializer):
             "device_type_name",
             "device_setup_parameters",
             "diagnosis_type",
+            "disease_type",
             "status",
-            "weekly_episode_count",
+            "monthly_episode_count",
             "episode_duration_minutes",
+            "symptoms",
             "current_medications",
             "total_sessions_planned",
             "completed_sessions_count",
@@ -72,8 +74,8 @@ class CaseSerializer(serializers.ModelSerializer):
            جذرها بدل معالجة أعراضها بالواجهة.
         2. المريض لا يجب أن يستطيع تعديل حقول الحالة السريرية (status,
            doctor, treatment_plan, initial_evaluation,
-           device_setup_parameters, weekly_episode_count,
-           episode_duration_minutes, current_medications,
+           device_setup_parameters, disease_type, monthly_episode_count,
+           episode_duration_minutes, symptoms, current_medications,
            total_sessions_planned) حتى لو أرسلها ضمن الطلب. هذا فحص
            إضافي على مستوى الـ Serializer فوق فحص الصلاحيات في الـ View.
         """
@@ -100,8 +102,10 @@ class CaseSerializer(serializers.ModelSerializer):
                 "doctor",
                 "device",
                 "device_setup_parameters",
-                "weekly_episode_count",
+                "disease_type",
+                "monthly_episode_count",
                 "episode_duration_minutes",
+                "symptoms",
                 "current_medications",
                 "total_sessions_planned",
                 "guarantor_name",

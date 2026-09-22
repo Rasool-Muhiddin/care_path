@@ -1,22 +1,35 @@
 /// Diagnosis types — matches DiagnosisType in cases/models.py
 enum DiagnosisType {
   migraine('migraine', 'Migraine'),
-  epilepsy('epilepsy', 'Epilepsy'),
-  parkinson('parkinson', "Parkinson's Disease"),
-  depression('depression', 'Depression'),
-  other('other', 'Other');
+  epilepsy('epilepsy', 'Epilepsy');
 
   const DiagnosisType(this.apiValue, this.label);
   final String apiValue;
   final String label;
 
   static DiagnosisType fromApiValue(String value) =>
-      DiagnosisType.values.firstWhere((e) => e.apiValue == value, orElse: () => DiagnosisType.other);
+      DiagnosisType.values.firstWhere((e) => e.apiValue == value, orElse: () => DiagnosisType.migraine);
 
-  /// Whether clinical detail fields (weekly episode count / duration /
-  /// medications) apply to this diagnosis type. Currently: epilepsy and
-  /// migraine only.
-  bool get hasClinicalDetails => this == DiagnosisType.epilepsy || this == DiagnosisType.migraine;
+  /// Whether clinical detail fields (monthly episode count / duration /
+  /// medications) apply to this diagnosis type. Both remaining diagnosis
+  /// types (epilepsy, migraine) have clinical details.
+  bool get hasClinicalDetails => true;
+}
+
+/// Disease sub-type — matches DiseaseType in cases/models.py.
+/// Placeholder values (type1/type2/type3) until the real sub-types are
+/// defined.
+enum DiseaseType {
+  type1('type1', 'Type 1'),
+  type2('type2', 'Type 2'),
+  type3('type3', 'Type 3');
+
+  const DiseaseType(this.apiValue, this.label);
+  final String apiValue;
+  final String label;
+
+  static DiseaseType fromApiValue(String? value) =>
+      DiseaseType.values.firstWhere((e) => e.apiValue == value, orElse: () => DiseaseType.type1);
 }
 
 /// Case status — matches CaseStatus in cases/models.py
@@ -45,9 +58,11 @@ class CaseModel {
   final String? deviceTypeName;
   final Map<String, dynamic> deviceSetupParameters;
   final DiagnosisType diagnosisType;
+  final DiseaseType? diseaseType;
   final CaseStatus status;
-  final int? weeklyEpisodeCount;
+  final int? monthlyEpisodeCount;
   final int? episodeDurationMinutes;
+  final String symptoms;
   final String currentMedications;
   final int? totalSessionsPlanned;
   final int completedSessionsCount;
@@ -71,9 +86,11 @@ class CaseModel {
     this.deviceTypeName,
     required this.deviceSetupParameters,
     required this.diagnosisType,
+    this.diseaseType,
     required this.status,
-    this.weeklyEpisodeCount,
+    this.monthlyEpisodeCount,
     this.episodeDurationMinutes,
+    this.symptoms = '',
     this.currentMedications = '',
     this.totalSessionsPlanned,
     this.completedSessionsCount = 0,
@@ -100,9 +117,13 @@ class CaseModel {
       deviceSetupParameters:
           (json['device_setup_parameters'] as Map<String, dynamic>?) ?? const {},
       diagnosisType: DiagnosisType.fromApiValue(json['diagnosis_type'] as String),
+      diseaseType: (json['disease_type'] as String?)?.isNotEmpty == true
+          ? DiseaseType.fromApiValue(json['disease_type'] as String?)
+          : null,
       status: CaseStatus.fromApiValue(json['status'] as String),
-      weeklyEpisodeCount: json['weekly_episode_count'] as int?,
+      monthlyEpisodeCount: json['monthly_episode_count'] as int?,
       episodeDurationMinutes: json['episode_duration_minutes'] as int?,
+      symptoms: json['symptoms'] as String? ?? '',
       currentMedications: json['current_medications'] as String? ?? '',
       totalSessionsPlanned: json['total_sessions_planned'] as int?,
       completedSessionsCount: json['completed_sessions_count'] as int? ?? 0,
@@ -126,8 +147,10 @@ class NewCasePayload {
   final String? deviceId;
   final Map<String, dynamic> deviceSetupParameters;
   final DiagnosisType diagnosisType;
-  final int? weeklyEpisodeCount;
+  final DiseaseType? diseaseType;
+  final int? monthlyEpisodeCount;
   final int? episodeDurationMinutes;
+  final String symptoms;
   final String currentMedications;
   final int? totalSessionsPlanned;
   final String guarantorName;
@@ -143,8 +166,10 @@ class NewCasePayload {
     this.deviceId,
     this.deviceSetupParameters = const {},
     required this.diagnosisType,
-    this.weeklyEpisodeCount,
+    this.diseaseType,
+    this.monthlyEpisodeCount,
     this.episodeDurationMinutes,
+    this.symptoms = '',
     this.currentMedications = '',
     this.totalSessionsPlanned,
     this.guarantorName = '',
@@ -161,8 +186,10 @@ class NewCasePayload {
         if (deviceId != null) 'device': deviceId,
         'device_setup_parameters': deviceSetupParameters,
         'diagnosis_type': diagnosisType.apiValue,
-        if (weeklyEpisodeCount != null) 'weekly_episode_count': weeklyEpisodeCount,
+        if (diseaseType != null) 'disease_type': diseaseType!.apiValue,
+        if (monthlyEpisodeCount != null) 'monthly_episode_count': monthlyEpisodeCount,
         if (episodeDurationMinutes != null) 'episode_duration_minutes': episodeDurationMinutes,
+        'symptoms': symptoms,
         'current_medications': currentMedications,
         if (totalSessionsPlanned != null) 'total_sessions_planned': totalSessionsPlanned,
         'guarantor_name': guarantorName,

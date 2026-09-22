@@ -10,18 +10,17 @@ import '../models/device_model.dart';
 import '../models/patient_model.dart';
 import 'add_patient_dialog.dart';
 
+/// Duration unit for the "attack duration" field — UI-only; the value is
+/// always converted to minutes before being sent to the backend
+/// (Case.episode_duration_minutes stays in minutes regardless of which
+/// unit the doctor picked).
+enum _DurationUnit { minutes, hours }
+
 /// New case screen — the doctor selects a patient from the registered
-/// list, an optional device, diagnosis type, clinical details (when
-/// applicable), and writes an initial evaluation and treatment plan.
+/// list, an optional device, diagnosis type, disease sub-type, symptoms,
+/// clinical details, and writes an initial evaluation and treatment plan.
 /// Guarantor / device-purchase info is handled separately by the
 /// engineer's device purchase screen (not built yet), not here.
-///
-/// Device setup section: built dynamically from device_type_setup_schema
-/// of the selected device. setup_schema is currently empty ({}) for all
-/// types (fields not defined yet), so a placeholder message is shown
-/// instead of actual fields — once fields are defined later in
-/// DeviceType.setup_schema, this section renders on top of it without
-/// changing the screen's structure.
 class AddCaseScreen extends ConsumerStatefulWidget {
   const AddCaseScreen({super.key});
 
@@ -33,22 +32,26 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _initialEvaluationController = TextEditingController();
   final _treatmentPlanController = TextEditingController();
-  final _weeklyEpisodeCountController = TextEditingController();
+  final _monthlyEpisodeCountController = TextEditingController();
   final _episodeDurationController = TextEditingController();
+  final _symptomsController = TextEditingController();
   final _medicationsController = TextEditingController();
   final _totalSessionsController = TextEditingController();
 
   PatientModel? _selectedPatient;
   DeviceModel? _selectedDevice;
   DiagnosisType _selectedDiagnosis = DiagnosisType.migraine;
+  DiseaseType _selectedDiseaseType = DiseaseType.type1;
+  _DurationUnit _durationUnit = _DurationUnit.minutes;
   bool _isSubmitting = false;
 
   @override
   void dispose() {
     _initialEvaluationController.dispose();
     _treatmentPlanController.dispose();
-    _weeklyEpisodeCountController.dispose();
+    _monthlyEpisodeCountController.dispose();
     _episodeDurationController.dispose();
+    _symptomsController.dispose();
     _medicationsController.dispose();
     _totalSessionsController.dispose();
     super.dispose();
@@ -68,18 +71,26 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
 
     setState(() => _isSubmitting = true);
     try {
+      // Duration is always sent to the backend in minutes, regardless of
+      // which unit the doctor picked in the dropdown.
+      final rawDuration = int.tryParse(_episodeDurationController.text.trim());
+      final episodeDurationMinutes = rawDuration == null
+          ? null
+          : (_durationUnit == _DurationUnit.hours ? rawDuration * 60 : rawDuration);
+
       await ref.read(doctorRepositoryProvider).createCase(
             NewCasePayload(
               patientId: _selectedPatient!.id,
               doctorId: authState.user.id,
               deviceId: _selectedDevice?.id,
               diagnosisType: _selectedDiagnosis,
-              weeklyEpisodeCount: _selectedDiagnosis.hasClinicalDetails
-                  ? int.tryParse(_weeklyEpisodeCountController.text.trim())
+              diseaseType: _selectedDiseaseType,
+              monthlyEpisodeCount: _selectedDiagnosis.hasClinicalDetails
+                  ? int.tryParse(_monthlyEpisodeCountController.text.trim())
                   : null,
-              episodeDurationMinutes: _selectedDiagnosis.hasClinicalDetails
-                  ? int.tryParse(_episodeDurationController.text.trim())
-                  : null,
+              episodeDurationMinutes:
+                  _selectedDiagnosis.hasClinicalDetails ? episodeDurationMinutes : null,
+              symptoms: _symptomsController.text.trim(),
               currentMedications:
                   _selectedDiagnosis.hasClinicalDetails ? _medicationsController.text.trim() : '',
               totalSessionsPlanned: int.tryParse(_totalSessionsController.text.trim()),
@@ -197,12 +208,6 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                 onChanged: (value) => setState(() => _selectedDevice = value),
               ),
             ),
-
-            // --- Device setup section (dynamic per device type) ---
-            if (_selectedDevice != null) ...[
-              const SizedBox(height: 12),
-              _DeviceSetupSection(device: _selectedDevice!),
-            ],
             const SizedBox(height: 20),
 
             // --- Diagnosis type ---
@@ -216,8 +221,33 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   .toList(),
               onChanged: (value) => setState(() => _selectedDiagnosis = value!),
             ),
-            const SizedBox(height: 12),
-            _DiagnosisSpecificFieldsSection(diagnosisType: _selectedDiagnosis),
+            const SizedBox(height: 20),
+
+            // --- Disease sub-type (placeholder values until the real
+            // sub-types are defined) ---
+            Text('Disease Type', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<DiseaseType>(
+              initialValue: _selectedDiseaseType,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+              items: DiseaseType.values
+                  .map((d) => DropdownMenuItem(value: d, child: Text(d.label)))
+                  .toList(),
+              onChanged: (value) => setState(() => _selectedDiseaseType = value!),
+            ),
+            const SizedBox(height: 20),
+
+            // --- Symptoms ---
+            Text('Symptoms', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _symptomsController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Describe the symptoms...',
+              ),
+            ),
 
             // --- Clinical details (epilepsy/migraine only) ---
             if (_selectedDiagnosis.hasClinicalDetails) ...[
@@ -228,26 +258,36 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller: _weeklyEpisodeCountController,
+                      controller: _monthlyEpisodeCountController,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'attack / week',
+                        labelText: 'attack / month',
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
+                    flex: 2,
                     child: TextFormField(
                       controller: _episodeDurationController,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'attack duration (min)',
+                        labelText: 'attack duration',
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<_DurationUnit>(
+                    value: _durationUnit,
+                    items: const [
+                      DropdownMenuItem(value: _DurationUnit.minutes, child: Text('min')),
+                      DropdownMenuItem(value: _DurationUnit.hours, child: Text('hour')),
+                    ],
+                    onChanged: (value) => setState(() => _durationUnit = value!),
                   ),
                 ],
               ),
@@ -335,63 +375,6 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
         ),
       ),
       ),
-    );
-  }
-}
-
-/// حقول خاصة بكل نوع تشخيص (مثلاً: الشقيقة، الصرع...) — فارغة حالياً
-/// كـ placeholder إلى أن تُحدَّد الحقول المطلوبة لكل مرض، عندها تُستبدل
-/// هذي الدالة بحقول فعلية حسب النوع دون تغيير بنية الشاشة.
-class _DiagnosisSpecificFieldsSection extends StatelessWidget {
-  const _DiagnosisSpecificFieldsSection({required this.diagnosisType});
-  final DiagnosisType diagnosisType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        'Fields specific to "${diagnosisType.label}" — to be added later',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-    );
-  }
-}
-
-/// Shows device setup fields based on device_type_setup_schema.
-/// setup_schema is currently empty for all types, so a placeholder
-/// message is shown.
-class _DeviceSetupSection extends StatelessWidget {
-  const _DeviceSetupSection({required this.device});
-  final DeviceModel device;
-
-  @override
-  Widget build(BuildContext context) {
-    final schema = device.deviceTypeSetupSchema;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: schema.isEmpty
-          ? Text(
-              'No setup fields defined yet for device type "${device.deviceTypeName ?? ''}" — '
-              'they will appear here automatically once defined.',
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          : Text(
-              // TODO: replace with actual fields (Text/Number/Choice) once
-              // setup_schema shape is defined
-              'Device type setup: $schema',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
     );
   }
 }

@@ -7,9 +7,17 @@ from devices.models import Device
 class DiagnosisType(models.TextChoices):
     MIGRAINE = "migraine", "Migraine"
     EPILEPSY = "epilepsy", "Epilepsy"
-    PARKINSON = "parkinson", "Parkinson's Disease"
-    DEPRESSION = "depression", "Depression"
-    OTHER = "other", "Other"
+
+
+class DiseaseType(models.TextChoices):
+    """
+    نوع/تصنيف فرعي للمرض ضمن التشخيص الرئيسي (migraine/epilepsy).
+    القيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
+    """
+
+    TYPE1 = "type1", "Type 1"
+    TYPE2 = "type2", "Type 2"
+    TYPE3 = "type3", "Type 3"
 
 
 class CaseStatus(models.TextChoices):
@@ -57,17 +65,24 @@ class Case(models.Model):
     )
 
     diagnosis_type = models.CharField(max_length=20, choices=DiagnosisType.choices)
+    disease_type = models.CharField(
+        max_length=20, choices=DiseaseType.choices, blank=True,
+        help_text="نوع/تصنيف فرعي للمرض (قيم مؤقتة: type1/type2/type3)",
+    )
     status = models.CharField(
         max_length=25, choices=CaseStatus.choices, default=CaseStatus.NEW
     )
 
-    # تفاصيل التشخيص السريري — تُستخدم حالياً مع الصرع والشقيقة
-    # (تُترك فارغة لتشخيص "أخرى" أو أي حالة لا تنطبق عليها)
-    weekly_episode_count = models.PositiveIntegerField(
-        null=True, blank=True, help_text="عدد النوبات في الأسبوع"
+    # تفاصيل التشخيص السريري — تُستخدم مع الصرع والشقيقة (التشخيصان
+    # الوحيدان المتاحان حالياً، لذا تنطبق عملياً على كل حالة)
+    monthly_episode_count = models.PositiveIntegerField(
+        null=True, blank=True, help_text="عدد النوبات في الشهر"
     )
     episode_duration_minutes = models.PositiveIntegerField(
-        null=True, blank=True, help_text="متوسط مدة النوبة بالدقائق"
+        null=True, blank=True, help_text="متوسط مدة النوبة بالدقائق (يُخزَّن دائماً بالدقائق حتى لو أدخله الطبيب بالساعات)"
+    )
+    symptoms = models.TextField(
+        blank=True, help_text="الأعراض التي يعاني منها المريض (نص حر)"
     )
     current_medications = models.TextField(
         blank=True, help_text="الأدوية المستخدمة حالياً (نص حر)"

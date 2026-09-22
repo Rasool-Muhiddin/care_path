@@ -140,6 +140,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _InfoRow(label: 'Diagnosis', value: c.diagnosisType.label),
+                    _InfoRow(label: 'Disease Type', value: c.diseaseType?.label ?? '—'),
                     _InfoRow(label: 'Device', value: c.deviceTypeName ?? '—'),
                     _InfoRow(
                       label: 'Sessions completed',
@@ -147,10 +148,14 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                           ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
                           : '${c.completedSessionsCount}',
                     ),
+                    _InfoRow(
+                      label: 'Symptoms',
+                      value: c.symptoms.isNotEmpty ? c.symptoms : '—',
+                    ),
                     if (c.diagnosisType.hasClinicalDetails) ...[
                       _InfoRow(
-                        label: 'attack / week',
-                        value: c.weeklyEpisodeCount?.toString() ?? '—',
+                        label: 'attack / month',
+                        value: c.monthlyEpisodeCount?.toString() ?? '—',
                       ),
                       _InfoRow(
                         label: 'attack duration',

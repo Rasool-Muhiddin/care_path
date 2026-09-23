@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,8 +11,8 @@ import '../models/session_model.dart';
 import '../patient_providers.dart';
 import 'end_session_dialog.dart';
 
-/// الشاشة الرئيسية للمريض: ملخص حالته (خطة العلاج ونوع الجهاز)، عداد
-/// بدء/إنهاء الجلسة، زر فتح المحادثة مع الطبيب، وقائمة بجلساته السابقة.
+/// الشاشة الرئيسية للمريض: ملخص حالته (خطة العلاج ونوع الجهاز)، زر إنهاء
+/// الجلسة اليومية، زر فتح المحادثة مع الطبيب، وقائمة بجلساته السابقة.
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
 
@@ -23,57 +21,22 @@ class PatientHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
-  DateTime? _sessionStartedAt;
-  Timer? _tickTimer;
-  Duration _elapsed = Duration.zero;
   bool _isWeeklyDialogShowing = false;
 
-  @override
-  void dispose() {
-    _tickTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startSession() {
-    setState(() {
-      _sessionStartedAt = DateTime.now();
-      _elapsed = Duration.zero;
-    });
-    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _sessionStartedAt == null) return;
-      setState(() => _elapsed = DateTime.now().difference(_sessionStartedAt!));
-    });
-  }
-
   Future<void> _endSession(int caseId) async {
-    // نقرّب المدة لأقرب دقيقة، وبحد أدنى دقيقة واحدة حتى لا تُسجَّل جلسة
-    // بمدة صفر لو ضغط المريض "إنهاء" بعد ثوانٍ من "بدء"
-    final minutes = _elapsed.inSeconds >= 30
-        ? (_elapsed.inSeconds / 60).round()
-        : 1;
-    _tickTimer?.cancel();
-    final started = _sessionStartedAt != null;
-    setState(() {
-      _tickTimer = null;
-      _sessionStartedAt = null;
-      _elapsed = Duration.zero;
-    });
-    await showEndSessionDialog(
-      context,
-      caseId,
-      durationMinutes: started ? minutes : null,
-    );
-    ref.invalidate(myCaseProvider);
-  }
-
-  String _formatElapsed(Duration d) {
-    final minutes = d.inMinutes.toString().padLeft(2, '0');
-    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+    final wasSaved = await showEndSessionDialog(context, caseId);
+    if (wasSaved == true) {
+      ref.invalidate(myCaseProvider);
+    }
   }
 
   String _formatDate(DateTime d) =>
       '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
 
   /// يعرض رسالة التقرير الأسبوعي الإلزامية (كم نوبة هذا الأسبوع) لو فيه
   /// أسبوع مستحق لم يُجب عنه المريض بعد. لا يمكن تجاهلها أو إغلاقها إلا
@@ -255,47 +218,35 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               error: (_, __) => const SizedBox.shrink(),
               data: (myCase) {
                 if (myCase == null) return const SizedBox.shrink();
-                if (_sessionStartedAt == null) {
-                  return SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _startSession,
-                      icon: const Icon(Icons.play_circle_outline),
-                      label: const Text('بدء الجلسة'),
-                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                    ),
-                  );
-                }
-                return Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            _formatElapsed(_elapsed),
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                          const Text('الجلسة جارية...'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
+                return sessionsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (sessions) {
+                    final hasCompletedToday = sessions.any(
+                      (session) => _isToday(session.sessionDate),
+                    );
+                    return SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: () => _endSession(myCase.id),
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('إنهاء الجلسة'),
-                        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                        onPressed: hasCompletedToday
+                            ? null
+                            : () => _endSession(myCase.id),
+                        icon: Icon(
+                          hasCompletedToday
+                              ? Icons.check_circle
+                              : Icons.check_circle_outline,
+                        ),
+                        label: Text(
+                          hasCompletedToday
+                              ? 'تم إنهاء الجلسة اليومية'
+                              : 'إنهاء الجلسة اليومية',
+                        ),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 );
               },
             ),

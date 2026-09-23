@@ -16,20 +16,56 @@ enum DiagnosisType {
   bool get hasClinicalDetails => true;
 }
 
-/// Disease sub-type — matches DiseaseType in cases/models.py.
-/// Placeholder values (type1/type2/type3) until the real sub-types are
-/// defined.
-enum DiseaseType {
+/// Epilepsy sub-type — matches EpilepsyType in cases/models.py. Shown
+/// only when the selected diagnosis is epilepsy. Placeholder values
+/// (type1/type2/type3) until the real sub-types are defined.
+enum EpilepsyType {
   type1('type1', 'Type 1'),
   type2('type2', 'Type 2'),
   type3('type3', 'Type 3');
 
-  const DiseaseType(this.apiValue, this.label);
+  const EpilepsyType(this.apiValue, this.label);
   final String apiValue;
   final String label;
+}
 
-  static DiseaseType fromApiValue(String? value) =>
-      DiseaseType.values.firstWhere((e) => e.apiValue == value, orElse: () => DiseaseType.type1);
+/// Migraine sub-type — matches MigraineType in cases/models.py. Shown
+/// only when the selected diagnosis is migraine. Placeholder values
+/// (type1/type2/type3) until the real sub-types are defined.
+enum MigraineType {
+  type1('type1', 'Type 1'),
+  type2('type2', 'Type 2'),
+  type3('type3', 'Type 3');
+
+  const MigraineType(this.apiValue, this.label);
+  final String apiValue;
+  final String label;
+}
+
+/// Disease sub-type choices for the given diagnosis, as (apiValue, label)
+/// pairs — matches DISEASE_TYPE_CHOICES_BY_DIAGNOSIS in cases/models.py.
+/// Currently identical placeholder values for both diagnoses; will
+/// diverge once the real sub-type names are defined (only this function
+/// needs to change then).
+List<(String, String)> diseaseTypeChoicesFor(DiagnosisType diagnosisType) {
+  switch (diagnosisType) {
+    case DiagnosisType.epilepsy:
+      return EpilepsyType.values.map((e) => (e.apiValue, e.label)).toList();
+    case DiagnosisType.migraine:
+      return MigraineType.values.map((e) => (e.apiValue, e.label)).toList();
+  }
+}
+
+/// Human-readable label for a stored disease_type raw value, given the
+/// case's diagnosis type (needed because the same raw value, e.g.
+/// "type1", means a different thing depending on diagnosis_type).
+String diseaseTypeLabel(DiagnosisType diagnosisType, String? diseaseType) {
+  if (diseaseType == null || diseaseType.isEmpty) return '—';
+  final choices = diseaseTypeChoicesFor(diagnosisType);
+  for (final c in choices) {
+    if (c.$1 == diseaseType) return c.$2;
+  }
+  return diseaseType;
 }
 
 /// Case status — matches CaseStatus in cases/models.py
@@ -58,7 +94,7 @@ class CaseModel {
   final String? deviceTypeName;
   final Map<String, dynamic> deviceSetupParameters;
   final DiagnosisType diagnosisType;
-  final DiseaseType? diseaseType;
+  final String? diseaseType;
   final CaseStatus status;
   final int? monthlyEpisodeCount;
   final int? episodeDurationMinutes;
@@ -67,6 +103,7 @@ class CaseModel {
   final int? totalSessionsPlanned;
   final int completedSessionsCount;
   final int? remainingSessionsCount;
+  final DateTime? pendingWeeklyEpisodeWeek;
   final String guarantorName;
   final String guarantorAddress;
   final String guarantorPhoneNumber;
@@ -95,6 +132,7 @@ class CaseModel {
     this.totalSessionsPlanned,
     this.completedSessionsCount = 0,
     this.remainingSessionsCount,
+    this.pendingWeeklyEpisodeWeek,
     this.guarantorName = '',
     this.guarantorAddress = '',
     this.guarantorPhoneNumber = '',
@@ -118,7 +156,7 @@ class CaseModel {
           (json['device_setup_parameters'] as Map<String, dynamic>?) ?? const {},
       diagnosisType: DiagnosisType.fromApiValue(json['diagnosis_type'] as String),
       diseaseType: (json['disease_type'] as String?)?.isNotEmpty == true
-          ? DiseaseType.fromApiValue(json['disease_type'] as String?)
+          ? json['disease_type'] as String?
           : null,
       status: CaseStatus.fromApiValue(json['status'] as String),
       monthlyEpisodeCount: json['monthly_episode_count'] as int?,
@@ -128,6 +166,9 @@ class CaseModel {
       totalSessionsPlanned: json['total_sessions_planned'] as int?,
       completedSessionsCount: json['completed_sessions_count'] as int? ?? 0,
       remainingSessionsCount: json['remaining_sessions_count'] as int?,
+      pendingWeeklyEpisodeWeek: (json['pending_weekly_episode_week'] as String?) != null
+          ? DateTime.parse(json['pending_weekly_episode_week'] as String)
+          : null,
       guarantorName: json['guarantor_name'] as String? ?? '',
       guarantorAddress: json['guarantor_address'] as String? ?? '',
       guarantorPhoneNumber: json['guarantor_phone_number'] as String? ?? '',
@@ -147,7 +188,7 @@ class NewCasePayload {
   final String? deviceId;
   final Map<String, dynamic> deviceSetupParameters;
   final DiagnosisType diagnosisType;
-  final DiseaseType? diseaseType;
+  final String? diseaseType;
   final int? monthlyEpisodeCount;
   final int? episodeDurationMinutes;
   final String symptoms;
@@ -186,7 +227,7 @@ class NewCasePayload {
         if (deviceId != null) 'device': deviceId,
         'device_setup_parameters': deviceSetupParameters,
         'diagnosis_type': diagnosisType.apiValue,
-        if (diseaseType != null) 'disease_type': diseaseType!.apiValue,
+        if (diseaseType != null) 'disease_type': diseaseType,
         if (monthlyEpisodeCount != null) 'monthly_episode_count': monthlyEpisodeCount,
         if (episodeDurationMinutes != null) 'episode_duration_minutes': episodeDurationMinutes,
         'symptoms': symptoms,

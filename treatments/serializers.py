@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import TreatmentSession
@@ -34,6 +35,10 @@ class TreatmentSessionSerializer(serializers.ModelSerializer):
         1. يجب أن تكون الحالة (case) المُرسلة هي حالته الخاصة فقط — يمنع
            تسجيل جلسة نيابة عن مريض آخر.
         2. لا يمكنه تعديل doctor_notes — هذا الحقل خاص بملاحظات الطبيب.
+        3. لا يمكنه تسجيل أكثر من جلسة واحدة في نفس اليوم (زر "إنهاء
+           الجلسة اليومية" يُسمح بالضغط عليه مرة واحدة يومياً فقط). نعتمد
+           على تاريخ/وقت السيرفر (created_at) وليس أي تاريخ يُرسله
+           العميل، حتى لا يمكن الالتفاف على القيد بتعديل session_date.
         """
         request = self.context.get("request")
         if request and request.user.role == "patient":
@@ -47,6 +52,16 @@ class TreatmentSessionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"لا يمكن للمريض تعديل الحقول التالية: {', '.join(forbidden)}"
                 )
+            if self.instance is None and case:
+                today = timezone.localdate()
+                already_logged_today = TreatmentSession.objects.filter(
+                    case=case, created_at__date=today
+                ).exists()
+                if already_logged_today:
+                    raise serializers.ValidationError(
+                        "تم تسجيل الجلسة اليومية بالفعل اليوم. حاول مرة "
+                        "أخرى غداً."
+                    )
         return attrs
 
     def create(self, validated_data):

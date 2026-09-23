@@ -20,8 +20,10 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "phone_number",
             "specialty",
+            "date_joined",
         ]
-        read_only_fields = ["id", "role"]  # لا يمكن للمستخدم تغيير دوره بنفسه
+        # date_joined تُستخدم بواجهة المريض لحساب "عدد الأيام منذ التسجيل"
+        read_only_fields = ["id", "role", "date_joined"]  # لا يمكن للمستخدم تغيير دوره بنفسه
 
 
 class RegisterSerializer(serializers.ModelSerializer):

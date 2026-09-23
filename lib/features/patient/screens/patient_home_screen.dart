@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
+import '../../doctor/models/weekly_episode_log_model.dart';
 import '../models/session_model.dart';
 import '../patient_providers.dart';
 import 'end_session_dialog.dart';
@@ -24,6 +26,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   DateTime? _sessionStartedAt;
   Timer? _tickTimer;
   Duration _elapsed = Duration.zero;
+  bool _isWeeklyDialogShowing = false;
 
   @override
   void dispose() {
@@ -69,6 +72,123 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     return '$minutes:$seconds';
   }
 
+  String _formatDate(DateTime d) =>
+      '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+
+  /// يعرض رسالة التقرير الأسبوعي الإلزامية (كم نوبة هذا الأسبوع) لو فيه
+  /// أسبوع مستحق لم يُجب عنه المريض بعد. لا يمكن تجاهلها أو إغلاقها إلا
+  /// بالإجابة (لا زر إغلاق، لا سحب للخارج، لا زر رجوع). لو كان المريض
+  /// غايباً أكثر من أسبوع، تُعرض الأسابيع المتراكمة واحداً تلو الآخر
+  /// تلقائياً لحد ما يكمّلها كلها.
+  Future<void> _maybeShowWeeklyEpisodePrompt(CaseModel myCase) async {
+    if (_isWeeklyDialogShowing) return;
+    final week = myCase.pendingWeeklyEpisodeWeek;
+    if (week == null) return;
+
+    _isWeeklyDialogShowing = true;
+    await _showWeeklyEpisodeDialog(caseId: myCase.id, weekStart: week);
+    _isWeeklyDialogShowing = false;
+
+    if (!mounted) return;
+    try {
+      final latest = await ref.refresh(myCaseProvider.future);
+      if (latest != null && latest.pendingWeeklyEpisodeWeek != null && mounted) {
+        await _maybeShowWeeklyEpisodePrompt(latest);
+      }
+    } catch (_) {
+      // تجاهل أي خطأ بإعادة الجلب هنا — لو لسا فيه أسبوع مستحق، الشاشة
+      // ستحاول عرض الرسالة مرة ثانية بمجرد نجاح أي إعادة بناء لاحقة
+    }
+  }
+
+  Future<void> _showWeeklyEpisodeDialog({required int caseId, required DateTime weekStart}) {
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? errorText;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: StatefulBuilder(
+            builder: (context, setStateDialog) {
+              return AlertDialog(
+                title: const Text('تقرير أسبوعي إلزامي'),
+                content: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'كم نوبة كانت لديك خلال الأسبوع من '
+                        '${_formatDate(weekStart)} إلى ${_formatDate(weekEnd)}؟',
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: controller,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: 'عدد النوبات',
+                          errorText: errorText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final text = controller.text.trim();
+                            if (text.isEmpty || int.tryParse(text) == null) {
+                              setStateDialog(() => errorText = 'أدخل رقماً صحيحاً');
+                              return;
+                            }
+                            setStateDialog(() {
+                              errorText = null;
+                              isSubmitting = true;
+                            });
+                            try {
+                              await ref.read(patientRepositoryProvider).submitWeeklyEpisodeLog(
+                                    NewWeeklyEpisodeLogPayload(
+                                      caseId: caseId,
+                                      episodeCount: int.parse(text),
+                                    ),
+                                  );
+                              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                            } catch (e) {
+                              setStateDialog(() {
+                                isSubmitting = false;
+                                errorText = 'حدث خطأ، حاول مرة أخرى';
+                              });
+                            }
+                          },
+                    child: isSubmitting
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('إرسال'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
@@ -80,6 +200,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     final myCaseId = caseAsync.value?.id;
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForMyCase = myCaseId != null ? (unreadByCase[myCaseId] ?? 0) : 0;
+
+    // رسالة التقرير الأسبوعي الإلزامية — تُفحص بكل مرة تُبنى فيها
+    // الشاشة (أي فتح للتطبيق أو رجوع لهذي الشاشة)، وتعتمد بالكامل على
+    // حالة الـ backend (pendingWeeklyEpisodeWeek)، فتبقى تظهر تلقائياً
+    // لحد ما المريض يجاوب حتى لو أغلق التطبيق ورجع.
+    final pendingCase = caseAsync.value;
+    if (pendingCase != null && pendingCase.pendingWeeklyEpisodeWeek != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowWeeklyEpisodePrompt(pendingCase);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(

@@ -7,6 +7,7 @@ import 'models/case_model.dart';
 import 'models/case_progress_note_model.dart';
 import 'models/device_model.dart';
 import 'models/patient_model.dart';
+import 'models/weekly_episode_log_model.dart';
 
 final doctorRepositoryProvider = Provider<DoctorRepository>((ref) {
   return DoctorRepository(ref.read(apiClientProvider));
@@ -44,4 +45,11 @@ final caseSessionsProvider =
 final caseProgressNotesProvider =
     FutureProvider.autoDispose.family<List<CaseProgressNoteModel>, int>((ref, caseId) async {
   return ref.read(doctorRepositoryProvider).fetchProgressNotes(caseId);
+});
+
+/// تقارير النوبات الأسبوعية لحالة معيّنة — لبناء شارت المقارنة
+/// (جلسات مقابل نوبات) بشاشة تفاصيل الحالة
+final caseWeeklyEpisodeLogsProvider =
+    FutureProvider.autoDispose.family<List<WeeklyEpisodeLogModel>, int>((ref, caseId) async {
+  return ref.read(doctorRepositoryProvider).fetchWeeklyEpisodeLogs(caseId);
 });

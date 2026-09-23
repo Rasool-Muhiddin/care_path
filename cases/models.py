@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from devices.models import Device
 
@@ -9,15 +12,52 @@ class DiagnosisType(models.TextChoices):
     EPILEPSY = "epilepsy", "Epilepsy"
 
 
-class DiseaseType(models.TextChoices):
+class EpilepsyType(models.TextChoices):
     """
-    نوع/تصنيف فرعي للمرض ضمن التشخيص الرئيسي (migraine/epilepsy).
-    القيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
+    أنواع الصرع الفرعية — تظهر فقط عند اختيار تشخيص الصرع.
+    قيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
     """
 
     TYPE1 = "type1", "Type 1"
     TYPE2 = "type2", "Type 2"
     TYPE3 = "type3", "Type 3"
+
+
+class MigraineType(models.TextChoices):
+    """
+    أنواع الشقيقة الفرعية — تظهر فقط عند اختيار تشخيص الشقيقة.
+    قيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
+    """
+
+    TYPE1 = "type1", "Type 1"
+    TYPE2 = "type2", "Type 2"
+    TYPE3 = "type3", "Type 3"
+
+
+# خريطة: كل تشخيص رئيسي له مجموعة "أنواعه الفرعية" الخاصة به فقط —
+# تُستخدم بالـ Serializer (validate) للتأكد أن disease_type المُرسَل
+# ينتمي فعلاً لتشخيص الحالة (Case.diagnosis_type)، حتى لا يُحفظ نوع
+# فرعي يخص الصرع مع حالة تشخيصها شقيقة أو العكس.
+# حالياً كل المجموعات متطابقة القيم (type1/2/3) لأن الأنواع الحقيقية
+# لم تُحدَّد بعد — لاحقاً يكفي تعديل هذه الكلاسات فقط (EpilepsyType/
+# MigraineType) دون أي تغيير بالكود من حولها.
+DISEASE_TYPE_CHOICES_BY_DIAGNOSIS = {
+    DiagnosisType.EPILEPSY: EpilepsyType.choices,
+    DiagnosisType.MIGRAINE: MigraineType.choices,
+}
+
+
+def _all_disease_type_choices():
+    """
+    اتحاد كل الأنواع الفرعية عبر كل التشخيصات — تُستخدم فقط كـ choices
+    لحقل disease_type على مستوى الموديل/الأدمن (قبول أي قيمة من أي
+    تشخيص)، بينما التحقق الفعلي المرتبط بتشخيص الحالة بالذات يتم
+    بالـ Serializer عبر DISEASE_TYPE_CHOICES_BY_DIAGNOSIS أعلاه.
+    """
+    merged = {}
+    for choices in DISEASE_TYPE_CHOICES_BY_DIAGNOSIS.values():
+        merged.update(dict(choices))
+    return list(merged.items())
 
 
 class CaseStatus(models.TextChoices):
@@ -66,8 +106,8 @@ class Case(models.Model):
 
     diagnosis_type = models.CharField(max_length=20, choices=DiagnosisType.choices)
     disease_type = models.CharField(
-        max_length=20, choices=DiseaseType.choices, blank=True,
-        help_text="نوع/تصنيف فرعي للمرض (قيم مؤقتة: type1/type2/type3)",
+        max_length=20, choices=_all_disease_type_choices(), blank=True,
+        help_text="نوع/تصنيف فرعي للمرض — يعتمد على diagnosis_type (انظر DISEASE_TYPE_CHOICES_BY_DIAGNOSIS)",
     )
     status = models.CharField(
         max_length=25, choices=CaseStatus.choices, default=CaseStatus.NEW
@@ -164,3 +204,66 @@ class CaseProgressNote(models.Model):
 
     def __str__(self) -> str:
         return f"Progress note on Case #{self.case_id} @ {self.created_at:%Y-%m-%d}"
+
+
+def _week_start(d):
+    """يوم الاثنين من الأسبوع الذي يقع فيه التاريخ d."""
+    return d - timedelta(days=d.weekday())
+
+
+def pending_weekly_episode_week(case):
+    """
+    يرجّع تاريخ بداية (الاثنين) أقدم أسبوع لم يُسجَّل له تقرير نوبات
+    أسبوعي بعد من طرف المريض، بدءاً من أسبوع إنشاء الحالة ولغاية آخر
+    أسبوع اكتمل فعلياً (لا نطلب تقرير عن أسبوع لسا ما خلص). يرجّع None
+    لو المريض مسجّل كل الأسابيع المستحقة، أو لو الحالة مغلقة.
+
+    يُستخدم هذا لإجبار المريض على تسجيل عدد نوباته كل أسبوع (رسالة
+    إلزامية بالواجهة تبقى تظهر لحد ما يجاوب، حتى لو أغلق التطبيق ورجع)،
+    وبتراكم هذي التقارير الأسبوعية نقدر نبني سلسلة زمنية فعلية لعدد
+    النوبات (بعكس Case.monthly_episode_count اللي هو رقم ثابت واحد فقط)
+    تُستخدم لاحقاً بالتحليل الإحصائي (barplot: جلسات مقابل نوبات عبر
+    الزمن، وتجميع كل 4 أسابيع = شهر واحد).
+    """
+    if case.status == CaseStatus.CLOSED:
+        return None
+
+    today = timezone.localdate()
+    first_week_start = _week_start(case.created_at.date())
+    reported_weeks = set(
+        case.weekly_episode_logs.values_list("week_start_date", flat=True)
+    )
+
+    week = first_week_start
+    while week + timedelta(days=7) <= today:
+        if week not in reported_weeks:
+            return week
+        week += timedelta(days=7)
+    return None
+
+
+class WeeklyEpisodeLog(models.Model):
+    """
+    تقرير أسبوعي إلزامي يُدخله المريض بنفسه: كم نوبة/أزمة عانى منها
+    خلال أسبوع معيّن (week_start_date = يوم الاثنين). إدخال واحد لكل
+    أسبوع لكل حالة (unique_together)، ولا يمكن تعديله أو حذفه بعد
+    الإرسال — سجل تاريخي ثابت.
+    """
+
+    case = models.ForeignKey(
+        Case, on_delete=models.CASCADE, related_name="weekly_episode_logs"
+    )
+    week_start_date = models.DateField(
+        help_text="تاريخ يوم الاثنين لبداية الأسبوع الذي يخص هذا التقرير"
+    )
+    episode_count = models.PositiveIntegerField(
+        help_text="عدد النوبات التي أجاب بها المريض عن هذا الأسبوع"
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["week_start_date"]
+        unique_together = ("case", "week_start_date")
+
+    def __str__(self) -> str:
+        return f"Case #{self.case_id} — week of {self.week_start_date}: {self.episode_count}"

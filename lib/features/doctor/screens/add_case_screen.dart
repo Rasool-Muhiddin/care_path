@@ -41,7 +41,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
   PatientModel? _selectedPatient;
   DeviceModel? _selectedDevice;
   DiagnosisType _selectedDiagnosis = DiagnosisType.migraine;
-  DiseaseType _selectedDiseaseType = DiseaseType.type1;
+  String _selectedDiseaseType = diseaseTypeChoicesFor(DiagnosisType.migraine).first.$1;
   _DurationUnit _durationUnit = _DurationUnit.minutes;
   bool _isSubmitting = false;
 
@@ -219,19 +219,30 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
               items: DiagnosisType.values
                   .map((d) => DropdownMenuItem(value: d, child: Text(d.label)))
                   .toList(),
-              onChanged: (value) => setState(() => _selectedDiagnosis = value!),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _selectedDiagnosis = value;
+                  // Sub-types are diagnosis-specific (epilepsy types vs
+                  // migraine types) — reset to the new diagnosis's first
+                  // option whenever the diagnosis changes.
+                  _selectedDiseaseType = diseaseTypeChoicesFor(value).first.$1;
+                });
+              },
             ),
             const SizedBox(height: 20),
 
-            // --- Disease sub-type (placeholder values until the real
-            // sub-types are defined) ---
-            Text('Disease Type', style: Theme.of(context).textTheme.titleSmall),
+            // --- Disease sub-type — depends on the selected diagnosis:
+            // epilepsy types when Epilepsy is chosen, migraine types when
+            // Migraine is chosen. Placeholder values (type1/2/3) until the
+            // real sub-types are defined. ---
+            Text('${_selectedDiagnosis.label} Type', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            DropdownButtonFormField<DiseaseType>(
+            DropdownButtonFormField<String>(
               initialValue: _selectedDiseaseType,
               decoration: const InputDecoration(border: OutlineInputBorder()),
-              items: DiseaseType.values
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d.label)))
+              items: diseaseTypeChoicesFor(_selectedDiagnosis)
+                  .map((d) => DropdownMenuItem(value: d.$1, child: Text(d.$2)))
                   .toList(),
               onChanged: (value) => setState(() => _selectedDiseaseType = value!),
             ),

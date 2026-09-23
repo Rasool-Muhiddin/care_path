@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../patient/models/session_model.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
 import '../models/case_progress_note_model.dart';
+import '../models/weekly_episode_log_model.dart';
 
 /// Case details screen — opened by tapping a case in the doctor's home
 /// screen. Shows full case info, lets the doctor edit status / treatment
@@ -110,6 +112,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     final c = widget.caseModel;
     final sessionsAsync = ref.watch(caseSessionsProvider(c.id));
     final progressNotesAsync = ref.watch(caseProgressNotesProvider(c.id));
+    final weeklyEpisodeLogsAsync = ref.watch(caseWeeklyEpisodeLogsProvider(c.id));
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForThisCase = unreadByCase[c.id] ?? 0;
 
@@ -132,6 +135,31 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // --- Quick stats: days since registration & sessions
+            // recorded, shown prominently at the top so the doctor sees
+            // this at a glance for every case (same key numbers the
+            // patient tracks about their own case). ---
+            Row(
+              children: [
+                Expanded(
+                  child: _StatBox(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Days since registration',
+                    value: '${DateTime.now().difference(c.createdAt).inDays}',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatBox(
+                    icon: Icons.event_note_outlined,
+                    label: 'Sessions recorded',
+                    value: '${c.completedSessionsCount}',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // --- Read-only summary ---
             Card(
               child: Padding(
@@ -140,7 +168,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _InfoRow(label: 'Diagnosis', value: c.diagnosisType.label),
-                    _InfoRow(label: 'Disease Type', value: c.diseaseType?.label ?? '—'),
+                    _InfoRow(
+                      label: '${c.diagnosisType.label} Type',
+                      value: diseaseTypeLabel(c.diagnosisType, c.diseaseType),
+                    ),
                     _InfoRow(label: 'Device', value: c.deviceTypeName ?? '—'),
                     _InfoRow(
                       label: 'Sessions completed',
@@ -266,6 +297,52 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
             ),
 
             const SizedBox(height: 28),
+            Text('Sessions vs Attacks', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Compares how many sessions were done against how many attacks were '
+              'reported over time, to visually see whether attacks are trending down.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            sessionsAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('Failed to load sessions: $e', style: const TextStyle(color: Colors.red)),
+              ),
+              data: (sessions) => weeklyEpisodeLogsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Failed to load weekly attack reports: $e',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+                data: (episodeLogs) {
+                  if (episodeLogs.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No weekly attack reports from the patient yet — the chart '
+                        'will appear once the patient starts answering the mandatory '
+                        'weekly report.',
+                      ),
+                    );
+                  }
+                  return _SessionsVsAttacksChart(sessions: sessions, episodeLogs: episodeLogs);
+                },
+              ),
+            ),
+
+            const SizedBox(height: 28),
             Text('Progress Notes', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
@@ -323,6 +400,214 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+enum _ChartGranularity { weekly, monthly }
+
+/// Grouped bar chart comparing sessions done vs attacks reported, either
+/// per week (each bar = one WeeklyEpisodeLog) or per calendar month
+/// (4 weeks combined, as suggested) — toggled via the segmented control.
+/// Attack counts come from WeeklyEpisodeLog (patient's mandatory weekly
+/// reports), not from the old static Case.monthly_episode_count, since
+/// only the weekly reports form an actual time series.
+class _SessionsVsAttacksChart extends StatefulWidget {
+  const _SessionsVsAttacksChart({required this.sessions, required this.episodeLogs});
+  final List<SessionModel> sessions;
+  final List<WeeklyEpisodeLogModel> episodeLogs;
+
+  @override
+  State<_SessionsVsAttacksChart> createState() => _SessionsVsAttacksChartState();
+}
+
+class _SessionsVsAttacksChartState extends State<_SessionsVsAttacksChart> {
+  _ChartGranularity _granularity = _ChartGranularity.monthly;
+
+  String _twoDigit(int n) => n.toString().padLeft(2, '0');
+
+  /// Builds (label, sessionCount, attackCount) triples, sorted by time,
+  /// one per week or one per calendar month depending on [_granularity].
+  List<(String, double, double)> _buildBars() {
+    final sortedLogs = [...widget.episodeLogs]
+      ..sort((a, b) => a.weekStartDate.compareTo(b.weekStartDate));
+
+    if (_granularity == _ChartGranularity.weekly) {
+      return sortedLogs.map((log) {
+        final weekEnd = log.weekStartDate.add(const Duration(days: 7));
+        final sessionsInWeek = widget.sessions
+            .where((s) =>
+                !s.sessionDate.isBefore(log.weekStartDate) && s.sessionDate.isBefore(weekEnd))
+            .length;
+        final label = '${_twoDigit(log.weekStartDate.month)}/${_twoDigit(log.weekStartDate.day)}';
+        return (label, sessionsInWeek.toDouble(), log.episodeCount.toDouble());
+      }).toList();
+    }
+
+    // شهري: نجمع كل الأسابيع اللي تبدأ بنفس الشهر (سنة/شهر)، ونجمع
+    // الجلسات حسب تاريخها الفعلي بنفس (سنة/شهر).
+    final episodesByMonth = <String, int>{};
+    final monthOrder = <String>[];
+    for (final log in sortedLogs) {
+      final key = '${log.weekStartDate.year}-${_twoDigit(log.weekStartDate.month)}';
+      if (!episodesByMonth.containsKey(key)) monthOrder.add(key);
+      episodesByMonth[key] = (episodesByMonth[key] ?? 0) + log.episodeCount;
+    }
+    final sessionsByMonth = <String, int>{};
+    for (final s in widget.sessions) {
+      final key = '${s.sessionDate.year}-${_twoDigit(s.sessionDate.month)}';
+      sessionsByMonth[key] = (sessionsByMonth[key] ?? 0) + 1;
+    }
+    monthOrder.sort();
+    return monthOrder
+        .map((key) => (key, (sessionsByMonth[key] ?? 0).toDouble(), episodesByMonth[key]!.toDouble()))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = _buildBars();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final maxY = bars.isEmpty
+        ? 10.0
+        : bars
+            .map((b) => b.$2 > b.$3 ? b.$2 : b.$3)
+            .reduce((a, b) => a > b ? a : b) *
+            1.2 + 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _LegendDot(color: colorScheme.primary, label: 'Sessions'),
+            const SizedBox(width: 16),
+            _LegendDot(color: colorScheme.error, label: 'Attacks'),
+            const Spacer(),
+            SegmentedButton<_ChartGranularity>(
+              segments: const [
+                ButtonSegment(value: _ChartGranularity.monthly, label: Text('Monthly')),
+                ButtonSegment(value: _ChartGranularity.weekly, label: Text('Weekly')),
+              ],
+              selected: {_granularity},
+              onSelectionChanged: (s) => setState(() => _granularity = s.first),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (bars.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('Not enough data yet for this view.'),
+          )
+        else
+          SizedBox(
+            height: 220,
+            child: BarChart(
+              BarChartData(
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: true, reservedSize: 28),
+                  ),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (value, meta) {
+                        final i = value.toInt();
+                        if (i < 0 || i >= bars.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(bars[i].$1, style: Theme.of(context).textTheme.bodySmall),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < bars.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: bars[i].$2,
+                          color: colorScheme.primary,
+                          width: 10,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        BarChartRodData(
+                          toY: bars[i].$3,
+                          color: colorScheme.error,
+                          width: 10,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ],
+                      barsSpace: 4,
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  const _StatBox({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.onPrimaryContainer),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

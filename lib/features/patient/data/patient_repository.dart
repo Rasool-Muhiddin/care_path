@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
+import '../../doctor/models/weekly_episode_log_model.dart';
 import '../models/session_model.dart';
 
 /// طبقة التواصل مع بيانات المريض: حالته الخاصة، جلساته، وتسجيل جلسة جديدة.
@@ -47,6 +48,18 @@ class PatientRepository {
     try {
       final response = await _client.raw.post(ApiEndpoints.sessions, data: payload.toJson());
       return SessionModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// إرسال تقرير النوبات الأسبوعي الإلزامي (الأسبوع يُحدَّد تلقائياً
+  /// بالـ backend — أقدم أسبوع مستحق للحالة، لا نرسله من هنا)
+  Future<WeeklyEpisodeLogModel> submitWeeklyEpisodeLog(NewWeeklyEpisodeLogPayload payload) async {
+    try {
+      final response =
+          await _client.raw.post(ApiEndpoints.weeklyEpisodeLogs, data: payload.toJson());
+      return WeeklyEpisodeLogModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

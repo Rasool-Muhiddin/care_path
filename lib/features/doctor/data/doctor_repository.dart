@@ -7,6 +7,7 @@ import '../models/case_model.dart';
 import '../models/case_progress_note_model.dart';
 import '../models/device_model.dart';
 import '../models/patient_model.dart';
+import '../models/weekly_episode_log_model.dart';
 
 /// طبقة التواصل مع بيانات الطبيب: حالاته، قائمة المرضى (لاختيار مريض
 /// عند إنشاء حالة)، قائمة الأجهزة (لاختيار جهاز)، وإنشاء حالة جديدة.
@@ -116,6 +117,20 @@ class DoctorRepository {
       final response =
           await _client.raw.post(ApiEndpoints.caseProgressNotes, data: payload.toJson());
       return CaseProgressNoteModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// تقارير النوبات الأسبوعية لحالة معيّنة (يرسلها المريض) — تُستخدم
+  /// لبناء التحليل الإحصائي (barplot: جلسات مقابل نوبات عبر الزمن)
+  Future<List<WeeklyEpisodeLogModel>> fetchWeeklyEpisodeLogs(int caseId) async {
+    try {
+      final response = await _client.raw.get(
+        ApiEndpoints.weeklyEpisodeLogs,
+        queryParameters: {'case': caseId},
+      );
+      return _extractList(response.data, WeeklyEpisodeLogModel.fromJson);
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

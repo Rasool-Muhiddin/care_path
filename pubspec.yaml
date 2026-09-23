@@ -21,6 +21,9 @@ dependencies:
   # التواصل مع الـ API
   dio: ^5.5.0
 
+  # رسم بياني (barplot) لمقارنة الجلسات بالنوبات بشاشة تفاصيل الحالة
+  fl_chart: ^0.69.0
+
   # تخزين آمن للتوكنات — يدعم Android/iOS/macOS/Windows/Linux
   flutter_secure_storage: ^9.2.2
 

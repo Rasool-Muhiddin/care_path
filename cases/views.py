@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions
 
 from accounts.permissions import IsDoctorOrEngineer
-from .models import Case, CaseProgressNote
-from .serializers import CaseProgressNoteSerializer, CaseSerializer
+from .models import Case, CaseProgressNote, WeeklyEpisodeLog
+from .serializers import CaseProgressNoteSerializer, CaseSerializer, WeeklyEpisodeLogSerializer
 
 
 class IsDoctorUser(permissions.BasePermission):
@@ -14,6 +14,18 @@ class IsDoctorUser(permissions.BasePermission):
             request.user
             and request.user.is_authenticated
             and getattr(request.user, "role", None) == "doctor"
+        )
+
+
+class IsPatientUser(permissions.BasePermission):
+    """يسمح فقط للمريض — يُستخدم لتسجيل تقرير النوبات الأسبوعي (الطبيب
+    والمهندس يقرآن فقط، لا يكتبان)."""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and getattr(request.user, "role", None) == "patient"
         )
 
 
@@ -88,6 +100,47 @@ class CaseProgressNoteViewSet(viewsets.ModelViewSet):
         else:
             # المريض لا يرى شيئاً من هنا إطلاقاً
             return CaseProgressNote.objects.none()
+
+        case_id = self.request.query_params.get("case")
+        if case_id:
+            queryset = queryset.filter(case_id=case_id)
+
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+class WeeklyEpisodeLogViewSet(viewsets.ModelViewSet):
+    """
+    تقارير النوبات الأسبوعية.
+    - المريض: يرسل (create) فقط تقاريره الخاصة عن الأسبوع المستحق —
+      لا تعديل ولا حذف بعد الإرسال (سجل تاريخي ثابت).
+    - الطبيب: يقرأ تقارير حالاته فقط (لبناء التحليل الإحصائي بالشارت).
+    - المهندس: يقرأ الكل (للاتساق مع باقي الـ viewsets).
+
+    فلترة اختيارية: ?case=<id> — لعرض تقارير حالة معيّنة فقط.
+    """
+
+    serializer_class = WeeklyEpisodeLogSerializer
+    http_method_names = ["get", "post", "head", "options"]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [permissions.IsAuthenticated(), IsPatientUser()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == "patient":
+            queryset = WeeklyEpisodeLog.objects.filter(case__patient=user)
+        elif user.role == "doctor":
+            queryset = WeeklyEpisodeLog.objects.filter(case__doctor=user)
+        else:
+            # engineer
+            queryset = WeeklyEpisodeLog.objects.all()
 
         case_id = self.request.query_params.get("case")
         if case_id:

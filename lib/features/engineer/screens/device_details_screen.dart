@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/ltr_scope.dart';
+import '../../chat/presentation/chat_screen.dart';
 import '../../doctor/models/case_model.dart' show CaseStatus;
 import '../engineer_providers.dart';
 import '../models/case_summary_model.dart';
@@ -157,6 +158,9 @@ class _CaseCard extends ConsumerWidget {
           label: Text(caseSummary.status.label, style: const TextStyle(fontSize: 12)),
           backgroundColor: _statusColor(caseSummary.status).withValues(alpha: 0.15),
           side: BorderSide.none,
+        ),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ChatScreen(caseId: caseSummary.id)),
         ),
       ),
     );

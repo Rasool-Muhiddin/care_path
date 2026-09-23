@@ -3,6 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
 
+class ChatConversation {
+  const ChatConversation(this.caseId, this.inquiryType);
+
+  final int caseId;
+  final InquiryType inquiryType;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChatConversation &&
+      other.caseId == caseId &&
+      other.inquiryType == inquiryType;
+
+  @override
+  int get hashCode => Object.hash(caseId, inquiryType);
+}
+
 class ChatState {
   final List<ChatMessageModel> messages;
   final bool isLoading;
@@ -13,10 +29,10 @@ class ChatState {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final ChatRepository _repo;
-  final int caseId;
+  final ChatConversation conversation;
   Timer? _pollTimer;
 
-  ChatNotifier(this._repo, this.caseId) : super(ChatState()) {
+  ChatNotifier(this._repo, this.conversation) : super(ChatState()) {
     _load();
     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _load(silent: true));
   }
@@ -24,7 +40,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> _load({bool silent = false}) async {
     if (!silent) state = state.copyWith(isLoading: true);
     try {
-      final messages = await _repo.getMessages(caseId);
+      final messages = await _repo.getMessages(
+        conversation.caseId,
+        conversation.inquiryType,
+      );
       state = state.copyWith(messages: messages, isLoading: false);
     } catch (_) {
       if (!silent) state = state.copyWith(isLoading: false);
@@ -33,7 +52,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> send(String text) async {
     if (text.trim().isEmpty) return;
-    final sent = await _repo.sendMessage(caseId, text.trim());
+    final sent = await _repo.sendMessage(
+      conversation.caseId,
+      conversation.inquiryType,
+      text.trim(),
+    );
     state = state.copyWith(messages: [...state.messages, sent]);
   }
 
@@ -44,8 +67,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, int>(
-  (ref, caseId) => ChatNotifier(ref.watch(chatRepositoryProvider), caseId),
+final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, ChatConversation>(
+  (ref, conversation) => ChatNotifier(ref.watch(chatRepositoryProvider), conversation),
 );
 
 final unreadCountProvider = StreamProvider<int>((ref) async* {

@@ -9,18 +9,24 @@ class ChatRepository {
   final ApiClient _apiClient;
   ChatRepository(this._apiClient);
 
-  Future<List<ChatMessageModel>> getMessages(int caseId) async {
+  Future<List<ChatMessageModel>> getMessages(int caseId, InquiryType inquiryType) async {
     try {
-      final response = await _apiClient.raw.get(ApiEndpoints.caseMessages(caseId));
+      final response = await _apiClient.raw.get(
+        ApiEndpoints.caseMessages(caseId),
+        queryParameters: {'inquiry_type': inquiryType.apiValue},
+      );
       return (response.data as List).map((e) => ChatMessageModel.fromJson(e)).toList();
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }
   }
 
-  Future<ChatMessageModel> sendMessage(int caseId, String text) async {
+  Future<ChatMessageModel> sendMessage(int caseId, InquiryType inquiryType, String text) async {
     try {
-      final response = await _apiClient.raw.post(ApiEndpoints.caseMessages(caseId), data: {'text': text});
+      final response = await _apiClient.raw.post(
+        ApiEndpoints.caseMessages(caseId),
+        data: {'text': text, 'inquiry_type': inquiryType.apiValue},
+      );
       return ChatMessageModel.fromJson(response.data);
     } on DioException catch (e) {
       throw _apiClient.mapError(e);

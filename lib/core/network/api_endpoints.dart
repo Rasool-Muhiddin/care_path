@@ -16,6 +16,7 @@ class ApiEndpoints {
   static const String refresh = '$api/auth/refresh/';
   static const String me = '$api/auth/me/';
   static const String patients = '$api/patients/';
+  static const String doctors = '$api/doctors/';
   static const String engineers = '$api/engineers/';
 
   // devices

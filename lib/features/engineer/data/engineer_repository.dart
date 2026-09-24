@@ -2,9 +2,12 @@ import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../doctor/models/case_model.dart';
+import '../../doctor/models/patient_model.dart';
 import '../models/case_summary_model.dart';
 import '../models/clinic_model.dart';
 import '../models/device_type_model.dart';
+import '../models/doctor_model.dart';
 import '../models/engineer_device_model.dart';
 import '../models/engineer_model.dart';
 
@@ -91,6 +94,35 @@ class EngineerRepository {
     try {
       final response = await _client.raw.get(ApiEndpoints.engineers);
       return _extractList(response.data, EngineerModel.fromJson);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// قائمة الأطباء كاملة، حتى إن لم ترتبط بهم حالات حتى الآن.
+  Future<List<DoctorModel>> fetchDoctors() async {
+    try {
+      final response = await _client.raw.get(ApiEndpoints.doctors);
+      return _extractList(response.data, DoctorModel.fromJson);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  Future<List<PatientModel>> fetchPatients() async {
+    try {
+      final response = await _client.raw.get(ApiEndpoints.patients);
+      return _extractList(response.data, PatientModel.fromJson);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// المهندس يملك صلاحية قراءة كل الحالات؛ يحتوي الرد على الجلسات المنجزة.
+  Future<List<CaseModel>> fetchAllCases() async {
+    try {
+      final response = await _client.raw.get(ApiEndpoints.cases);
+      return _extractList(response.data, CaseModel.fromJson);
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

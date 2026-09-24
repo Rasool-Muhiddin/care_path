@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_state.dart';
+import '../doctor/models/case_model.dart';
+import '../doctor/models/patient_model.dart';
 import 'data/engineer_repository.dart';
 import 'models/case_summary_model.dart';
 import 'models/clinic_model.dart';
 import 'models/device_type_model.dart';
+import 'models/doctor_model.dart';
 import 'models/engineer_device_model.dart';
 import 'models/engineer_model.dart';
 
@@ -39,4 +42,19 @@ final casesForDeviceProvider =
 final sessionsCountForCaseProvider =
     FutureProvider.autoDispose.family<int, int>((ref, caseId) async {
   return ref.read(engineerRepositoryProvider).fetchSessionsCountForCase(caseId);
+});
+
+final doctorsListProvider = FutureProvider.autoDispose<List<DoctorModel>>((ref) async {
+  ref.watch(authStateProvider);
+  return ref.read(engineerRepositoryProvider).fetchDoctors();
+});
+
+final allPatientsProvider = FutureProvider.autoDispose<List<PatientModel>>((ref) async {
+  ref.watch(authStateProvider);
+  return ref.read(engineerRepositoryProvider).fetchPatients();
+});
+
+final allCasesProvider = FutureProvider.autoDispose<List<CaseModel>>((ref) async {
+  ref.watch(authStateProvider);
+  return ref.read(engineerRepositoryProvider).fetchAllCases();
 });

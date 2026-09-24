@@ -5,7 +5,13 @@ from rest_framework.views import APIView
 
 from .models import UserRole
 from .permissions import IsDoctorOrEngineer, IsEngineer
-from .serializers import EngineerListSerializer, PatientListSerializer, RegisterSerializer, UserSerializer
+from .serializers import (
+    DoctorListSerializer,
+    EngineerListSerializer,
+    PatientListSerializer,
+    RegisterSerializer,
+    UserSerializer,
+)
 
 User = get_user_model()
 
@@ -58,3 +64,13 @@ class EngineerListView(generics.ListAPIView):
 
     def get_queryset(self):
         return User.objects.filter(role=UserRole.ENGINEER).order_by("first_name", "last_name")
+
+
+class DoctorListView(generics.ListAPIView):
+    """قائمة الأطباء الكاملة للمهندس، بما في ذلك الطبيب بلا حالات بعد."""
+
+    serializer_class = DoctorListSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEngineer]
+
+    def get_queryset(self):
+        return User.objects.filter(role=UserRole.DOCTOR).order_by("first_name", "last_name")

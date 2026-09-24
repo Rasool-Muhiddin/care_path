@@ -6,8 +6,9 @@ import '../../../core/widgets/ltr_scope.dart';
 import 'clinics_tab.dart';
 import 'device_types_tab.dart';
 import 'devices_tab.dart';
+import 'overview_tab.dart';
 
-/// Engineer's home screen — 3 tabs: Devices, Clinics, Device Types.
+/// Engineer's home screen — operational overview plus management tabs.
 class EngineerHomeScreen extends ConsumerStatefulWidget {
   const EngineerHomeScreen({super.key});
 
@@ -22,7 +23,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -49,6 +50,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
           bottom: TabBar(
             controller: _tabController,
             tabs: const [
+              Tab(text: 'Overview'),
               Tab(text: 'Devices'),
               Tab(text: 'Clinics'),
               Tab(text: 'Device Types'),
@@ -58,6 +60,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
+            OverviewTab(),
             DevicesTab(),
             ClinicsTab(),
             DeviceTypesTab(),

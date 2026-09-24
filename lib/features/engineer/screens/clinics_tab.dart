@@ -59,12 +59,23 @@ class _ClinicTile extends StatelessWidget {
       leading: const CircleAvatar(child: Icon(Icons.local_hospital_outlined)),
       title: Text(clinic.name),
       subtitle: subtitleParts.isNotEmpty ? Text(subtitleParts.join(' • ')) : null,
-      trailing: clinic.contactPerson.isNotEmpty
-          ? Chip(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (clinic.contactPerson.isNotEmpty) ...[
+            Chip(
               label: Text(clinic.contactPerson, style: const TextStyle(fontSize: 12)),
               side: BorderSide.none,
-            )
-          : null,
+            ),
+            const SizedBox(width: 4),
+          ],
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit',
+            onPressed: () => showEditClinicDialog(context, clinic),
+          ),
+        ],
+      ),
     );
   }
 }

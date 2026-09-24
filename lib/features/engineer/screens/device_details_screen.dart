@@ -7,30 +7,50 @@ import '../../doctor/models/case_model.dart' show CaseStatus;
 import '../engineer_providers.dart';
 import '../models/case_summary_model.dart';
 import '../models/engineer_device_model.dart';
+import 'add_device_screen.dart';
 
 /// Device details screen — opened by tapping a device in the Devices
 /// tab. Shows the device's own info plus every Case that has ever been
 /// linked to it (patient, doctor, diagnosis, status, session count) —
 /// so the engineer can follow up on where each physical device went.
-class DeviceDetailsScreen extends ConsumerWidget {
+class DeviceDetailsScreen extends ConsumerStatefulWidget {
   const DeviceDetailsScreen({super.key, required this.device});
 
   final EngineerDeviceModel device;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final casesAsync = ref.watch(casesForDeviceProvider(device.id));
+  ConsumerState<DeviceDetailsScreen> createState() => _DeviceDetailsScreenState();
+}
+
+class _DeviceDetailsScreenState extends ConsumerState<DeviceDetailsScreen> {
+  late EngineerDeviceModel _device = widget.device;
+
+  Future<void> _editDevice() async {
+    final updated = await Navigator.of(context).push<EngineerDeviceModel>(
+      MaterialPageRoute(builder: (_) => AddDeviceScreen(device: _device)),
+    );
+    if (updated != null && mounted) setState(() => _device = updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final casesAsync = ref.watch(casesForDeviceProvider(_device.id));
 
     return LtrScope(
       child: Scaffold(
-        appBar: AppBar(title: Text(device.serialNumber)),
+        appBar: AppBar(
+          title: Text(_device.serialNumber),
+          actions: [
+            IconButton(icon: const Icon(Icons.edit), onPressed: _editDevice),
+          ],
+        ),
         body: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(casesForDeviceProvider(device.id)),
+          onRefresh: () async => ref.invalidate(casesForDeviceProvider(_device.id)),
           child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
-            _DeviceInfoCard(device: device),
+            _DeviceInfoCard(device: _device),
             const SizedBox(height: 24),
             Text('Linked Cases', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),

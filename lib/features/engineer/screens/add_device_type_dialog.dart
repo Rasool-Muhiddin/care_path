@@ -16,8 +16,22 @@ Future<bool?> showAddDeviceTypeDialog(BuildContext context) {
   );
 }
 
+/// Dialog to edit an existing device type — same form, pre-filled and
+/// submitting a PATCH instead of a POST.
+Future<bool?> showEditDeviceTypeDialog(BuildContext context, DeviceTypeModel type) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => _AddDeviceTypeDialog(type: type),
+  );
+}
+
 class _AddDeviceTypeDialog extends ConsumerStatefulWidget {
-  const _AddDeviceTypeDialog();
+  const _AddDeviceTypeDialog({this.type});
+
+  /// When non-null, the dialog opens pre-filled in edit mode.
+  final DeviceTypeModel? type;
+
+  bool get isEditing => type != null;
 
   @override
   ConsumerState<_AddDeviceTypeDialog> createState() => _AddDeviceTypeDialogState();
@@ -25,9 +39,9 @@ class _AddDeviceTypeDialog extends ConsumerStatefulWidget {
 
 class _AddDeviceTypeDialogState extends ConsumerState<_AddDeviceTypeDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  bool _isActive = true;
+  late final _nameController = TextEditingController(text: widget.type?.name ?? '');
+  late final _descriptionController = TextEditingController(text: widget.type?.description ?? '');
+  late bool _isActive = widget.type?.isActive ?? true;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -47,13 +61,17 @@ class _AddDeviceTypeDialogState extends ConsumerState<_AddDeviceTypeDialog> {
     });
 
     try {
-      await ref.read(engineerRepositoryProvider).createDeviceType(
-            DeviceTypePayload(
-              name: _nameController.text.trim(),
-              description: _descriptionController.text.trim(),
-              isActive: _isActive,
-            ),
-          );
+      final payload = DeviceTypePayload(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        isActive: _isActive,
+      );
+      final repo = ref.read(engineerRepositoryProvider);
+      if (widget.isEditing) {
+        await repo.updateDeviceType(widget.type!.id, payload);
+      } else {
+        await repo.createDeviceType(payload);
+      }
       ref.invalidate(deviceTypesListProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -67,7 +85,7 @@ class _AddDeviceTypeDialogState extends ConsumerState<_AddDeviceTypeDialog> {
   Widget build(BuildContext context) {
     return LtrScope(
       child: AlertDialog(
-      title: const Text('New Device Type'),
+      title: Text(widget.isEditing ? 'Edit Device Type' : 'New Device Type'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -120,7 +138,7 @@ class _AddDeviceTypeDialogState extends ConsumerState<_AddDeviceTypeDialog> {
                   width: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Create'),
+              : Text(widget.isEditing ? 'Save' : 'Create'),
         ),
       ],
       ),

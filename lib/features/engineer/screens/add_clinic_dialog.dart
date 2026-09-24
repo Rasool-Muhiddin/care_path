@@ -15,8 +15,22 @@ Future<bool?> showAddClinicDialog(BuildContext context) {
   );
 }
 
+/// Dialog to edit an existing clinic — same form, pre-filled and
+/// submitting a PATCH instead of a POST.
+Future<bool?> showEditClinicDialog(BuildContext context, ClinicModel clinic) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => _AddClinicDialog(clinic: clinic),
+  );
+}
+
 class _AddClinicDialog extends ConsumerStatefulWidget {
-  const _AddClinicDialog();
+  const _AddClinicDialog({this.clinic});
+
+  /// When non-null, the dialog opens pre-filled in edit mode.
+  final ClinicModel? clinic;
+
+  bool get isEditing => clinic != null;
 
   @override
   ConsumerState<_AddClinicDialog> createState() => _AddClinicDialogState();
@@ -24,10 +38,11 @@ class _AddClinicDialog extends ConsumerStatefulWidget {
 
 class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _contactPersonController = TextEditingController();
+  late final _nameController = TextEditingController(text: widget.clinic?.name ?? '');
+  late final _addressController = TextEditingController(text: widget.clinic?.address ?? '');
+  late final _phoneController = TextEditingController(text: widget.clinic?.phoneNumber ?? '');
+  late final _contactPersonController =
+      TextEditingController(text: widget.clinic?.contactPerson ?? '');
 
   EngineerModel? _selectedEngineer;
   bool _isSubmitting = false;
@@ -51,15 +66,19 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
     });
 
     try {
-      await ref.read(engineerRepositoryProvider).createClinic(
-            ClinicPayload(
-              name: _nameController.text.trim(),
-              address: _addressController.text.trim(),
-              phoneNumber: _phoneController.text.trim(),
-              contactPerson: _contactPersonController.text.trim(),
-              responsibleEngineerId: _selectedEngineer?.id,
-            ),
-          );
+      final payload = ClinicPayload(
+        name: _nameController.text.trim(),
+        address: _addressController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        contactPerson: _contactPersonController.text.trim(),
+        responsibleEngineerId: _selectedEngineer?.id,
+      );
+      final repo = ref.read(engineerRepositoryProvider);
+      if (widget.isEditing) {
+        await repo.updateClinic(widget.clinic!.id, payload);
+      } else {
+        await repo.createClinic(payload);
+      }
       ref.invalidate(clinicsListProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -75,7 +94,7 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
 
     return LtrScope(
       child: AlertDialog(
-      title: const Text('New Clinic'),
+      title: Text(widget.isEditing ? 'Edit Clinic' : 'New Clinic'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -113,7 +132,16 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
               engineersAsync.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Failed to load engineers: $e'),
-                data: (engineers) => DropdownButtonFormField<EngineerModel>(
+                data: (engineers) {
+                  if (widget.isEditing && _selectedEngineer == null) {
+                    for (final e in engineers) {
+                      if (e.id == widget.clinic!.responsibleEngineerId) {
+                        _selectedEngineer = e;
+                        break;
+                      }
+                    }
+                  }
+                  return DropdownButtonFormField<EngineerModel>(
                   initialValue: _selectedEngineer,
                   decoration: const InputDecoration(border: OutlineInputBorder()),
                   hint: const Text('Select engineer'),
@@ -122,7 +150,8 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                       .map((e) => DropdownMenuItem(value: e, child: Text(e.displayName)))
                       .toList(),
                   onChanged: (value) => setState(() => _selectedEngineer = value),
-                ),
+                  );
+                },
               ),
             ],
           ),
@@ -141,7 +170,7 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                   width: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Create'),
+              : Text(widget.isEditing ? 'Save' : 'Create'),
         ),
       ],
       ),

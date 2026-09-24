@@ -7,10 +7,17 @@ import '../models/clinic_model.dart';
 import '../models/device_type_model.dart';
 import '../models/engineer_device_model.dart';
 
-/// New device screen — the engineer enters serial number, model, type,
-/// clinic (optional), status, install date, and notes.
+/// New / Edit device screen — the engineer enters serial number, model,
+/// type, clinic (optional), status, install date, and notes.
+/// Pass [device] to edit an existing device instead of creating one.
 class AddDeviceScreen extends ConsumerStatefulWidget {
-  const AddDeviceScreen({super.key});
+  const AddDeviceScreen({super.key, this.device});
+
+  /// When non-null, the screen opens in edit mode pre-filled with this
+  /// device's data and submits a PATCH instead of a POST.
+  final EngineerDeviceModel? device;
+
+  bool get isEditing => device != null;
 
   @override
   ConsumerState<AddDeviceScreen> createState() => _AddDeviceScreenState();
@@ -18,14 +25,16 @@ class AddDeviceScreen extends ConsumerStatefulWidget {
 
 class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _serialNumberController = TextEditingController();
-  final _modelNameController = TextEditingController();
-  final _notesController = TextEditingController();
+  late final _serialNumberController =
+      TextEditingController(text: widget.device?.serialNumber ?? '');
+  late final _modelNameController =
+      TextEditingController(text: widget.device?.modelName ?? '');
+  late final _notesController = TextEditingController(text: widget.device?.notes ?? '');
 
   DeviceTypeModel? _selectedDeviceType;
   ClinicModel? _selectedClinic;
-  DeviceStatus _selectedStatus = DeviceStatus.active;
-  DateTime? _installedAt;
+  late DeviceStatus _selectedStatus = widget.device?.status ?? DeviceStatus.active;
+  late DateTime? _installedAt = widget.device?.installedAt;
   bool _isSubmitting = false;
 
   @override
@@ -51,19 +60,21 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(engineerRepositoryProvider).createDevice(
-            NewDevicePayload(
-              serialNumber: _serialNumberController.text.trim(),
-              modelName: _modelNameController.text.trim(),
-              deviceTypeId: _selectedDeviceType?.id,
-              clinicId: _selectedClinic?.id,
-              status: _selectedStatus,
-              installedAt: _installedAt,
-              notes: _notesController.text.trim(),
-            ),
-          );
+      final payload = NewDevicePayload(
+        serialNumber: _serialNumberController.text.trim(),
+        modelName: _modelNameController.text.trim(),
+        deviceTypeId: _selectedDeviceType?.id,
+        clinicId: _selectedClinic?.id,
+        status: _selectedStatus,
+        installedAt: _installedAt,
+        notes: _notesController.text.trim(),
+      );
+      final repo = ref.read(engineerRepositoryProvider);
+      final saved = widget.isEditing
+          ? await repo.updateDevice(widget.device!.id, payload)
+          : await repo.createDevice(payload);
       ref.invalidate(devicesListProvider);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop(saved);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -80,7 +91,7 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
 
     return LtrScope(
       child: Scaffold(
-        appBar: AppBar(title: const Text('New Device')),
+        appBar: AppBar(title: Text(widget.isEditing ? 'Edit Device' : 'New Device')),
         body: Form(
           key: _formKey,
           child: ListView(
@@ -118,6 +129,16 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     style: TextStyle(color: Colors.orange),
                   );
                 }
+                // Resolve the device's current type to a matching item in
+                // the loaded list on first build (edit mode only).
+                if (widget.isEditing && _selectedDeviceType == null) {
+                  for (final t in types) {
+                    if (t.id == widget.device!.deviceTypeId) {
+                      _selectedDeviceType = t;
+                      break;
+                    }
+                  }
+                }
                 return DropdownButtonFormField<DeviceTypeModel>(
                   initialValue: _selectedDeviceType,
                   decoration: const InputDecoration(border: OutlineInputBorder()),
@@ -138,7 +159,16 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
             clinicsAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => Text('Failed to load clinics: $e'),
-              data: (clinics) => DropdownButtonFormField<ClinicModel>(
+              data: (clinics) {
+                if (widget.isEditing && _selectedClinic == null) {
+                  for (final c in clinics) {
+                    if (c.id == widget.device!.clinicId) {
+                      _selectedClinic = c;
+                      break;
+                    }
+                  }
+                }
+                return DropdownButtonFormField<ClinicModel>(
                 initialValue: _selectedClinic,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
                 hint: const Text('Select clinic'),
@@ -147,7 +177,8 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
                     .toList(),
                 onChanged: (value) => setState(() => _selectedClinic = value),
-              ),
+              );
+              },
             ),
             const SizedBox(height: 20),
 
@@ -198,7 +229,7 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Save Device'),
+                  : Text(widget.isEditing ? 'Save Changes' : 'Save Device'),
             ),
           ],
         ),

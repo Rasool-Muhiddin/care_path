@@ -58,12 +58,23 @@ class _DeviceTypeTile extends StatelessWidget {
       ),
       title: Text(type.name),
       subtitle: type.description.isNotEmpty ? Text(type.description) : null,
-      trailing: type.isActive
-          ? null
-          : Chip(
-              label: const Text('Inactive', style: TextStyle(fontSize: 12)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!type.isActive) ...[
+            const Chip(
+              label: Text('Inactive', style: TextStyle(fontSize: 12)),
               side: BorderSide.none,
             ),
+            const SizedBox(width: 4),
+          ],
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit',
+            onPressed: () => showEditDeviceTypeDialog(context, type),
+          ),
+        ],
+      ),
     );
   }
 }

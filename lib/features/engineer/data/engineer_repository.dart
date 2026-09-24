@@ -41,6 +41,17 @@ class EngineerRepository {
     }
   }
 
+  /// تعديل جهاز موجود (رقم الجهاز id هو UUID كسلسلة نصية).
+  Future<EngineerDeviceModel> updateDevice(String id, NewDevicePayload payload) async {
+    try {
+      final response =
+          await _client.raw.patch('${ApiEndpoints.devices}$id/', data: payload.toJson());
+      return EngineerDeviceModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
   /// كل الحالات (عبر الزمن) التي ارتبطت بجهاز معيّن — لشاشة تفاصيل الجهاز
   Future<List<CaseSummaryModel>> fetchCasesForDevice(String deviceId) async {
     try {
@@ -83,6 +94,17 @@ class EngineerRepository {
   Future<ClinicModel> createClinic(ClinicPayload payload) async {
     try {
       final response = await _client.raw.post(ApiEndpoints.clinics, data: payload.toJson());
+      return ClinicModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// تعديل عيادة موجودة.
+  Future<ClinicModel> updateClinic(int id, ClinicPayload payload) async {
+    try {
+      final response =
+          await _client.raw.patch('${ApiEndpoints.clinics}$id/', data: payload.toJson());
       return ClinicModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _client.mapError(e);
@@ -142,6 +164,17 @@ class EngineerRepository {
   Future<DeviceTypeModel> createDeviceType(DeviceTypePayload payload) async {
     try {
       final response = await _client.raw.post(ApiEndpoints.deviceTypes, data: payload.toJson());
+      return DeviceTypeModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// تعديل نوع جهاز موجود.
+  Future<DeviceTypeModel> updateDeviceType(int id, DeviceTypePayload payload) async {
+    try {
+      final response =
+          await _client.raw.patch('${ApiEndpoints.deviceTypes}$id/', data: payload.toJson());
       return DeviceTypeModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _client.mapError(e);

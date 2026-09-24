@@ -8,7 +8,10 @@ import '../logic/chat_notifier.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final int caseId;
-  const ChatScreen({super.key, required this.caseId});
+
+  /// اسم الطبيب المعالج (اختياري) — يُعرض للمريض في سطر "إلى: ..." بالقناة الطبية.
+  final String? doctorName;
+  const ChatScreen({super.key, required this.caseId, this.doctorName});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -35,6 +38,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final inquiryType = currentRole == UserRole.doctor
         ? InquiryType.medical
         : _selectedInquiryType ?? InquiryType.technical;
+    // المهندس يرى القناة الطبية كمدير لكن للقراءة فقط.
+    final isEngineerReadOnly =
+        currentRole == UserRole.engineer && inquiryType == InquiryType.medical;
+    final doctorLabel = (widget.doctorName != null && widget.doctorName!.trim().isNotEmpty)
+        ? 'د. ${widget.doctorName!.trim()}'
+        : 'الطبيب المعالج';
+    final recipientLabel = currentRole == UserRole.patient
+        ? (inquiryType == InquiryType.technical
+            ? 'إلى: المهندس'
+            : 'إلى: $doctorLabel (ويطّلع عليها المهندس)')
+        : null;
     final conversation = ChatConversation(widget.caseId, inquiryType);
     final state = ref.watch(chatProvider(conversation));
 
@@ -67,6 +81,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (recipientLabel != null) _RecipientBanner(label: recipientLabel),
           Expanded(
             child: state.isLoading && state.messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
@@ -101,6 +116,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
+          if (isEngineerReadOnly)
+            const _ReadOnlyBar()
+          else
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(8.0),
@@ -138,6 +156,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final inquiryType = currentRole == UserRole.doctor
         ? InquiryType.medical
         : _selectedInquiryType ?? InquiryType.technical;
+    // حماية إضافية: المهندس لا يرسل في القناة الطبية (والـ backend يرفض أيضاً).
+    if (currentRole == UserRole.engineer && inquiryType == InquiryType.medical) return;
     ref
         .read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier)
         .send(text);
@@ -219,6 +239,48 @@ class _InquiryOption extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_left),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _RecipientBanner extends StatelessWidget {
+  const _RecipientBanner({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: scheme.secondaryContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSecondaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyBar extends StatelessWidget {
+  const _ReadOnlyBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        width: double.infinity,
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: const Text(
+          'View only — medical conversation between the patient and the doctor.',
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }

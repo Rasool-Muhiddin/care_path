@@ -34,12 +34,25 @@ class ApiClient {
 
   Dio get raw => _dio;
 
+  /// تجديد واحد فقط في أي لحظة: إذا انتهى الـ token وفشلت عدة طلبات معاً
+  /// (مثلاً جلسات + تقارير نوبات عند فتح شاشة)، تنتظر كلها نفس عملية التجديد
+  /// بدل أن يبدأ كل طلب تجديداً خاصاً به ويتسابقون على الكتابة في التخزين.
+  Future<String?>? _refreshing;
+
+  Future<String?> _refreshAccessToken() {
+    return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
+  }
+
   InterceptorsWrapper _authInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await TokenStorage.instance.accessToken;
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        // الطلب المُعاد بعد التجديد يحمل التوكن الجديد أصلاً؛ لا نقرأ التخزين
+        // مرة ثانية كي لا نرجع بالخطأ إلى توكن قديم.
+        if (options.extra['retried'] != true) {
+          final token = await TokenStorage.instance.accessToken;
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
         }
         handler.next(options);
       },
@@ -49,21 +62,18 @@ class ApiClient {
         final isRetry = error.requestOptions.extra['retried'] == true;
 
         if (isUnauthorized && !isRetry) {
-          final refreshed = await _tryRefreshToken();
-          if (refreshed) {
+          final newToken = await _refreshAccessToken();
+          if (newToken != null) {
             final opts = error.requestOptions;
             opts.extra['retried'] = true;
-            final newToken = await TokenStorage.instance.accessToken;
             opts.headers['Authorization'] = 'Bearer $newToken';
             try {
               final response = await _dio.fetch(opts);
               return handler.resolve(response);
-            } catch (e) {
-              return handler.next(error);
+            } on DioException catch (retryError) {
+              // نُرجع الخطأ الحقيقي للطلب المُعاد (مثلاً 403) وليس الـ 401 الأصلي.
+              return handler.next(retryError);
             }
-          } else {
-            await TokenStorage.instance.clear();
-            onSessionExpired();
           }
         }
         handler.next(error);
@@ -71,19 +81,42 @@ class ApiClient {
     );
   }
 
-  Future<bool> _tryRefreshToken() async {
+  /// يجدد الـ access token. يرجع التوكن الجديد، أو null عند الفشل.
+  /// نعتبر الجلسة منتهية (تسجيل خروج) فقط إذا رفض الخادم الـ refresh token
+  /// نفسه؛ أما انقطاع الشبكة أو تعطل الخادم فلا يسجّل خروج المستخدم.
+  Future<String?> _doRefresh() async {
     final refreshToken = await TokenStorage.instance.refreshToken;
-    if (refreshToken == null) return false;
+    if (refreshToken == null) {
+      await TokenStorage.instance.clear();
+      onSessionExpired();
+      return null;
+    }
     try {
       final response = await Dio().post(
         ApiEndpoints.refresh,
         data: {'refresh': refreshToken},
       );
       final newAccess = response.data['access'] as String;
-      await TokenStorage.instance.updateAccessToken(newAccess);
-      return true;
+      // إن فعّلت ROTATE_REFRESH_TOKENS يرجع الخادم refresh جديداً أيضاً.
+      final newRefresh = response.data['refresh'] as String?;
+      if (newRefresh != null) {
+        await TokenStorage.instance.saveTokens(
+          accessToken: newAccess,
+          refreshToken: newRefresh,
+        );
+      } else {
+        await TokenStorage.instance.updateAccessToken(newAccess);
+      }
+      return newAccess;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 400 || status == 401 || status == 403) {
+        await TokenStorage.instance.clear();
+        onSessionExpired();
+      }
+      return null;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 

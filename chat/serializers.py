@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from .models import ChatMessage, InquiryType
 
 
@@ -25,8 +26,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     def validate_inquiry_type(self, value):
         """المريض يختار نوع استفساره؛ الطبيب يكتب طبياً فقط.
 
-        المهندس يستطيع الرد ضمن أي من القناتين حتى تصل إجابته إلى نفس
-        المستلمين الذين استلموا سؤال المريض.
+        المهندس يقرأ القناة الطبية للاطلاع فقط ولا يكتب فيها (يُفحص في validate).
         """
         request = self.context.get('request')
         if not request:
@@ -38,3 +38,16 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         if role == 'patient' and value not in InquiryType.values:
             raise serializers.ValidationError('نوع الاستفسار غير صالح.')
         return value
+
+    def validate(self, attrs):
+        """المهندس يرى القناة الطبية (كمدير) لكن لا يحق له الرد فيها.
+
+        نفحص هنا وليس في validate_inquiry_type لأن الحقل غير مطلوب وقيمته
+        الافتراضية طبية، فلا يعمل الفحص على الحقل إذا لم يُرسَل.
+        """
+        request = self.context.get('request')
+        role = getattr(getattr(request, 'user', None), 'role', None)
+        inquiry_type = attrs.get('inquiry_type', InquiryType.MEDICAL)
+        if role == 'engineer' and inquiry_type == InquiryType.MEDICAL:
+            raise PermissionDenied('المهندس يستطيع قراءة القناة الطبية فقط ولا يمكنه الرد فيها.')
+        return attrs

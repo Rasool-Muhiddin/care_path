@@ -45,8 +45,12 @@ class CaseMessagesView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
-        # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة
-        self.get_queryset().exclude(sender=request.user).update(is_read=True)
+        # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة. المهندس يطّلع على
+        # القناة الطبية فقط، فلا نعلّمها مقروءة كي لا يختفي عدّاد الطبيب/المريض.
+        unread = self.get_queryset().exclude(sender=request.user)
+        if getattr(request.user, 'role', None) == 'engineer':
+            unread = unread.filter(inquiry_type=InquiryType.TECHNICAL)
+        unread.update(is_read=True)
         return response
 
 
@@ -70,6 +74,9 @@ class UnreadCountView(APIView):
             messages = ChatMessage.objects.filter(case=case, is_read=False).exclude(sender=user)
             if getattr(user, 'role', None) == 'doctor':
                 messages = messages.filter(inquiry_type=InquiryType.MEDICAL)
+            elif getattr(user, 'role', None) == 'engineer':
+                # القناة الطبية للاطلاع فقط عند المهندس، فلا تُحتسب كغير مقروءة له.
+                messages = messages.filter(inquiry_type=InquiryType.TECHNICAL)
             n = messages.count()
             if n:
                 by_case[case.id] = n

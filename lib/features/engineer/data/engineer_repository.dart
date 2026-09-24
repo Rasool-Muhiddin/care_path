@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../doctor/models/case_model.dart';
+import '../../doctor/models/weekly_episode_log_model.dart';
+import '../../patient/models/session_model.dart';
 import '../../doctor/models/patient_model.dart';
 import '../models/case_summary_model.dart';
 import '../models/clinic_model.dart';
@@ -75,6 +77,32 @@ class EngineerRepository {
       final data = response.data;
       final results = data is Map && data.containsKey('results') ? data['results'] as List : data as List;
       return results.length;
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// كل جلسات حالة معيّنة (مع التواريخ) — لشاشة تفاصيل المريض عند المهندس
+  Future<List<SessionModel>> fetchSessionsForCase(int caseId) async {
+    try {
+      final response = await _client.raw.get(
+        ApiEndpoints.sessions,
+        queryParameters: {'case': caseId},
+      );
+      return _extractList(response.data, SessionModel.fromJson);
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// تقارير النوبات الأسبوعية لحالة معيّنة — لبناء شارت (جلسات مقابل نوبات)
+  Future<List<WeeklyEpisodeLogModel>> fetchWeeklyEpisodeLogs(int caseId) async {
+    try {
+      final response = await _client.raw.get(
+        ApiEndpoints.weeklyEpisodeLogs,
+        queryParameters: {'case': caseId},
+      );
+      return _extractList(response.data, WeeklyEpisodeLogModel.fromJson);
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

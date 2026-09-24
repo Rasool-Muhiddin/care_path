@@ -7,6 +7,7 @@ import '../engineer_providers.dart';
 import '../models/clinic_model.dart';
 import '../models/doctor_model.dart';
 import '../models/engineer_device_model.dart';
+import 'engineer_patient_details_screen.dart';
 
 /// لوحة متابعة المدير/المهندس. تعتمد على البيانات الفعلية التي يراها
 /// المهندس في النظام، وتعرض ملخص علاج كل مريض أسفل طبيبه.
@@ -302,6 +303,11 @@ class _PatientTreatmentTile extends StatelessWidget {
         if (caseModel.deviceTypeName != null) caseModel.deviceTypeName!,
       ].join(' • ')),
       trailing: Chip(label: Text(caseModel.status.label), side: BorderSide.none),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => EngineerPatientDetailsScreen(caseModel: caseModel),
+        ),
+      ),
     );
   }
 }

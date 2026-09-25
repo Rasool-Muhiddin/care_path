@@ -17,8 +17,20 @@ import 'add_patient_dialog.dart';
 /// unit the doctor picked).
 enum _DurationUnit { minutes, hours }
 
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
+  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
   static const sectionTitle = TextStyle(
     color: Colors.white,
     fontSize: 14,
@@ -26,6 +38,102 @@ class _Txt {
   );
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
   static const body = TextStyle(color: Colors.white, fontSize: 14);
+  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
+  static const error = TextStyle(color: Color(0xFFF87171));
+}
+
+/// Small circular badge behind a data-category icon: tinted fill,
+/// tinted border, colored icon — replaces flat white avatars/icons.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.18),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// A field label with a small colored leading icon, used above every
+/// section on this form instead of a plain white caption.
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text, {this.icon, this.color = _Accent.doctor});
+  final String text;
+  final IconData? icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+        ],
+        Text(text, style: _Txt.sectionTitle),
+      ],
+    );
+  }
+}
+
+/// Compact inline error panel for a field that failed to load its
+/// options (patients/devices dropdown data), with a glass "Retry"
+/// action instead of a bare line of red text.
+class _InlineErrorPanel extends StatelessWidget {
+  const _InlineErrorPanel({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 30),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message, style: _Txt.error)),
+          const SizedBox(width: 8),
+          _RetryButton(onPressed: onRetry),
+        ],
+      ),
+    );
+  }
+}
+
+/// Glass-styled retry button used by every empty/error state.
+class _RetryButton extends StatelessWidget {
+  const _RetryButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.refresh, color: Colors.white, size: 16),
+      label: const Text('Retry', style: TextStyle(color: Colors.white, fontSize: 13)),
+      style: TextButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.18),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+        ),
+      ),
+    );
+  }
 }
 
 /// New case screen — the doctor selects a patient from the registered
@@ -162,7 +270,8 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
     );
   }
 
-  Widget _sectionTitle(String text) => Text(text, style: _Txt.sectionTitle);
+  Widget _sectionTitle(String text, {IconData? icon, Color color = _Accent.doctor}) =>
+      _FieldLabel(text, icon: icon, color: color);
 
   @override
   Widget build(BuildContext context) {
@@ -189,14 +298,14 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
                   // --- Attending doctor (auto-filled, read-only) ---
-                  _sectionTitle('Attending Doctor'),
+                  _sectionTitle('Attending Doctor', icon: Icons.badge_outlined, color: _Accent.doctor),
                   const SizedBox(height: 8),
                   GlassContainer(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     child: Row(
                       children: [
-                        const Icon(Icons.medical_services_outlined, size: 18, color: Colors.white70),
-                        const SizedBox(width: 8),
+                        _IconBadge(icon: Icons.medical_services_outlined, color: _Accent.doctor, size: 32),
+                        const SizedBox(width: 10),
                         Text('Dr. $doctorDisplayName', style: _Txt.body),
                       ],
                     ),
@@ -207,11 +316,11 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _sectionTitle('Patient'),
+                      _sectionTitle('Patient', icon: Icons.person_outline, color: _Accent.patient),
                       TextButton.icon(
                         onPressed: _isSubmitting ? null : _openAddPatientDialog,
                         style: TextButton.styleFrom(foregroundColor: Colors.white),
-                        icon: const Icon(Icons.person_add_alt_1, size: 18),
+                        icon: Icon(Icons.person_add_alt_1, size: 18, color: _Accent.patient),
                         label: const Text('Add New Patient'),
                       ),
                     ],
@@ -219,8 +328,10 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 4),
                   patientsAsync.when(
                     loading: () => const LinearProgressIndicator(color: Colors.white),
-                    error: (e, _) => Text('Failed to load patients: $e',
-                        style: const TextStyle(color: Colors.redAccent)),
+                    error: (e, _) => _InlineErrorPanel(
+                      message: 'Failed to load patients: $e',
+                      onRetry: () => ref.invalidate(patientsListProvider),
+                    ),
                     data: (patients) => DropdownButtonFormField<PatientModel>(
                       initialValue: _selectedPatient,
                       decoration: _dropdownDecoration(hint: 'Select patient'),
@@ -239,12 +350,14 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Device selection (optional) ---
-                  _sectionTitle('Device (optional)'),
+                  _sectionTitle('Device (optional)', icon: Icons.memory_outlined, color: _Accent.device),
                   const SizedBox(height: 8),
                   devicesAsync.when(
                     loading: () => const LinearProgressIndicator(color: Colors.white),
-                    error: (e, _) => Text('Failed to load devices: $e',
-                        style: const TextStyle(color: Colors.redAccent)),
+                    error: (e, _) => _InlineErrorPanel(
+                      message: 'Failed to load devices: $e',
+                      onRetry: () => ref.invalidate(devicesListProvider(null)),
+                    ),
                     data: (devices) => DropdownButtonFormField<DeviceModel>(
                       initialValue: _selectedDevice,
                       decoration: _dropdownDecoration(hint: 'Select device'),
@@ -265,7 +378,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Diagnosis type ---
-                  _sectionTitle('Diagnosis Type'),
+                  _sectionTitle('Diagnosis Type', icon: Icons.category_outlined, color: _Accent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<DiagnosisType>(
                     initialValue: _selectedDiagnosis,
@@ -293,7 +406,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // epilepsy types when Epilepsy is chosen, migraine types when
                   // Migraine is chosen. Placeholder values (type1/2/3) until the
                   // real sub-types are defined. ---
-                  _sectionTitle('${_selectedDiagnosis.label} Type'),
+                  _sectionTitle('${_selectedDiagnosis.label} Type', icon: Icons.category_outlined, color: _Accent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _selectedDiseaseType,
@@ -309,7 +422,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Symptoms ---
-                  _sectionTitle('Symptoms'),
+                  _sectionTitle('Symptoms', icon: Icons.sick_outlined, color: _Accent.caseC),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _symptomsController,
@@ -323,7 +436,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // --- Clinical details (epilepsy/migraine only) ---
                   if (_selectedDiagnosis.hasClinicalDetails) ...[
                     const SizedBox(height: 20),
-                    _sectionTitle('Diagnosis Details'),
+                    _sectionTitle('Diagnosis Details', icon: Icons.analytics_outlined, color: _Accent.caseC),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -384,7 +497,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Initial evaluation ---
-                  _sectionTitle('Initial Evaluation'),
+                  _sectionTitle('Initial Evaluation', icon: Icons.fact_check_outlined, color: _Accent.doctor),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _initialEvaluationController,
@@ -397,7 +510,8 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Total sessions planned (optional) ---
-                  _sectionTitle('Total Sessions Planned (optional)'),
+                  _sectionTitle('Total Sessions Planned (optional)',
+                      icon: Icons.format_list_numbered, color: _Accent.doctor),
                   const SizedBox(height: 4),
                   const Text(
                     'Used to show the patient how many sessions remain — leave blank if not decided yet',
@@ -418,7 +532,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // --- Treatment plan ---
                   Row(
                     children: [
-                      _sectionTitle('Treatment Plan'),
+                      _sectionTitle('Treatment Plan', icon: Icons.assignment_outlined, color: _Accent.doctor),
                       const SizedBox(width: 6),
                       const Text(
                         '(visible to patient)',

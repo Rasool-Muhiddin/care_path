@@ -286,28 +286,35 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     if (myCase == null || myCase.totalSessionsPlanned == null) {
                       // لو ما حدد الطبيب عدد الجلسات الإجمالي، نعرض المكتملة فقط
                       if (myCase == null) return const SizedBox.shrink();
-                      return Text(
-                        'الجلسات المكتملة: ${myCase.completedSessionsCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                      );
+                      return _SessionCounters(completed: myCase.completedSessionsCount);
                     }
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('الجلسات المكتملة: ${myCase.completedSessionsCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 14)),
-                        Text('المتبقية: ${myCase.remainingSessionsCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 14)),
-                      ],
+                    return _SessionCounters(
+                      completed: myCase.completedSessionsCount,
+                      remaining: myCase.remainingSessionsCount,
                     );
                   },
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'جلساتي',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                _SectionHeader(
+                  icon: Icons.event_note_outlined,
+                  color: _Accent.patient,
+                  title: 'جلساتي',
+                  subtitleSpans: [
+                    TextSpan(
+                      text: '${sessionsAsync.value?.length ?? 0}',
+                      style: TextStyle(
+                        color: _Accent.patient,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        shadows: [
+                          Shadow(color: _Accent.patient.withValues(alpha: 0.55), blurRadius: 14),
+                        ],
+                      ),
+                    ),
+                    const TextSpan(text: ' جلسة مسجّلة'),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 sessionsAsync.when(
                   loading: () => const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
@@ -323,9 +330,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     }
                     final sorted = [...sessions]
                       ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
-                    return Column(
-                      children: sorted.map((s) => _SessionTile(session: s)).toList(),
-                    );
+                    return _SessionsGroup(sessions: sorted);
                   },
                 ),
               ],
@@ -333,6 +338,102 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// Fixed text styles so every screen stays visually consistent.
+class _Txt {
+  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
+  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
+  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
+  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
+  static const body = TextStyle(color: Colors.white60, fontSize: 13);
+  static const error = TextStyle(color: Color(0xFFF87171));
+}
+
+/// Small circular badge behind a data-category icon: tinted fill,
+/// tinted border, colored icon — replaces flat white avatars/icons.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.18),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// Unified section header: colored side bar + small icon + white title
+/// + a lighter subtitle line (which may contain a glowing highlight,
+/// e.g. a count).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitleSpans,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<InlineSpan>? subtitleSpans;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: subtitleSpans != null ? 34 : 20,
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _Txt.sectionTitle),
+              if (subtitleSpans != null) ...[
+                const SizedBox(height: 2),
+                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -351,20 +452,98 @@ class _CaseSummaryCard extends StatelessWidget {
           if (myCase.deviceTypeName != null) ...[
             Row(
               children: [
-                const Icon(Icons.medical_services_outlined, size: 18, color: Colors.white70),
-                const SizedBox(width: 8),
-                Text('الجهاز: ${myCase.deviceTypeName}', style: const TextStyle(color: Colors.white)),
+                _IconBadge(icon: Icons.medical_services_outlined, color: _Accent.device, size: 34),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('الجهاز: ${myCase.deviceTypeName}', style: _Txt.tileTitle),
+                ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
           if (myCase.treatmentPlan.isNotEmpty) ...[
-            const Text(
-              'خطة العلاج',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Icon(Icons.assignment_outlined, size: 16, color: _Accent.patient),
+                const SizedBox(width: 6),
+                const Text('خطة العلاج', style: _Txt.tileTitle),
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(myCase.treatmentPlan, style: const TextStyle(color: Colors.white)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// عدّادات الجلسات المكتملة/المتبقية، بأرقام بارزة ذات توهّج.
+class _SessionCounters extends StatelessWidget {
+  const _SessionCounters({required this.completed, this.remaining});
+  final int completed;
+  final int? remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget counter(String label, int value, Color color) {
+      return Expanded(
+        child: GlassContainer(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            children: [
+              Text(
+                '$value',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  shadows: [Shadow(color: color.withValues(alpha: 0.55), blurRadius: 14)],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(label, style: _Txt.tileSubtitle),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (remaining == null) {
+      return counter('الجلسات المكتملة', completed, _Accent.patient);
+    }
+    return Row(
+      children: [
+        counter('الجلسات المكتملة', completed, _Accent.patient),
+        const SizedBox(width: 10),
+        counter('المتبقية', remaining!, _Accent.caseC),
+      ],
+    );
+  }
+}
+
+/// كل جلسات المريض مجمّعة داخل حاوية زجاجية واحدة، مفصولة بخطوط رفيعة
+/// شفافة بدل بطاقة مستقلة لكل جلسة.
+class _SessionsGroup extends StatelessWidget {
+  const _SessionsGroup({required this.sessions});
+  final List<SessionModel> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+        children: [
+          for (var i = 0; i < sessions.length; i++) ...[
+            _SessionTile(session: sessions[i]),
+            if (i != sessions.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 14,
+                endIndent: 14,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
           ],
         ],
       ),
@@ -380,27 +559,31 @@ class _SessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = session.sessionDate;
     final dateLabel = '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+    final completed = session.patientResponse.isNotEmpty;
 
-    return GlassContainer(
-      margin: const EdgeInsets.only(bottom: 8),
-      borderRadius: 16,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: CircleAvatar(
-          backgroundColor: Colors.white.withValues(alpha: 0.14),
-          child: const Icon(Icons.event_note, color: Colors.white),
-        ),
-        title: Text('جلسة $dateLabel', style: const TextStyle(color: Colors.white)),
-        subtitle: session.patientResponse.isNotEmpty
-            ? Text(session.patientResponse, style: const TextStyle(color: Colors.white70))
-            : (session.durationMinutes != null
-                ? Text('المدة: ${session.durationMinutes} دقيقة',
-                    style: const TextStyle(color: Colors.white70))
-                : null),
-        trailing: session.patientResponse.isNotEmpty
-            ? const Icon(Icons.check_circle, color: Colors.greenAccent)
-            : const Icon(Icons.radio_button_unchecked, color: Colors.white38),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          _IconBadge(icon: Icons.event_note, color: _Accent.patient),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('جلسة $dateLabel', style: _Txt.tileTitle),
+                if (session.patientResponse.isNotEmpty)
+                  Text(session.patientResponse, style: _Txt.tileSubtitle)
+                else if (session.durationMinutes != null)
+                  Text('المدة: ${session.durationMinutes} دقيقة', style: _Txt.tileSubtitle),
+              ],
+            ),
+          ),
+          Icon(
+            completed ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: completed ? _Accent.patient : Colors.white38,
+          ),
+        ],
       ),
     );
   }
@@ -411,10 +594,15 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white54)),
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _IconBadge(icon: Icons.event_busy_outlined, color: _Accent.patient, size: 44),
+          const SizedBox(height: 12),
+          const Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white70)),
+        ],
       ),
     );
   }
@@ -427,27 +615,39 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+          _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 44),
           const SizedBox(height: 12),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: onRetry,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.16),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-            ),
-            child: const Text('إعادة المحاولة'),
-          ),
+          Text(message, textAlign: TextAlign.center, style: _Txt.error),
+          const SizedBox(height: 14),
+          _RetryButton(onPressed: onRetry),
         ],
+      ),
+    );
+  }
+}
+
+/// زر إعادة المحاولة بالنمط الزجاجي الموحّد لكل الحالات الفارغة/الأخطاء.
+class _RetryButton extends StatelessWidget {
+  const _RetryButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
+      label: const Text('إعادة المحاولة', style: TextStyle(color: Colors.white)),
+      style: TextButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.18),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+        ),
       ),
     );
   }

@@ -7,17 +7,29 @@ import '../../../core/widgets/sessions_vs_attacks_chart.dart';
 import '../../doctor/models/case_model.dart';
 import '../engineer_providers.dart';
 
+/// Accent palette — mirrors the one used in OverviewTab so a patient's
+/// stats/info read consistently with the rest of the engineer section.
+class _Accent {
+  static const days = Color(0xFF5AC8FA);
+  static const sessions = Color(0xFF34D399);
+  static const status = Color(0xFFFBBF24);
+  static const chart = Color(0xFFA78BFA);
+}
+
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
-  static const title = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700);
-  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600);
-  static const sectionSubtitle = TextStyle(color: Colors.white70, fontSize: 12);
-  static const label = TextStyle(color: Colors.white70, fontSize: 13);
-  static const value = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500);
-  static const statValue = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
-  static const statLabel = TextStyle(color: Colors.white70, fontSize: 11);
+  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700);
+  static const sectionSubtitle = TextStyle(color: Colors.white54, fontSize: 12);
+  static const label = TextStyle(color: Colors.white60, fontSize: 12.5, fontWeight: FontWeight.w500);
+  static const value = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
+  static const statValue = TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800);
+  static const statLabel = TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w500);
   static const error = TextStyle(color: Colors.redAccent, fontSize: 13);
-  static const empty = TextStyle(color: Colors.white70, fontSize: 13);
+  static const empty = TextStyle(color: Colors.white54, fontSize: 13);
+
+  static List<Shadow> glow(Color color, {double blur = 14}) => [
+        Shadow(color: color.withValues(alpha: 0.55), blurRadius: blur),
+      ];
 }
 
 /// صفحة تفاصيل مريض عند المهندس (للقراءة فقط) — تُفتح بالضغط على المريض
@@ -68,7 +80,8 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: _StatBox(
-                          icon: Icons.calendar_today_outlined,
+                          icon: Icons.calendar_today_rounded,
+                          accent: _Accent.days,
                           label: 'Days since registration',
                           value: '${DateTime.now().difference(c.createdAt).inDays}',
                         ),
@@ -76,34 +89,48 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _StatBox(
-                          icon: Icons.event_note_outlined,
+                          icon: Icons.event_note_rounded,
+                          accent: _Accent.sessions,
                           label: 'Sessions recorded',
                           value: '${c.completedSessionsCount}',
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  const _SectionHeader(
+                    icon: Icons.badge_outlined,
+                    accent: _Accent.status,
+                    title: 'Case summary',
+                  ),
+                  const SizedBox(height: 10),
                   GlassContainer(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _InfoRow(label: 'Status', value: c.status.label),
-                        _InfoRow(label: 'Diagnosis', value: c.diagnosisType.label),
-                        _InfoRow(label: 'Device', value: c.deviceTypeName ?? '—'),
+                        _InfoRow(icon: Icons.flag_rounded, label: 'Status', value: c.status.label),
+                        _divider(),
+                        _InfoRow(icon: Icons.psychology_alt_outlined, label: 'Diagnosis', value: c.diagnosisType.label),
+                        _divider(),
+                        _InfoRow(icon: Icons.memory_rounded, label: 'Device', value: c.deviceTypeName ?? '—'),
+                        _divider(),
                         _InfoRow(
+                          icon: Icons.fact_check_outlined,
                           label: 'Sessions completed',
                           value: c.remainingSessionsCount != null
                               ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
                               : '${c.completedSessionsCount}',
                         ),
                         if (c.diagnosisType.hasClinicalDetails) ...[
+                          _divider(),
                           _InfoRow(
+                            icon: Icons.bolt_rounded,
                             label: 'attack / month',
                             value: c.monthlyEpisodeCount?.toString() ?? '—',
                           ),
+                          _divider(),
                           _InfoRow(
+                            icon: Icons.timer_outlined,
                             label: 'attack duration',
                             value: c.episodeDurationMinutes != null
                                 ? '${c.episodeDurationMinutes} min'
@@ -114,14 +141,14 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  const Text('Sessions vs Attacks', style: _Txt.sectionTitle),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Compares how many sessions were done against how many attacks were '
-                    'reported over time.',
-                    style: _Txt.sectionSubtitle,
+                  const _SectionHeader(
+                    icon: Icons.bar_chart_rounded,
+                    accent: _Accent.chart,
+                    title: 'Sessions vs Attacks',
+                    subtitle: 'Compares how many sessions were done against how many attacks '
+                        'were reported over time.',
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   GlassContainer(
                     padding: const EdgeInsets.all(12),
                     child: sessionsAsync.when(
@@ -155,6 +182,14 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
     );
   }
 
+  static Widget _divider() => Divider(
+        height: 1,
+        thickness: 1,
+        color: Colors.white.withValues(alpha: 0.08),
+        indent: 16,
+        endIndent: 16,
+      );
+
   static Widget _loading() => const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -166,9 +201,76 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
       );
 }
 
-class _StatBox extends StatelessWidget {
-  const _StatBox({required this.icon, required this.label, required this.value});
+/// A round icon badge tinted with [color] — mirrors OverviewTab's _IconBadge
+/// so stat boxes and info rows carry the same category-color language.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 34});
   final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
+      ),
+      child: Icon(icon, color: color, size: size * 0.52),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.icon, required this.accent, required this.title, this.subtitle});
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: subtitle != null ? 36 : 22,
+            margin: const EdgeInsets.only(top: 2, right: 10),
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 8)],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 16, color: accent),
+                    const SizedBox(width: 6),
+                    Flexible(child: Text(title, style: _Txt.sectionTitle)),
+                  ],
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!, style: _Txt.sectionSubtitle),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+class _StatBox extends StatelessWidget {
+  const _StatBox({required this.icon, required this.accent, required this.label, required this.value});
+  final IconData icon;
+  final Color accent;
   final String label;
   final String value;
 
@@ -178,9 +280,9 @@ class _StatBox extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       child: Column(
         children: [
-          Icon(icon, size: 18, color: Colors.white70),
-          const SizedBox(height: 6),
-          Text(value, style: _Txt.statValue),
+          _IconBadge(icon: icon, color: accent),
+          const SizedBox(height: 8),
+          Text(value, style: _Txt.statValue.copyWith(shadows: _Txt.glow(accent))),
           const SizedBox(height: 2),
           Text(label, textAlign: TextAlign.center, style: _Txt.statLabel),
         ],
@@ -190,19 +292,22 @@ class _StatBox extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow({required this.icon, required this.label, required this.value});
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(width: 130, child: Text(label, style: _Txt.label)),
-          Expanded(child: Text(value, style: _Txt.value)),
+          Icon(icon, size: 17, color: Colors.white54),
+          const SizedBox(width: 10),
+          SizedBox(width: 118, child: Text(label, style: _Txt.label)),
+          Expanded(child: Text(value, style: _Txt.value, textAlign: TextAlign.end)),
         ],
       ),
     );

@@ -70,11 +70,32 @@ class DoctorHomeScreen extends ConsumerWidget {
                     return const _EmptyView();
                   }
                   final sorted = _sortByPriority(cases);
-                  return ListView.builder(
+                  return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-                    itemCount: sorted.length,
-                    itemBuilder: (context, index) => _CaseTile(caseModel: sorted[index]),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 88),
+                    children: [
+                      _SectionHeader(
+                        icon: Icons.folder_shared_outlined,
+                        color: _Accent.caseC,
+                        title: 'My Cases',
+                        subtitleSpans: [
+                          TextSpan(
+                            text: '${sorted.length}',
+                            style: TextStyle(
+                              color: _Accent.caseC,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              shadows: [
+                                Shadow(color: _Accent.caseC.withValues(alpha: 0.55), blurRadius: 14),
+                              ],
+                            ),
+                          ),
+                          const TextSpan(text: ' active cases'),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _CasesGroup(cases: sorted),
+                    ],
                   );
                 },
               ),
@@ -108,6 +129,102 @@ class DoctorHomeScreen extends ConsumerWidget {
         return b.updatedAt.compareTo(a.updatedAt);
       });
     return sorted;
+  }
+}
+
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// Fixed text styles so every screen stays visually consistent.
+class _Txt {
+  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
+  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
+  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
+  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
+  static const body = TextStyle(color: Colors.white60, fontSize: 13);
+  static const error = TextStyle(color: Color(0xFFF87171));
+}
+
+/// Small circular badge behind a data-category icon: tinted fill,
+/// tinted border, colored icon — replaces flat white avatars/icons.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.18),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// Unified section header: colored side bar + small icon + white title
+/// + a lighter subtitle line (which may contain a glowing highlight,
+/// e.g. a count).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitleSpans,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<InlineSpan>? subtitleSpans;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: subtitleSpans != null ? 34 : 20,
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _Txt.sectionTitle),
+              if (subtitleSpans != null) ...[
+                const SizedBox(height: 2),
+                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -146,6 +263,35 @@ class _GlassFab extends StatelessWidget {
   }
 }
 
+/// All case rows grouped inside a single glass panel, separated by
+/// thin translucent dividers instead of one card per item.
+class _CasesGroup extends StatelessWidget {
+  const _CasesGroup({required this.cases});
+  final List<CaseModel> cases;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+        children: [
+          for (var i = 0; i < cases.length; i++) ...[
+            _CaseTile(caseModel: cases[i]),
+            if (i != cases.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 14,
+                endIndent: 14,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CaseTile extends ConsumerWidget {
   const _CaseTile({required this.caseModel});
   final CaseModel caseModel;
@@ -173,79 +319,71 @@ class _CaseTile extends ConsumerWidget {
     final sessionsAsync = ref.watch(caseSessionsProvider(caseModel.id));
     final statusColor = _statusColor(caseModel.status);
 
-    return GlassContainer(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => CaseDetailsScreen(caseModel: caseModel)),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: statusColor.withValues(alpha: 0.18),
-                  child: Icon(Icons.person, color: statusColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        caseModel.patientName.isNotEmpty
-                            ? caseModel.patientName
-                            : 'Patient #${caseModel.patientId}',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(caseModel.diagnosisType.label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          const Text(' • ', style: TextStyle(color: Colors.white38)),
-                          sessionsAsync.when(
-                            loading: () => const Text('...', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                            error: (_, __) => const Text('Sessions: —', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                            data: (sessions) {
-                              final completedToday = sessions.any((s) => _isToday(s.sessionDate));
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('${sessions.length} sessions', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                  if (completedToday) ...[
-                                    const SizedBox(width: 6),
-                                    const Icon(Icons.check_circle, size: 14, color: Color(0xFF6EE7A0)),
-                                    const Text(' Today', style: TextStyle(color: Color(0xFF6EE7A0), fontSize: 12)),
-                                  ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => CaseDetailsScreen(caseModel: caseModel)),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              _IconBadge(icon: Icons.person, color: statusColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      caseModel.patientName.isNotEmpty
+                          ? caseModel.patientName
+                          : 'Patient #${caseModel.patientId}',
+                      style: _Txt.tileTitle,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(caseModel.diagnosisType.label, style: _Txt.tileSubtitle),
+                        const Text(' • ', style: TextStyle(color: Colors.white38)),
+                        sessionsAsync.when(
+                          loading: () => Text('...', style: _Txt.tileSubtitle),
+                          error: (_, __) => Text('Sessions: —', style: _Txt.tileSubtitle),
+                          data: (sessions) {
+                            final completedToday = sessions.any((s) => _isToday(s.sessionDate));
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('${sessions.length} sessions', style: _Txt.tileSubtitle),
+                                if (completedToday) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.check_circle, size: 14, color: Color(0xFF6EE7A0)),
+                                  const Text(' Today', style: TextStyle(color: Color(0xFF6EE7A0), fontSize: 12)),
                                 ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    caseModel.status.label,
-                    style: TextStyle(fontSize: 12, color: statusColor),
-                  ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.4)),
                 ),
-              ],
-            ),
+                child: Text(
+                  caseModel.status.label,
+                  style: TextStyle(fontSize: 12, color: statusColor),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -263,13 +401,23 @@ class _EmptyView extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: const Center(
+          child: Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'No cases yet — tap "New Case" to get started',
-                style: TextStyle(color: Colors.white70),
-                textAlign: TextAlign.center,
+              padding: const EdgeInsets.all(20),
+              child: GlassContainer(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _IconBadge(icon: Icons.folder_off_outlined, color: _Accent.caseC, size: 48),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'No cases yet — tap "New Case" to get started',
+                      style: TextStyle(color: Colors.white70),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -293,19 +441,45 @@ class _ErrorView extends StatelessWidget {
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
-                  const SizedBox(height: 12),
-                  Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-                  const SizedBox(height: 12),
-                  ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
-                ],
+              padding: const EdgeInsets.all(20),
+              child: GlassContainer(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 48),
+                    const SizedBox(height: 14),
+                    Text(message, textAlign: TextAlign.center, style: _Txt.error),
+                    const SizedBox(height: 16),
+                    _RetryButton(onPressed: onRetry),
+                  ],
+                ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Glass-styled retry button used by every empty/error state.
+class _RetryButton extends StatelessWidget {
+  const _RetryButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
+      label: const Text('Retry', style: TextStyle(color: Colors.white)),
+      style: TextButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.18),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
+import '../../../core/widgets/glass_container.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
 import '../../doctor/models/weekly_episode_log_model.dart';
@@ -79,8 +80,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           canPop: false,
           child: StatefulBuilder(
             builder: (context, setStateDialog) {
-              return AlertDialog(
-                title: const Text('تقرير أسبوعي إلزامي'),
+              return GlassDialog(
+                title: 'تقرير أسبوعي إلزامي',
                 content: Form(
                   key: formKey,
                   child: Column(
@@ -90,6 +91,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       Text(
                         'كم نوبة كانت لديك خلال الأسبوع من '
                         '${_formatDate(weekStart)} إلى ${_formatDate(weekEnd)}؟',
+                        style: const TextStyle(color: Colors.white),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -97,17 +99,26 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                         autofocus: true,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: InputDecoration(
-                          border: const OutlineInputBorder(),
-                          labelText: 'عدد النوبات',
-                          errorText: errorText,
-                        ),
+                        style: const TextStyle(color: Colors.white),
+                        cursorColor: Colors.white,
+                        decoration: glassInputDecoration(
+                          'عدد النوبات',
+                        ).copyWith(errorText: errorText),
                       ),
                     ],
                   ),
                 ),
                 actions: [
                   FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.18),
+                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                      ),
+                    ),
                     onPressed: isSubmitting
                         ? null
                         : () async {
@@ -139,7 +150,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                         ? const SizedBox(
                             height: 16,
                             width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Text('إرسال'),
                   ),
@@ -176,126 +187,150 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('مرحباً $username'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        title: Text('مرحباً $username', style: const TextStyle(color: Colors.white)),
         actions: [
           if (myCaseId != null)
             IconButton(
               icon: Badge(
                 isLabelVisible: unreadForMyCase > 0,
                 label: Text('$unreadForMyCase'),
-                child: const Icon(Icons.chat_bubble_outline),
+                child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
               ),
               tooltip: 'المحادثة مع الطبيب',
               onPressed: () => context.push('/patient/chat/$myCaseId'),
             ),
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () => ref.read(authStateProvider.notifier).logout(),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(mySessionsProvider);
-          ref.invalidate(myCaseProvider);
-        },
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          children: [
-            caseAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (myCase) {
-                if (myCase == null) return const SizedBox.shrink();
-                return _CaseSummaryCard(myCase: myCase);
-              },
-            ),
-            const SizedBox(height: 16),
-            caseAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (myCase) {
-                if (myCase == null) return const SizedBox.shrink();
-                return sessionsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+      body: AppGradientBackground(
+        child: SafeArea(
+          child: RefreshIndicator(
+            color: AppGlassColors.baseDark,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              ref.invalidate(mySessionsProvider);
+              ref.invalidate(myCaseProvider);
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                caseAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (sessions) {
-                    final hasCompletedToday = sessions.any(
-                      (session) => _isToday(session.sessionDate),
-                    );
-                    return SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: hasCompletedToday
-                            ? null
-                            : () => _endSession(myCase.id),
-                        icon: Icon(
-                          hasCompletedToday
-                              ? Icons.check_circle
-                              : Icons.check_circle_outline,
-                        ),
-                        label: Text(
-                          hasCompletedToday
-                              ? 'تم إنهاء الجلسة اليومية'
-                              : 'إنهاء الجلسة اليومية',
-                        ),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
+                  data: (myCase) {
+                    if (myCase == null) return const SizedBox.shrink();
+                    return _CaseSummaryCard(myCase: myCase);
+                  },
+                ),
+                const SizedBox(height: 16),
+                caseAsync.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (myCase) {
+                    if (myCase == null) return const SizedBox.shrink();
+                    return sessionsAsync.when(
+                      loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      error: (_, __) => const SizedBox.shrink(),
+                      data: (sessions) {
+                        final hasCompletedToday = sessions.any(
+                          (session) => _isToday(session.sessionDate),
+                        );
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: FilledButton.icon(
+                            onPressed: hasCompletedToday
+                                ? null
+                                : () => _endSession(myCase.id),
+                            icon: Icon(
+                              hasCompletedToday
+                                  ? Icons.check_circle
+                                  : Icons.check_circle_outline,
+                            ),
+                            label: Text(
+                              hasCompletedToday
+                                  ? 'تم إنهاء الجلسة اليومية'
+                                  : 'إنهاء الجلسة اليومية',
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: 0.18),
+                              disabledBackgroundColor: Colors.white.withValues(alpha: 0.1),
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.white70,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
+                ),
+                const SizedBox(height: 16),
+                caseAsync.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (myCase) {
+                    if (myCase == null || myCase.totalSessionsPlanned == null) {
+                      // لو ما حدد الطبيب عدد الجلسات الإجمالي، نعرض المكتملة فقط
+                      if (myCase == null) return const SizedBox.shrink();
+                      return Text(
+                        'الجلسات المكتملة: ${myCase.completedSessionsCount}',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      );
+                    }
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('الجلسات المكتملة: ${myCase.completedSessionsCount}',
+                            style: const TextStyle(color: Colors.white, fontSize: 14)),
+                        Text('المتبقية: ${myCase.remainingSessionsCount}',
+                            style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'جلساتي',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                sessionsAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                  ),
+                  error: (error, _) => _ErrorView(
+                    message: error.toString(),
+                    onRetry: () => ref.invalidate(mySessionsProvider),
+                  ),
+                  data: (sessions) {
+                    if (sessions.isEmpty) {
+                      return const _EmptyView();
+                    }
+                    final sorted = [...sessions]
+                      ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
+                    return Column(
+                      children: sorted.map((s) => _SessionTile(session: s)).toList(),
+                    );
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            caseAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (myCase) {
-                if (myCase == null || myCase.totalSessionsPlanned == null) {
-                  // لو ما حدد الطبيب عدد الجلسات الإجمالي، نعرض المكتملة فقط
-                  if (myCase == null) return const SizedBox.shrink();
-                  return Text(
-                    'الجلسات المكتملة: ${myCase.completedSessionsCount}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  );
-                }
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('الجلسات المكتملة: ${myCase.completedSessionsCount}'),
-                    Text('المتبقية: ${myCase.remainingSessionsCount}'),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            Text('جلساتي', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            sessionsAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (error, _) => _ErrorView(
-                message: error.toString(),
-                onRetry: () => ref.invalidate(mySessionsProvider),
-              ),
-              data: (sessions) {
-                if (sessions.isEmpty) {
-                  return const _EmptyView();
-                }
-                final sorted = [...sessions]
-                  ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
-                return Column(
-                  children: sorted.map((s) => _SessionTile(session: s)).toList(),
-                );
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -308,29 +343,30 @@ class _CaseSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (myCase.deviceTypeName != null) ...[
-              Row(
-                children: [
-                  const Icon(Icons.medical_services_outlined, size: 18),
-                  const SizedBox(width: 8),
-                  Text('الجهاز: ${myCase.deviceTypeName}'),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (myCase.treatmentPlan.isNotEmpty) ...[
-              const Text('خطة العلاج', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(myCase.treatmentPlan),
-            ],
+    return GlassContainer(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (myCase.deviceTypeName != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.medical_services_outlined, size: 18, color: Colors.white70),
+                const SizedBox(width: 8),
+                Text('الجهاز: ${myCase.deviceTypeName}', style: const TextStyle(color: Colors.white)),
+              ],
+            ),
+            const SizedBox(height: 8),
           ],
-        ),
+          if (myCase.treatmentPlan.isNotEmpty) ...[
+            const Text(
+              'خطة العلاج',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(myCase.treatmentPlan, style: const TextStyle(color: Colors.white)),
+          ],
+        ],
       ),
     );
   }
@@ -345,19 +381,26 @@ class _SessionTile extends StatelessWidget {
     final date = session.sessionDate;
     final dateLabel = '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
 
-    return Card(
+    return GlassContainer(
       margin: const EdgeInsets.only(bottom: 8),
+      borderRadius: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.event_note)),
-        title: Text('جلسة $dateLabel'),
+        contentPadding: EdgeInsets.zero,
+        leading: CircleAvatar(
+          backgroundColor: Colors.white.withValues(alpha: 0.14),
+          child: const Icon(Icons.event_note, color: Colors.white),
+        ),
+        title: Text('جلسة $dateLabel', style: const TextStyle(color: Colors.white)),
         subtitle: session.patientResponse.isNotEmpty
-            ? Text(session.patientResponse)
+            ? Text(session.patientResponse, style: const TextStyle(color: Colors.white70))
             : (session.durationMinutes != null
-                ? Text('المدة: ${session.durationMinutes} دقيقة')
+                ? Text('المدة: ${session.durationMinutes} دقيقة',
+                    style: const TextStyle(color: Colors.white70))
                 : null),
         trailing: session.patientResponse.isNotEmpty
-            ? const Icon(Icons.check_circle, color: Colors.green)
-            : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
+            ? const Icon(Icons.check_circle, color: Colors.greenAccent)
+            : const Icon(Icons.radio_button_unchecked, color: Colors.white38),
       ),
     );
   }
@@ -370,7 +413,9 @@ class _EmptyView extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 24),
-      child: Center(child: Text('لا توجد جلسات بعد')),
+      child: Center(
+        child: Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white54)),
+      ),
     );
   }
 }
@@ -386,11 +431,22 @@ class _ErrorView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, size: 40, color: Colors.red),
+          const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
           const SizedBox(height: 12),
-          Text(message, textAlign: TextAlign.center),
+          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
           const SizedBox(height: 12),
-          ElevatedButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+          ElevatedButton(
+            onPressed: onRetry,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.16),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+            ),
+            child: const Text('إعادة المحاولة'),
+          ),
         ],
       ),
     );

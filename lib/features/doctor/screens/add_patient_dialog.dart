@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
 
 /// Generates a secure random password (letters + digits, 10 chars).
@@ -34,15 +35,9 @@ Future<AddPatientDialogResult?> showAddPatientDialog(
   return showDialog<AddPatientDialogResult>(
     context: context,
     barrierDismissible: false,
+    barrierColor: AppGlassColors.baseDark.withValues(alpha: 0.55),
     builder: (context) => const _AddPatientDialog(),
   );
-}
-
-class _AddPatientDialog extends ConsumerStatefulWidget {
-  const _AddPatientDialog();
-
-  @override
-  ConsumerState<_AddPatientDialog> createState() => _AddPatientDialogState();
 }
 
 class _AddPatientDialogState extends ConsumerState<_AddPatientDialog> {
@@ -122,78 +117,99 @@ class _AddPatientDialogState extends ConsumerState<_AddPatientDialog> {
     }
 
     return LtrScope(
-      child: AlertDialog(
-      title: const Text('Add New Patient'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 12),
-              ],
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _firstNameController,
-                      decoration: const InputDecoration(labelText: 'First Name'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lastNameController,
-                      decoration: const InputDecoration(labelText: 'Last Name'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                  ),
+      child: GlassDialog(
+        title: 'Add New Patient',
+        content: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_errorMessage != null) ...[
+                  Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+                  const SizedBox(height: 12),
                 ],
-              ),
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  helperText: 'Used by the patient to log in later',
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _firstNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: glassInputDecoration('First Name'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _lastNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: glassInputDecoration('Last Name'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                    ),
+                  ],
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-              ),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email (optional)'),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _usernameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: glassInputDecoration(
+                    'Username',
+                    helperText: 'Used by the patient to log in later',
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: glassInputDecoration('Phone Number'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: glassInputDecoration('Email (optional)'),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Create'),
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _isSubmitting ? null : _submit,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              foregroundColor: Colors.white,
+            ),
+            child: _isSubmitting
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Create'),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _AddPatientDialog extends ConsumerStatefulWidget {
+  const _AddPatientDialog();
+
+  @override
+  ConsumerState<_AddPatientDialog> createState() => _AddPatientDialogState();
 }
 
 /// Shown once after successful registration — the doctor must copy
@@ -212,14 +228,16 @@ class _SuccessView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LtrScope(
-      child: AlertDialog(
-      title: const Text('Patient Added'),
+    return GlassDialog(
+      title: 'Patient Added',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Save these credentials — the password cannot be shown again.'),
+          const Text(
+            'Save these credentials — the password cannot be shown again.',
+            style: TextStyle(color: Colors.white70),
+          ),
           const SizedBox(height: 16),
           _CredentialRow(label: 'Username', value: username),
           const SizedBox(height: 8),
@@ -227,7 +245,7 @@ class _SuccessView extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'Give these to the patient to log in once they install the app.',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12, color: Colors.white54),
           ),
         ],
       ),
@@ -239,11 +257,19 @@ class _SuccessView extends StatelessWidget {
               const SnackBar(content: Text('Copied to clipboard')),
             );
           },
+          style: TextButton.styleFrom(foregroundColor: Colors.white70),
           child: const Text('Copy'),
         ),
-        FilledButton(onPressed: onDone, child: const Text('Done')),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: onDone,
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.18),
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Done'),
+        ),
       ],
-      ),
     );
   }
 }
@@ -257,11 +283,14 @@ class _CredentialRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(width: 80, child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold))),
+        SizedBox(
+          width: 80,
+          child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        ),
         Expanded(
           child: SelectableText(
             value,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 16),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 16, color: Colors.white),
           ),
         ),
       ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../engineer_providers.dart';
 import '../models/clinic_model.dart';
@@ -93,86 +94,116 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
     final engineersAsync = ref.watch(engineersListProvider);
 
     return LtrScope(
-      child: AlertDialog(
-      title: Text(widget.isEditing ? 'Edit Clinic' : 'New Clinic'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+      child: GlassDialog(
+        title: widget.isEditing ? 'Edit Clinic' : 'New Clinic',
+        content: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_errorMessage != null) ...[
+                  Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+                  const SizedBox(height: 12),
+                ],
+                TextFormField(
+                  controller: _nameController,
+                  style: const TextStyle(color: Colors.white),
+                  cursorColor: Colors.white,
+                  decoration: glassInputDecoration('Clinic Name'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
                 const SizedBox(height: 12),
-              ],
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Clinic Name'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Address'),
-              ),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-              ),
-              TextFormField(
-                controller: _contactPersonController,
-                decoration: const InputDecoration(labelText: 'Contact Person'),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Responsible Engineer', style: Theme.of(context).textTheme.bodySmall),
-              ),
-              const SizedBox(height: 4),
-              engineersAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed to load engineers: $e'),
-                data: (engineers) {
-                  if (widget.isEditing && _selectedEngineer == null) {
-                    for (final e in engineers) {
-                      if (e.id == widget.clinic!.responsibleEngineerId) {
-                        _selectedEngineer = e;
-                        break;
+                TextFormField(
+                  controller: _addressController,
+                  style: const TextStyle(color: Colors.white),
+                  cursorColor: Colors.white,
+                  decoration: glassInputDecoration('Address'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white),
+                  cursorColor: Colors.white,
+                  decoration: glassInputDecoration('Phone Number'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _contactPersonController,
+                  style: const TextStyle(color: Colors.white),
+                  cursorColor: Colors.white,
+                  decoration: glassInputDecoration('Contact Person'),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Responsible Engineer',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                engineersAsync.when(
+                  loading: () => const LinearProgressIndicator(color: Colors.white),
+                  error: (e, _) => Text('Failed to load engineers: $e',
+                      style: const TextStyle(color: Colors.redAccent)),
+                  data: (engineers) {
+                    if (widget.isEditing && _selectedEngineer == null) {
+                      for (final e in engineers) {
+                        if (e.id == widget.clinic!.responsibleEngineerId) {
+                          _selectedEngineer = e;
+                          break;
+                        }
                       }
                     }
-                  }
-                  return DropdownButtonFormField<EngineerModel>(
-                  initialValue: _selectedEngineer,
-                  decoration: const InputDecoration(border: OutlineInputBorder()),
-                  hint: const Text('Select engineer'),
-                  isExpanded: true,
-                  items: engineers
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e.displayName)))
-                      .toList(),
-                  onChanged: (value) => setState(() => _selectedEngineer = value),
-                  );
-                },
-              ),
-            ],
+                    return DropdownButtonFormField<EngineerModel>(
+                      initialValue: _selectedEngineer,
+                      decoration: glassInputDecoration('').copyWith(labelText: null),
+                      dropdownColor: AppGlassColors.baseDark,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      iconEnabledColor: Colors.white70,
+                      hint: const Text('Select engineer', style: TextStyle(color: Colors.white54)),
+                      isExpanded: true,
+                      items: engineers
+                          .map((e) => DropdownMenuItem(value: e, child: Text(e.displayName)))
+                          .toList(),
+                      onChanged: (value) => setState(() => _selectedEngineer = value),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(widget.isEditing ? 'Save' : 'Create'),
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+            ),
+            onPressed: _isSubmitting ? null : _submit,
+            child: _isSubmitting
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(widget.isEditing ? 'Save' : 'Create'),
+          ),
+        ],
       ),
     );
   }

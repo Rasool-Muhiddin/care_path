@@ -37,3 +37,4 @@ flutter:
 
   assets:
     - assets/images/login_background.jpg
+    - assets/images/wall.png

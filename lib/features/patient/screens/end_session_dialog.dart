@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/glass_container.dart';
 import '../models/session_model.dart';
 import '../patient_providers.dart';
 
@@ -70,34 +71,43 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('إنهاء الجلسة'),
+    return GlassDialog(
+      title: 'إنهاء الجلسة',
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_errorMessage != null) ...[
-              Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+              Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
               const SizedBox(height: 12),
             ],
-            const Text('كيف كانت تجربتك بهذي الجلسة؟'),
+            const Text('كيف كانت تجربتك بهذي الجلسة؟', style: TextStyle(color: Colors.white)),
             if (widget.durationMinutes != null) ...[
               const SizedBox(height: 4),
               Text(
                 'مدة الجلسة: ${widget.durationMinutes} دقيقة',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: PatientFeeling.values.map((feeling) {
                 final isSelected = _selectedFeeling == feeling;
                 return ChoiceChip(
                   label: Text(feeling.label),
                   selected: isSelected,
                   onSelected: (_) => setState(() => _selectedFeeling = feeling),
+                  showCheckmark: false,
+                  labelStyle: TextStyle(
+                    color: isSelected ? AppGlassColors.baseDark : Colors.white,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  selectedColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
                 );
               }).toList(),
             ),
@@ -105,11 +115,11 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
             TextField(
               controller: _noteController,
               maxLines: 2,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'ملاحظة (اختياري)',
-                hintText: 'أي شي تحب تضيفه...',
-              ),
+              style: const TextStyle(color: Colors.white),
+              cursorColor: Colors.white,
+              decoration: glassInputDecoration(
+                'ملاحظة (اختياري)',
+              ).copyWith(hintText: 'أي شي تحب تضيفه...'),
             ),
           ],
         ),
@@ -117,15 +127,26 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
       actions: [
         TextButton(
           onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+          style: TextButton.styleFrom(foregroundColor: Colors.white70),
           child: const Text('إلغاء'),
         ),
+        const SizedBox(width: 8),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.18),
+            disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+            ),
+          ),
           onPressed: _isSubmitting ? null : _submit,
           child: _isSubmitting
               ? const SizedBox(
                   height: 16,
                   width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Text('حفظ'),
         ),

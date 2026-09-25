@@ -1,8 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
+import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
@@ -24,44 +27,58 @@ class DoctorHomeScreen extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
     final username = authState is AuthAuthenticated ? authState.user.username : '';
     final casesAsync = ref.watch(myCasesProvider);
+    final topPadding = kToolbarHeight + MediaQuery.of(context).padding.top;
 
     return LtrScope(
       child: Scaffold(
+        extendBodyBehindAppBar: true,
+        backgroundColor: AppGlassColors.baseDark,
         appBar: AppBar(
-          title: Text('Dr. $username'),
+          title: Text('Dr. $username', style: const TextStyle(color: Colors.white)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          flexibleSpace: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+          ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.logout),
+              icon: const Icon(Icons.logout, color: Colors.white),
               onPressed: () => ref.read(authStateProvider.notifier).logout(),
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
+        floatingActionButton: _GlassFab(
           onPressed: () => context.push('/doctor/new-case'),
-          icon: const Icon(Icons.add),
-          label: const Text('New Case'),
         ),
-        body: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(myCasesProvider),
-          child: casesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => _ErrorView(
-              message: error.toString(),
-              onRetry: () => ref.invalidate(myCasesProvider),
+        body: AppGradientBackground(
+          child: Padding(
+            padding: EdgeInsets.only(top: topPadding),
+            child: RefreshIndicator(
+              onRefresh: () async => ref.invalidate(myCasesProvider),
+              child: casesAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                error: (error, _) => _ErrorView(
+                  message: error.toString(),
+                  onRetry: () => ref.invalidate(myCasesProvider),
+                ),
+                data: (cases) {
+                  if (cases.isEmpty) {
+                    return const _EmptyView();
+                  }
+                  final sorted = _sortByPriority(cases);
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+                    itemCount: sorted.length,
+                    itemBuilder: (context, index) => _CaseTile(caseModel: sorted[index]),
+                  );
+                },
+              ),
             ),
-            data: (cases) {
-              if (cases.isEmpty) {
-                return const _EmptyView();
-              }
-              final sorted = _sortByPriority(cases);
-              return ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: sorted.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) => _CaseTile(caseModel: sorted[index]),
-              );
-            },
           ),
         ),
       ),
@@ -94,6 +111,41 @@ class DoctorHomeScreen extends ConsumerWidget {
   }
 }
 
+/// A frosted, pill-shaped extended FAB matching the glass theme
+/// (plain [FloatingActionButton.extended] can't blur its own
+/// background, so this builds the same shape manually).
+class _GlassFab extends StatelessWidget {
+  const _GlassFab({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      borderRadius: 28,
+      opacity: 0.16,
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: onPressed,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add, color: Colors.white),
+                SizedBox(width: 8),
+                Text('New Case', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CaseTile extends ConsumerWidget {
   const _CaseTile({required this.caseModel});
   final CaseModel caseModel;
@@ -101,13 +153,13 @@ class _CaseTile extends ConsumerWidget {
   Color _statusColor(CaseStatus status) {
     switch (status) {
       case CaseStatus.inTreatment:
-        return Colors.green;
+        return const Color(0xFF6EE7A0);
       case CaseStatus.underEvaluation:
-        return Colors.orange;
+        return const Color(0xFFFFC46E);
       case CaseStatus.newCase:
-        return Colors.blue;
+        return const Color(0xFF7FB3FF);
       case CaseStatus.closed:
-        return Colors.grey;
+        return Colors.white54;
     }
   }
 
@@ -119,47 +171,84 @@ class _CaseTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(caseSessionsProvider(caseModel.id));
+    final statusColor = _statusColor(caseModel.status);
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: _statusColor(caseModel.status).withValues(alpha: 0.15),
-        child: Icon(Icons.person, color: _statusColor(caseModel.status)),
-      ),
-      title: Text(caseModel.patientName.isNotEmpty ? caseModel.patientName : 'Patient #${caseModel.patientId}'),
-      subtitle: Row(
-        children: [
-          Text(caseModel.diagnosisType.label),
-          const Text(' • '),
-          sessionsAsync.when(
-            loading: () => const Text('...'),
-            error: (_, __) => const Text('Sessions: —'),
-            data: (sessions) {
-              final completedToday = sessions.any((s) => _isToday(s.sessionDate));
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${sessions.length} sessions'),
-                  if (completedToday) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.check_circle, size: 14, color: Colors.green),
-                    const Text(' Today', style: TextStyle(color: Colors.green, fontSize: 12)),
-                  ],
-                ],
-              );
-            },
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => CaseDetailsScreen(caseModel: caseModel)),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: statusColor.withValues(alpha: 0.18),
+                  child: Icon(Icons.person, color: statusColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        caseModel.patientName.isNotEmpty
+                            ? caseModel.patientName
+                            : 'Patient #${caseModel.patientId}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(caseModel.diagnosisType.label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          const Text(' • ', style: TextStyle(color: Colors.white38)),
+                          sessionsAsync.when(
+                            loading: () => const Text('...', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                            error: (_, __) => const Text('Sessions: —', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                            data: (sessions) {
+                              final completedToday = sessions.any((s) => _isToday(s.sessionDate));
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('${sessions.length} sessions', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                  if (completedToday) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.check_circle, size: 14, color: Color(0xFF6EE7A0)),
+                                    const Text(' Today', style: TextStyle(color: Color(0xFF6EE7A0), fontSize: 12)),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    caseModel.status.label,
+                    style: TextStyle(fontSize: 12, color: statusColor),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
-      trailing: Chip(
-        label: Text(caseModel.status.label, style: const TextStyle(fontSize: 12)),
-        backgroundColor: _statusColor(caseModel.status).withValues(alpha: 0.15),
-        side: BorderSide.none,
-      ),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => CaseDetailsScreen(caseModel: caseModel)),
-        );
-      },
     );
   }
 }
@@ -177,7 +266,11 @@ class _EmptyView extends StatelessWidget {
           child: const Center(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: Text('No cases yet — tap "New Case" to get started'),
+              child: Text(
+                'No cases yet — tap "New Case" to get started',
+                style: TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ),
@@ -204,9 +297,9 @@ class _ErrorView extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline, size: 40, color: Colors.red),
+                  const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
                   const SizedBox(height: 12),
-                  Text(message, textAlign: TextAlign.center),
+                  Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
                   const SizedBox(height: 12),
                   ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
                 ],

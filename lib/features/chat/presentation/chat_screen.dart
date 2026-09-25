@@ -7,6 +7,50 @@ import '../../../core/permissions/user_role.dart';
 import '../data/chat_message_model.dart';
 import '../logic/chat_notifier.dart';
 
+/// Chat-only background: a deep teal-to-navy gradient with a soft glow
+/// near the top, distinct from [AppGradientBackground] so the messaging
+/// screen reads differently from the rest of the app at a glance.
+/// Deliberately local to this file — it doesn't touch or replace the
+/// shared background widget used everywhere else.
+class _ChatGradientBackground extends StatelessWidget {
+  const _ChatGradientBackground({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF0A1638), // AppGlassColors.baseDark
+            Color(0xFF0F2E45), // teal-tinted navy — the "messaging" note
+            Color(0xFF102A4A),
+            Color(0xFF0A1638),
+          ],
+          stops: [0.0, 0.35, 0.7, 1.0],
+        ),
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0.6, -0.9),
+            radius: 1.3,
+            colors: [
+              const Color(0xFF22D3EE).withValues(alpha: 0.16),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
   static const banner = TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600);
@@ -61,7 +105,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final recipientLabel = currentRole == UserRole.patient
         ? (inquiryType == InquiryType.technical
             ? 'إلى: المهندس'
-            : 'إلى: $doctorLabel (ويطّلع عليها المهندس)')
+            : 'إلى: $doctorLabel')
         : null;
     final conversation = ChatConversation(widget.caseId, inquiryType);
     final state = ref.watch(chatProvider(conversation));
@@ -102,7 +146,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ]
             : null,
       ),
-      body: AppGradientBackground(
+      body: _ChatGradientBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -222,7 +266,7 @@ class _InquiryTypePicker extends StatelessWidget {
         foregroundColor: Colors.white,
         title: const Text('المحادثة', style: TextStyle(color: Colors.white)),
       ),
-      body: AppGradientBackground(
+      body: _ChatGradientBackground(
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),

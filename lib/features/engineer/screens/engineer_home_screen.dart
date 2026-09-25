@@ -9,6 +9,43 @@ import 'device_types_tab.dart';
 import 'devices_tab.dart';
 import 'overview_tab.dart';
 
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white. Used here to
+/// tint each tab's icon by what it manages.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// A TabBar tab with a fixed-color icon (from [_Accent]) next to the
+/// label, instead of an icon that just follows the selected/unselected
+/// label color like a plain [Tab] would.
+class _AccentTab extends StatelessWidget {
+  const _AccentTab({required this.icon, required this.color, required this.label});
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tab(
+      height: 44,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
 /// Engineer's home screen — operational overview plus management tabs.
 ///
 /// This screen owns the single [AppGradientBackground] for the whole
@@ -64,10 +101,10 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
         indicatorColor: Colors.white,
         indicatorWeight: 2,
         tabs: const [
-          Tab(text: 'Overview'),
-          Tab(text: 'Devices'),
-          Tab(text: 'Clinics'),
-          Tab(text: 'Device Types'),
+          _AccentTab(icon: Icons.dashboard_outlined, color: _Accent.clinic, label: 'Overview'),
+          _AccentTab(icon: Icons.memory_outlined, color: _Accent.device, label: 'Devices'),
+          _AccentTab(icon: Icons.local_hospital_outlined, color: _Accent.clinic, label: 'Clinics'),
+          _AccentTab(icon: Icons.category_outlined, color: _Accent.device, label: 'Device Types'),
         ],
       ),
     );

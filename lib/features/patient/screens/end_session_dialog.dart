@@ -5,6 +5,102 @@ import '../../../core/widgets/glass_container.dart';
 import '../models/session_model.dart';
 import '../patient_providers.dart';
 
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// Fixed text styles so every screen stays visually consistent.
+class _Txt {
+  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
+  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
+  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
+  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
+  static const body = TextStyle(color: Colors.white60, fontSize: 13);
+  static const error = TextStyle(color: Color(0xFFF87171));
+}
+
+/// Small circular badge behind a data-category icon: tinted fill,
+/// tinted border, colored icon — replaces flat white avatars/icons.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.18),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// Unified section header: colored side bar + small icon + white title
+/// + a lighter subtitle line (which may contain a glowing highlight,
+/// e.g. a count).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitleSpans,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<InlineSpan>? subtitleSpans;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: subtitleSpans != null ? 34 : 20,
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _Txt.sectionTitle),
+              if (subtitleSpans != null) ...[
+                const SizedBox(height: 2),
+                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// نافذة "إنهاء الجلسة" — اختيار سريع لرد الفعل + ملاحظة اختيارية.
 /// [durationMinutes]: المدة المحسوبة تلقائياً من عداد "بدء الجلسة" بالشاشة
 /// الرئيسية (null لو المريض ضغط "إنهاء الجلسة" مباشرة بدون بدء عداد).
@@ -79,18 +175,39 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_errorMessage != null) ...[
-              Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+              Row(
+                children: [
+                  _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 28),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(_errorMessage!, style: _Txt.error),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
             ],
-            const Text('كيف كانت تجربتك بهذي الجلسة؟', style: TextStyle(color: Colors.white)),
-            if (widget.durationMinutes != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                'مدة الجلسة: ${widget.durationMinutes} دقيقة',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-            const SizedBox(height: 12),
+            _SectionHeader(
+              icon: Icons.mood_outlined,
+              color: _Accent.patient,
+              title: 'كيف كانت تجربتك بهذي الجلسة؟',
+              subtitleSpans: widget.durationMinutes != null
+                  ? [
+                      const TextSpan(text: 'مدة الجلسة: '),
+                      TextSpan(
+                        text: '${widget.durationMinutes}',
+                        style: TextStyle(
+                          color: _Accent.patient,
+                          fontWeight: FontWeight.w700,
+                          shadows: [
+                            Shadow(color: _Accent.patient.withValues(alpha: 0.55), blurRadius: 14),
+                          ],
+                        ),
+                      ),
+                      const TextSpan(text: ' دقيقة'),
+                    ]
+                  : null,
+            ),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -102,12 +219,12 @@ class _EndSessionDialogState extends ConsumerState<_EndSessionDialog> {
                   onSelected: (_) => setState(() => _selectedFeeling = feeling),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color: isSelected ? AppGlassColors.baseDark : Colors.white,
+                    color: isSelected ? AppGlassColors.baseDark : Colors.black,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  selectedColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                  backgroundColor: _Accent.patient.withValues(alpha: 0.1),
+                  selectedColor: _Accent.patient,
+                  side: BorderSide(color: _Accent.patient.withValues(alpha: isSelected ? 0.7 : 0.3)),
                 );
               }).toList(),
             ),

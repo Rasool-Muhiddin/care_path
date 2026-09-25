@@ -9,6 +9,102 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
 
+/// Category accent colors — every screen picks its palette from here so
+/// data reads by color instead of a flat, uniform white.
+class _Accent {
+  static const Color doctor = Color(0xFF5AC8FA);
+  static const Color patient = Color(0xFF34D399);
+  static const Color caseC = Color(0xFFFBBF24);
+  static const Color device = Color(0xFFA78BFA);
+  static const Color unlinked = Color(0xFFF87171);
+  static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// Fixed text styles so every screen stays visually consistent.
+class _Txt {
+  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
+  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
+  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
+  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
+  static const body = TextStyle(color: Colors.white60, fontSize: 13);
+  static const error = TextStyle(color: Color(0xFFF87171));
+}
+
+/// Small circular badge behind a data-category icon: tinted fill,
+/// tinted border, colored icon — replaces flat white avatars/icons.
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon, required this.color, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.18),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// Unified section header: colored side bar + small icon + white title
+/// + a lighter subtitle line (which may contain a glowing highlight,
+/// e.g. a count).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitleSpans,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<InlineSpan>? subtitleSpans;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: subtitleSpans != null ? 34 : 20,
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _Txt.sectionTitle),
+              if (subtitleSpans != null) ...[
+                const SizedBox(height: 2),
+                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Generates a secure random password (letters + digits, 10 chars).
 /// Shown once to the doctor after registration so they can hand it to
 /// the patient for their first login.
@@ -124,11 +220,26 @@ class _AddPatientDialogState extends ConsumerState<_AddPatientDialog> {
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_errorMessage != null) ...[
-                  Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+                  Row(
+                    children: [
+                      _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(_errorMessage!, style: _Txt.error),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                 ],
+                _SectionHeader(
+                  icon: Icons.person_add_alt_1_outlined,
+                  color: _Accent.patient,
+                  title: 'Patient Details',
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
@@ -234,18 +345,34 @@ class _SuccessView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Save these credentials — the password cannot be shown again.',
-            style: TextStyle(color: Colors.white70),
+          Row(
+            children: [
+              _IconBadge(icon: Icons.check_circle_outline, color: _Accent.patient, size: 32),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Save these credentials — the password cannot be shown again.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          _CredentialRow(label: 'Username', value: username),
-          const SizedBox(height: 8),
-          _CredentialRow(label: 'Password', value: password),
+          GlassContainer(
+            borderRadius: 14,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Column(
+              children: [
+                _CredentialRow(icon: Icons.person_outline, label: 'Username', value: username),
+                Divider(height: 18, thickness: 1, color: Colors.white.withValues(alpha: 0.08)),
+                _CredentialRow(icon: Icons.lock_outline, label: 'Password', value: password),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
           const Text(
             'Give these to the patient to log in once they install the app.',
-            style: TextStyle(fontSize: 12, color: Colors.white54),
+            style: _Txt.body,
           ),
         ],
       ),
@@ -275,7 +402,8 @@ class _SuccessView extends StatelessWidget {
 }
 
 class _CredentialRow extends StatelessWidget {
-  const _CredentialRow({required this.label, required this.value});
+  const _CredentialRow({required this.icon, required this.label, required this.value});
+  final IconData icon;
   final String label;
   final String value;
 
@@ -283,14 +411,22 @@ class _CredentialRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        _IconBadge(icon: icon, color: _Accent.patient, size: 32),
+        const SizedBox(width: 10),
         SizedBox(
-          width: 80,
-          child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          width: 72,
+          child: Text(label, style: _Txt.tileTitle),
         ),
         Expanded(
           child: SelectableText(
             value,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 16, color: Colors.white),
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              shadows: [Shadow(color: _Accent.patient.withValues(alpha: 0.55), blurRadius: 14)],
+            ),
           ),
         ),
       ],

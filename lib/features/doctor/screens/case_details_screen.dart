@@ -11,6 +11,23 @@ import '../doctor_providers.dart';
 import '../models/case_model.dart';
 import '../models/case_progress_note_model.dart';
 
+/// Number of calendar days since [createdAt], counting the registration
+/// day itself as day 1.
+///
+/// Using `DateTime.now().difference(createdAt).inDays` compares raw
+/// 24-hour durations, not calendar dates — a patient registered at
+/// 8 PM Monday and checked at 9 AM Wednesday has only ~37 hours elapsed
+/// (`.inDays` == 1), even though that spans 3 calendar days. Since one
+/// session is allowed per calendar day, that mismatch is exactly why the
+/// sessions count could exceed "days since registration". Comparing
+/// date-only values (dropping the time-of-day) and adding 1 fixes it.
+int _daysSinceRegistration(DateTime createdAt) {
+  final today = DateTime.now();
+  final startDate = DateTime(createdAt.year, createdAt.month, createdAt.day);
+  final currentDate = DateTime(today.year, today.month, today.day);
+  return currentDate.difference(startDate).inDays + 1;
+}
+
 /// Category accent colors — every screen picks its palette from here so
 /// data reads by color instead of a flat, uniform white.
 class _Accent {
@@ -383,7 +400,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                       child: _StatBox(
                         icon: Icons.calendar_today_outlined,
                         label: 'Days since registration',
-                        value: '${DateTime.now().difference(c.createdAt).inDays}',
+                        value: '${_daysSinceRegistration(c.createdAt)}',
                         color: _Accent.caseC,
                       ),
                     ),

@@ -1,6 +1,6 @@
 {
-    "name": "care_path",
-    "short_name": "care_path",
+    "name": "axon",
+    "short_name": "axon",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -96,6 +96,8 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
       ],
       bottom: TabBar(
         controller: _tabController,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white54,
         indicatorColor: Colors.white,

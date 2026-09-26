@@ -630,7 +630,6 @@ class _DeviceRow extends StatelessWidget {
       title: Text(device.serialNumber, style: _Txt.tileTitle),
       subtitle: Text(
         [
-          device.modelName,
           if (device.clinicName != null) device.clinicName!,
           device.status.label,
         ].join(' • '),

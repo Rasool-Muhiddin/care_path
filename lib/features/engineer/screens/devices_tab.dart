@@ -247,7 +247,6 @@ class _DeviceTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       [
-                        device.modelName,
                         if (device.deviceTypeName != null) device.deviceTypeName!,
                         if (device.clinicName != null) device.clinicName!,
                       ].join(' • '),

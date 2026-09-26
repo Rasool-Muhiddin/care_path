@@ -18,8 +18,8 @@ class _Txt {
   static const warning = TextStyle(color: Colors.orangeAccent, fontSize: 13);
 }
 
-/// New / Edit device screen — the engineer enters serial number, model,
-/// type, clinic (optional), status, install date, and notes.
+/// New / Edit device screen — the engineer enters serial number, type,
+/// clinic (optional), status, and install date.
 /// Pass [device] to edit an existing device instead of creating one.
 class AddDeviceScreen extends ConsumerStatefulWidget {
   const AddDeviceScreen({super.key, this.device});
@@ -38,9 +38,6 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
   final _formKey = GlobalKey<FormState>();
   late final _serialNumberController =
       TextEditingController(text: widget.device?.serialNumber ?? '');
-  late final _modelNameController =
-      TextEditingController(text: widget.device?.modelName ?? '');
-  late final _notesController = TextEditingController(text: widget.device?.notes ?? '');
 
   DeviceTypeModel? _selectedDeviceType;
   ClinicModel? _selectedClinic;
@@ -51,8 +48,6 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
   @override
   void dispose() {
     _serialNumberController.dispose();
-    _modelNameController.dispose();
-    _notesController.dispose();
     super.dispose();
   }
 
@@ -73,12 +68,10 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
     try {
       final payload = NewDevicePayload(
         serialNumber: _serialNumberController.text.trim(),
-        modelName: _modelNameController.text.trim(),
         deviceTypeId: _selectedDeviceType?.id,
         clinicId: _selectedClinic?.id,
         status: _selectedStatus,
         installedAt: _installedAt,
-        notes: _notesController.text.trim(),
       );
       final repo = ref.read(engineerRepositoryProvider);
       final saved = widget.isEditing
@@ -124,14 +117,6 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     style: const TextStyle(color: Colors.white),
                     cursorColor: Colors.white,
                     decoration: glassInputDecoration('Serial Number'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _modelNameController,
-                    style: const TextStyle(color: Colors.white),
-                    cursorColor: Colors.white,
-                    decoration: glassInputDecoration('Model Name'),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 20),
@@ -243,18 +228,6 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // --- Notes ---
-                  const Text('Notes', style: _Txt.sectionTitle),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _notesController,
-                    maxLines: 3,
-                    style: const TextStyle(color: Colors.white),
-                    cursorColor: Colors.white,
-                    decoration: glassInputDecoration('').copyWith(labelText: null),
                   ),
                   const SizedBox(height: 28),
 

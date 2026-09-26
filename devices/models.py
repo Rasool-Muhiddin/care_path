@@ -81,7 +81,6 @@ class Device(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     serial_number = models.CharField(max_length=50, unique=True)
-    model_name = models.CharField(max_length=100, help_text="طراز/موديل الجهاز")
 
     # نوع الجهاز — يحدد شكل نافذة الإعدادات في التطبيق عند إنشاء Case
     device_type = models.ForeignKey(
@@ -102,10 +101,9 @@ class Device(models.Model):
 
     installed_at = models.DateField(null=True, blank=True)
     last_maintenance_at = models.DateField(null=True, blank=True)
-    notes = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
-        return f"{self.model_name} - {self.serial_number}"
+        return self.serial_number

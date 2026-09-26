@@ -8,8 +8,8 @@ class TokenStorage {
 
   final _storage = const FlutterSecureStorage();
 
-  static const _accessKey = 'care_path_access_token';
-  static const _refreshKey = 'care_path_refresh_token';
+  static const _accessKey = 'axon_access_token';
+  static const _refreshKey = 'axon_refresh_token';
 
   Future<void> saveTokens({
     required String accessToken,

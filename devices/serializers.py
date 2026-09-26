@@ -49,7 +49,6 @@ class DeviceSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "serial_number",
-            "model_name",
             "device_type",
             "device_type_name",
             "device_type_setup_schema",
@@ -59,7 +58,6 @@ class DeviceSerializer(serializers.ModelSerializer):
             "is_available",
             "installed_at",
             "last_maintenance_at",
-            "notes",
             "created_at",
             "updated_at",
         ]

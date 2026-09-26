@@ -124,7 +124,6 @@ class _DeviceInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _InfoRow(label: 'Model', value: device.modelName),
           _InfoRow(label: 'Type', value: device.deviceTypeName ?? '—'),
           _InfoRow(label: 'Clinic', value: device.clinicName ?? '—'),
           _InfoRow(label: 'Status', value: device.status.label),
@@ -134,7 +133,6 @@ class _DeviceInfoCard extends StatelessWidget {
               value:
                   '${device.installedAt!.year}/${device.installedAt!.month.toString().padLeft(2, '0')}/${device.installedAt!.day.toString().padLeft(2, '0')}',
             ),
-          if (device.notes.isNotEmpty) _InfoRow(label: 'Notes', value: device.notes),
         ],
       ),
     );

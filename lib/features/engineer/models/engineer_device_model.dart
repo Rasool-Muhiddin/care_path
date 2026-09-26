@@ -18,7 +18,6 @@ enum DeviceStatus {
 class EngineerDeviceModel {
   final String id; // UUID
   final String serialNumber;
-  final String modelName;
   final int? deviceTypeId;
   final String? deviceTypeName;
   final Map<String, dynamic> deviceTypeSetupSchema;
@@ -27,14 +26,12 @@ class EngineerDeviceModel {
   final DeviceStatus status;
   final DateTime? installedAt;
   final DateTime? lastMaintenanceAt;
-  final String notes;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   const EngineerDeviceModel({
     required this.id,
     required this.serialNumber,
-    required this.modelName,
     this.deviceTypeId,
     this.deviceTypeName,
     required this.deviceTypeSetupSchema,
@@ -43,7 +40,6 @@ class EngineerDeviceModel {
     required this.status,
     this.installedAt,
     this.lastMaintenanceAt,
-    required this.notes,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -52,7 +48,6 @@ class EngineerDeviceModel {
     return EngineerDeviceModel(
       id: json['id'] as String,
       serialNumber: json['serial_number'] as String,
-      modelName: json['model_name'] as String,
       deviceTypeId: json['device_type'] as int?,
       deviceTypeName: json['device_type_name'] as String?,
       deviceTypeSetupSchema:
@@ -64,7 +59,6 @@ class EngineerDeviceModel {
       lastMaintenanceAt: json['last_maintenance_at'] != null
           ? DateTime.parse(json['last_maintenance_at'] as String)
           : null,
-      notes: json['notes'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -74,32 +68,26 @@ class EngineerDeviceModel {
 /// Payload for creating a new device
 class NewDevicePayload {
   final String serialNumber;
-  final String modelName;
   final int? deviceTypeId;
   final int? clinicId;
   final DeviceStatus status;
   final DateTime? installedAt;
-  final String notes;
 
   const NewDevicePayload({
     required this.serialNumber,
-    required this.modelName,
     this.deviceTypeId,
     this.clinicId,
     this.status = DeviceStatus.active,
     this.installedAt,
-    this.notes = '',
   });
 
   Map<String, dynamic> toJson() => {
         'serial_number': serialNumber,
-        'model_name': modelName,
         if (deviceTypeId != null) 'device_type': deviceTypeId,
         if (clinicId != null) 'clinic': clinicId,
         'status': status.apiValue,
         if (installedAt != null)
           'installed_at':
               '${installedAt!.year.toString().padLeft(4, '0')}-${installedAt!.month.toString().padLeft(2, '0')}-${installedAt!.day.toString().padLeft(2, '0')}',
-        'notes': notes,
       };
 }

@@ -1,5 +1,4 @@
-/// الأدوار الثلاثة في تطبيق care_path
-/// تطابق UserRole في Django backend (accounts/models.py)
+
 enum UserRole {
   patient,
   doctor,

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="care_path"
+        android:label="axon"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

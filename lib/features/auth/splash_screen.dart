@@ -212,8 +212,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 500),
                       child: Text(
-                        "A healthier tomorrow begins with care today  "
-                        "and we're always here with you.",
+                        "Every session, tracked. Every step, supported",
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 19,

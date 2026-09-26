@@ -18,6 +18,6 @@ class DeviceTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
-    list_display = ("serial_number", "model_name", "device_type", "clinic", "status", "updated_at")
+    list_display = ("serial_number", "device_type", "clinic", "status", "updated_at")
     list_filter = ("status", "device_type", "clinic")
-    search_fields = ("serial_number", "model_name")
+    search_fields = ("serial_number",)

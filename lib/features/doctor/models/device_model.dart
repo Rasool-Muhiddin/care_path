@@ -5,7 +5,6 @@
 class DeviceModel {
   final String id; // UUID (Device.id)
   final String serialNumber;
-  final String modelName;
   final int? deviceTypeId; // DeviceType.id عادي (AutoField)، وليس UUID
   final String? deviceTypeName;
   final Map<String, dynamic> deviceTypeSetupSchema;
@@ -16,7 +15,6 @@ class DeviceModel {
   const DeviceModel({
     required this.id,
     required this.serialNumber,
-    required this.modelName,
     this.deviceTypeId,
     this.deviceTypeName,
     required this.deviceTypeSetupSchema,
@@ -29,7 +27,6 @@ class DeviceModel {
     return DeviceModel(
       id: json['id'] as String,
       serialNumber: json['serial_number'] as String,
-      modelName: json['model_name'] as String,
       deviceTypeId: json['device_type'] as int?,
       deviceTypeName: json['device_type_name'] as String?,
       deviceTypeSetupSchema:

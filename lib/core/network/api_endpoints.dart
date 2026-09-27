@@ -6,8 +6,7 @@ class ApiEndpoints {
   // TODO: غيّر هذا حسب مكان تشغيل الـ backend
   // مثال محلي (محاكي Android): http://10.0.2.2:8000
   // مثال محلي (iOS Simulator / Desktop): http://127.0.0.1:8000
-  static const String baseUrl = 'http://192.168.9.109:8000';
-
+  static const String baseUrl = 'http://192.168.100.140:8000';
   static const String api = '$baseUrl/api';
 
   // accounts

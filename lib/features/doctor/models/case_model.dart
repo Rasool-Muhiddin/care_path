@@ -17,12 +17,12 @@ enum DiagnosisType {
 }
 
 /// Epilepsy sub-type — matches EpilepsyType in cases/models.py. Shown
-/// only when the selected diagnosis is epilepsy. Placeholder values
-/// (type1/type2/type3) until the real sub-types are defined.
+/// only when the selected diagnosis is epilepsy.
 enum EpilepsyType {
-  type1('type1', 'Type 1'),
-  type2('type2', 'Type 2'),
-  type3('type3', 'Type 3');
+  focal('focal', 'Focal Epilepsy'),
+  generalized('generalized', 'Generalized Epilepsy'),
+  combined('combined', 'Combined Generalized and Focal Epilepsy'),
+  unknown('unknown', 'Unknown Epilepsy');
 
   const EpilepsyType(this.apiValue, this.label);
   final String apiValue;
@@ -30,12 +30,13 @@ enum EpilepsyType {
 }
 
 /// Migraine sub-type — matches MigraineType in cases/models.py. Shown
-/// only when the selected diagnosis is migraine. Placeholder values
-/// (type1/type2/type3) until the real sub-types are defined.
+/// only when the selected diagnosis is migraine.
 enum MigraineType {
-  type1('type1', 'Type 1'),
-  type2('type2', 'Type 2'),
-  type3('type3', 'Type 3');
+  withoutAura('without_aura', 'Migraine without Aura'),
+  withAura('with_aura', 'Migraine with Aura'),
+  chronic('chronic', 'Chronic Migraine'),
+  menstrual('menstrual', 'Menstrual Migraine'),
+  vestibular('vestibular', 'Vestibular Migraine');
 
   const MigraineType(this.apiValue, this.label);
   final String apiValue;
@@ -44,9 +45,6 @@ enum MigraineType {
 
 /// Disease sub-type choices for the given diagnosis, as (apiValue, label)
 /// pairs — matches DISEASE_TYPE_CHOICES_BY_DIAGNOSIS in cases/models.py.
-/// Currently identical placeholder values for both diagnoses; will
-/// diverge once the real sub-type names are defined (only this function
-/// needs to change then).
 List<(String, String)> diseaseTypeChoicesFor(DiagnosisType diagnosisType) {
   switch (diagnosisType) {
     case DiagnosisType.epilepsy:
@@ -57,8 +55,8 @@ List<(String, String)> diseaseTypeChoicesFor(DiagnosisType diagnosisType) {
 }
 
 /// Human-readable label for a stored disease_type raw value, given the
-/// case's diagnosis type (needed because the same raw value, e.g.
-/// "type1", means a different thing depending on diagnosis_type).
+/// case's diagnosis type (needed because the same raw value could mean
+/// a different thing depending on diagnosis_type).
 String diseaseTypeLabel(DiagnosisType diagnosisType, String? diseaseType) {
   if (diseaseType == null || diseaseType.isEmpty) return '—';
   final choices = diseaseTypeChoicesFor(diagnosisType);

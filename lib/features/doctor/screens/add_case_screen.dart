@@ -404,8 +404,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
 
                   // --- Disease sub-type — depends on the selected diagnosis:
                   // epilepsy types when Epilepsy is chosen, migraine types when
-                  // Migraine is chosen. Placeholder values (type1/2/3) until the
-                  // real sub-types are defined. ---
+                  // Migraine is chosen. ---
                   _sectionTitle('${_selectedDiagnosis.label} Type', icon: Icons.category_outlined, color: _Accent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(

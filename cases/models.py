@@ -13,34 +13,28 @@ class DiagnosisType(models.TextChoices):
 
 
 class EpilepsyType(models.TextChoices):
-    """
-    أنواع الصرع الفرعية — تظهر فقط عند اختيار تشخيص الصرع.
-    قيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
-    """
+    """أنواع الصرع الفرعية — تظهر فقط عند اختيار تشخيص الصرع."""
 
-    TYPE1 = "type1", "Type 1"
-    TYPE2 = "type2", "Type 2"
-    TYPE3 = "type3", "Type 3"
+    FOCAL = "focal", "Focal Epilepsy"
+    GENERALIZED = "generalized", "Generalized Epilepsy"
+    COMBINED = "combined", "Combined Generalized and Focal Epilepsy"
+    UNKNOWN = "unknown", "Unknown Epilepsy"
 
 
 class MigraineType(models.TextChoices):
-    """
-    أنواع الشقيقة الفرعية — تظهر فقط عند اختيار تشخيص الشقيقة.
-    قيم مؤقتة (type1/type2/type3) إلى أن تُحدَّد الأنواع الفعلية لاحقاً.
-    """
+    """أنواع الشقيقة الفرعية — تظهر فقط عند اختيار تشخيص الشقيقة."""
 
-    TYPE1 = "type1", "Type 1"
-    TYPE2 = "type2", "Type 2"
-    TYPE3 = "type3", "Type 3"
+    WITHOUT_AURA = "without_aura", "Migraine without Aura"
+    WITH_AURA = "with_aura", "Migraine with Aura"
+    CHRONIC = "chronic", "Chronic Migraine"
+    MENSTRUAL = "menstrual", "Menstrual Migraine"
+    VESTIBULAR = "vestibular", "Vestibular Migraine"
 
 
 # خريطة: كل تشخيص رئيسي له مجموعة "أنواعه الفرعية" الخاصة به فقط —
 # تُستخدم بالـ Serializer (validate) للتأكد أن disease_type المُرسَل
 # ينتمي فعلاً لتشخيص الحالة (Case.diagnosis_type)، حتى لا يُحفظ نوع
 # فرعي يخص الصرع مع حالة تشخيصها شقيقة أو العكس.
-# حالياً كل المجموعات متطابقة القيم (type1/2/3) لأن الأنواع الحقيقية
-# لم تُحدَّد بعد — لاحقاً يكفي تعديل هذه الكلاسات فقط (EpilepsyType/
-# MigraineType) دون أي تغيير بالكود من حولها.
 DISEASE_TYPE_CHOICES_BY_DIAGNOSIS = {
     DiagnosisType.EPILEPSY: EpilepsyType.choices,
     DiagnosisType.MIGRAINE: MigraineType.choices,

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from datetime import timedelta
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -47,6 +48,8 @@ INSTALLED_APPS = [
     'treatments',
     'feedback',
     'chat',
+    'app_updates',
+    'notifications',
 ]
 
 MIDDLEWARE = [
@@ -149,6 +152,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# ملفات مرفوعة من المستخدم/الأدمن (مثلاً ملفات APK لتحديثات التطبيق)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# مسار ملف اعتماد Firebase Admin SDK (Service Account JSON) لإرسال
+# إشعارات FCM. لا تضع المسار الفعلي هنا ولا ترفع الملف نفسه لأي مستودع
+# — اضبطه فقط عبر متغيّر بيئة على السيرفر. إشعارات FCM تُعطَّل بصمت
+# (بدون أي خطأ) طالما هذا المتغيّر غير مضبوط.
+FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH')
 
 
 # Email

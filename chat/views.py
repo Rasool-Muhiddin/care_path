@@ -8,6 +8,7 @@ from .models import ChatMessage
 from .models import InquiryType
 from .serializers import ChatMessageSerializer
 from .permissions import IsCaseParticipant
+from .notifications import notify_new_message
 
 
 class CaseMessagesView(generics.ListCreateAPIView):
@@ -41,7 +42,7 @@ class CaseMessagesView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(case=self.get_case(), sender=self.request.user)
-        # TODO لاحقًا: notify_new_message(serializer.instance)  عند تفعيل push
+        notify_new_message(serializer.instance)
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)

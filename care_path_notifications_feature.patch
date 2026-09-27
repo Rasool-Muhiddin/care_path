@@ -1,0 +1,1266 @@
+diff --git a/FIREBASE_SETUP.md b/FIREBASE_SETUP.md
+new file mode 100644
+index 0000000..62a18ab
+--- /dev/null
++++ b/FIREBASE_SETUP.md
+@@ -0,0 +1,73 @@
++# إعداد Firebase (خطوات يدوية فقط — لا تعديل كود مطلوب)
++
++كل الكود جاهز ولا يحتاج أي تعديل. تبقّى فقط وضع ملفين واثنين من الإعدادات
++بعد أن تُنشئ مشروع Firebase الخاص بك.
++
++## 1. قبل إنشاء مشروع Firebase
++
++اختر الآن اسم حزمة (Application ID) نهائي بدل القيمة المؤقتة
++`com.example.axon` الموجودة حالياً في:
++
++```
++android/app/build.gradle.kts   →  applicationId = "com.example.axon"
++```
++
++غيّرها لشيء مثل `com.yourcompany.carepath`، لأن Firebase يربط المشروع
++بهذا الاسم تحديداً — تغييره لاحقاً يعني تسجيل تطبيق Firebase جديد من
++الصفر.
++
++## 2. ملف Android: `google-services.json`
++
++من Firebase Console → إعدادات المشروع → أضف تطبيق Android → أدخل نفس
++الـ applicationId أعلاه → حمّل الملف وضعه هنا حرفياً:
++
++```
++android/app/google-services.json
++```
++
++هذا كل ما يلزم من جهة Gradle — البلجن مُفعّل مسبقاً في
++`android/settings.gradle.kts` و `android/app/build.gradle.kts`.
++
++## 3. ملف السيرفر: مفتاح Service Account
++
++من Firebase Console → إعدادات المشروع → Service Accounts → Generate new
++private key. يُنزَّل ملف JSON **سرّي جداً** — لا يُرفع لأي مستودع Git.
++
++ضعه في أي مكان آمن على السيرفر خارج مجلد المشروع المتتبَّع بـ git، مثلاً:
++
++```
++/etc/care_path/firebase-service-account.json
++```
++
++ثم اضبط متغيّر البيئة قبل تشغيل الخادم:
++
++```bash
++export FIREBASE_CREDENTIALS_PATH=/etc/care_path/firebase-service-account.json
++```
++
++(أو أضفه في ملف `.env`/إعدادات الخدمة حسب طريقة تشغيلكم على Hetzner).
++طالما هذا المتغيّر غير مضبوط، الإشعارات تُعطَّل بصمت فقط — بقية
++التطبيق (بما فيه إرسال الرسائل نفسها) يعمل بشكل طبيعي.
++
++## 4. تثبيت الاعتماديات
++
++```bash
++# Backend
++pip install -r requirements.txt
++python manage.py migrate
++
++# Flutter
++flutter pub get
++```
++
++## 5. (لاحقاً، اختياري) دعم آيفون
++
++نفس مشروع Firebase يدعم آيفون أيضاً — يتطلب فقط:
++- تسجيل تطبيق iOS داخل نفس مشروع Firebase (يعطيك `GoogleService-Info.plist`
++  توضعه في `ios/Runner/`)
++- رفع مفتاح APNs (.p8) من Apple Developer Account إلى إعدادات Cloud
++  Messaging في Firebase — وهذا يتطلب حساب Apple Developer المدفوع
++  (99$/سنة) المذكور سابقاً، ولا تكلفة إضافية غيره.
++
++لا تعديل كود مطلوب لهذا لاحقاً — نفس `notifications` app في Django ونفس
++`FcmService` في Flutter يعملان لكلا المنصتين كما هما.
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index ddf5541..9460c57 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -1,5 +1,6 @@
+ plugins {
+     id("com.android.application")
++    id("com.google.gms.google-services")
+     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+     id("dev.flutter.flutter-gradle-plugin")
+ }
+diff --git a/android/settings.gradle.kts b/android/settings.gradle.kts
+index c21f0c5..f8e625d 100644
+--- a/android/settings.gradle.kts
++++ b/android/settings.gradle.kts
+@@ -21,6 +21,10 @@ plugins {
+     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+     id("com.android.application") version "9.0.1" apply false
+     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
++    // يقرأ android/app/google-services.json ويولّد إعدادات Firebase —
++    // ضع الملف في مكانه أولاً (راجع ملاحظة FIREBASE_SETUP.md)، وإلا
++    // فشل بناء أندرويد بخطأ "File google-services.json is missing".
++    id("com.google.gms.google-services") version "4.4.2" apply false
+ }
+ 
+ include(":app")
+diff --git a/app_updates/__init__.py b/app_updates/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/app_updates/admin.py b/app_updates/admin.py
+new file mode 100644
+index 0000000..f16d4fa
+--- /dev/null
++++ b/app_updates/admin.py
+@@ -0,0 +1,26 @@
++from django.contrib import admin
++
++from .models import AppVersion
++
++
++@admin.register(AppVersion)
++class AppVersionAdmin(admin.ModelAdmin):
++    list_display = (
++        "platform",
++        "version_name",
++        "version_code",
++        "is_mandatory",
++        "is_published",
++        "created_at",
++    )
++    list_filter = ("platform", "is_published", "is_mandatory")
++    search_fields = ("version_name", "release_notes")
++    ordering = ("-version_code",)
++
++    fieldsets = (
++        (None, {"fields": ("platform", "version_name", "version_code", "release_notes")}),
++        ("مصدر التحديث", {"fields": ("apk_file", "download_url")}),
++        ("النشر", {"fields": ("is_mandatory", "is_published")}),
++    )
++
++    readonly_fields = ("created_at",)
+diff --git a/app_updates/apps.py b/app_updates/apps.py
+new file mode 100644
+index 0000000..268eee9
+--- /dev/null
++++ b/app_updates/apps.py
+@@ -0,0 +1,7 @@
++from django.apps import AppConfig
++
++
++class AppUpdatesConfig(AppConfig):
++    default_auto_field = "django.db.models.BigAutoField"
++    name = "app_updates"
++    verbose_name = "تحديثات التطبيق"
+diff --git a/app_updates/migrations/0001_initial.py b/app_updates/migrations/0001_initial.py
+new file mode 100644
+index 0000000..4c414df
+--- /dev/null
++++ b/app_updates/migrations/0001_initial.py
+@@ -0,0 +1,32 @@
++# Generated by Django 6.1.1 on 2026-09-26 19:44
++
++from django.db import migrations, models
++
++
++class Migration(migrations.Migration):
++
++    initial = True
++
++    dependencies = [
++    ]
++
++    operations = [
++        migrations.CreateModel(
++            name='AppVersion',
++            fields=[
++                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
++                ('platform', models.CharField(choices=[('android', 'Android'), ('ios', 'iOS')], default='android', max_length=10)),
++                ('version_name', models.CharField(help_text='مثال: 1.4.0 — نص وصفي يُعرض للمستخدم فقط', max_length=30)),
++                ('version_code', models.PositiveIntegerField(help_text='رقم صحيح يزداد مع كل إصدار (يطابق versionCode في Android). هذا هو الرقم الذي تتم المقارنة عليه، وليس version_name.')),
++                ('release_notes', models.TextField(blank=True, help_text='ماذا تغيّر في هذه النسخة — يُعرض للمستخدم في نافذة التحديث')),
++                ('is_mandatory', models.BooleanField(default=False, help_text='إذا فُعّل: يمنع المستخدم من متابعة استخدام التطبيق قبل التحديث')),
++                ('apk_file', models.FileField(blank=True, help_text='ملف APK ليُحمَّل مباشرة من التطبيق (اختياري)', null=True, upload_to='app_releases/')),
++                ('download_url', models.URLField(blank=True, help_text='رابط خارجي للتحديث (Google Play مثلاً) — يُستخدم إن لم يُرفع ملف APK')),
++                ('is_published', models.BooleanField(default=False, help_text='لا تظهر هذه النسخة للمستخدمين إلا بعد تفعيل هذا الخيار')),
++                ('created_at', models.DateTimeField(auto_now_add=True)),
++            ],
++            options={
++                'ordering': ['-version_code'],
++            },
++        ),
++    ]
+diff --git a/app_updates/migrations/__init__.py b/app_updates/migrations/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/app_updates/models.py b/app_updates/models.py
+new file mode 100644
+index 0000000..a3fbfcd
+--- /dev/null
++++ b/app_updates/models.py
+@@ -0,0 +1,66 @@
++from django.db import models
++
++
++class Platform(models.TextChoices):
++    ANDROID = "android", "Android"
++    IOS = "ios", "iOS"
++
++
++class AppVersion(models.Model):
++    """
++    نسخة من تطبيق الموبايل يُصدرها الأدمن من لوحة تحكم Django.
++
++    عند تفعيل is_published على نسخة جديدة بـ version_code أعلى من كل
++    النسخ المنشورة الأخرى لنفس platform، سيراها التطبيق كـ "آخر تحديث
++    متاح" في أول طلب لاحق لـ /api/app-version/latest/ ويعرض إشعار
++    التحديث للمستخدم (بدون أي إشعار push — الفحص يحدث عند فتح التطبيق).
++    """
++
++    platform = models.CharField(
++        max_length=10, choices=Platform.choices, default=Platform.ANDROID
++    )
++    version_name = models.CharField(
++        max_length=30, help_text="مثال: 1.4.0 — نص وصفي يُعرض للمستخدم فقط"
++    )
++    version_code = models.PositiveIntegerField(
++        help_text=(
++            "رقم صحيح يزداد مع كل إصدار (يطابق versionCode في Android). "
++            "هذا هو الرقم الذي تتم المقارنة عليه، وليس version_name."
++        )
++    )
++    release_notes = models.TextField(
++        blank=True, help_text="ماذا تغيّر في هذه النسخة — يُعرض للمستخدم في نافذة التحديث"
++    )
++    is_mandatory = models.BooleanField(
++        default=False,
++        help_text="إذا فُعّل: يمنع المستخدم من متابعة استخدام التطبيق قبل التحديث",
++    )
++    apk_file = models.FileField(
++        upload_to="app_releases/",
++        blank=True,
++        null=True,
++        help_text="ملف APK ليُحمَّل مباشرة من التطبيق (اختياري)",
++    )
++    download_url = models.URLField(
++        blank=True,
++        help_text="رابط خارجي للتحديث (Google Play مثلاً) — يُستخدم إن لم يُرفع ملف APK",
++    )
++    is_published = models.BooleanField(
++        default=False,
++        help_text="لا تظهر هذه النسخة للمستخدمين إلا بعد تفعيل هذا الخيار",
++    )
++
++    created_at = models.DateTimeField(auto_now_add=True)
++
++    class Meta:
++        ordering = ["-version_code"]
++
++    def __str__(self) -> str:
++        return f"{self.get_platform_display()} v{self.version_name} ({self.version_code})"
++
++    def download_link(self, request=None) -> str:
++        """رابط التحميل الفعلي: ملف الـ APK إن وُجد، وإلا الرابط الخارجي."""
++        if self.apk_file:
++            url = self.apk_file.url
++            return request.build_absolute_uri(url) if request is not None else url
++        return self.download_url
+diff --git a/app_updates/serializers.py b/app_updates/serializers.py
+new file mode 100644
+index 0000000..3809bd2
+--- /dev/null
++++ b/app_updates/serializers.py
+@@ -0,0 +1,22 @@
++from rest_framework import serializers
++
++from .models import AppVersion
++
++
++class AppVersionSerializer(serializers.ModelSerializer):
++    download_link = serializers.SerializerMethodField()
++
++    class Meta:
++        model = AppVersion
++        fields = [
++            "platform",
++            "version_name",
++            "version_code",
++            "release_notes",
++            "is_mandatory",
++            "download_link",
++        ]
++
++    def get_download_link(self, obj: AppVersion) -> str:
++        request = self.context.get("request")
++        return obj.download_link(request)
+diff --git a/app_updates/urls.py b/app_updates/urls.py
+new file mode 100644
+index 0000000..919b236
+--- /dev/null
++++ b/app_updates/urls.py
+@@ -0,0 +1,7 @@
++from django.urls import path
++
++from .views import LatestAppVersionView
++
++urlpatterns = [
++    path("app-version/latest/", LatestAppVersionView.as_view(), name="app-version-latest"),
++]
+diff --git a/app_updates/views.py b/app_updates/views.py
+new file mode 100644
+index 0000000..c16a8a8
+--- /dev/null
++++ b/app_updates/views.py
+@@ -0,0 +1,31 @@
++from rest_framework import permissions
++from rest_framework.exceptions import NotFound
++from rest_framework.generics import RetrieveAPIView
++
++from .models import AppVersion, Platform
++from .serializers import AppVersionSerializer
++
++
++class LatestAppVersionView(RetrieveAPIView):
++    """
++    GET /api/app-version/latest/?platform=android
++
++    متاح بدون تسجيل دخول (AllowAny) لأن فحص التحديث يجب أن يعمل من
++    شاشة البداية قبل أي تسجيل دخول. يرجع آخر نسخة منشورة (أعلى
++    version_code) لهذه المنصة، أو 404 إن لم تُنشر أي نسخة بعد —
++    والتطبيق يتعامل مع الـ 404 على أنه "لا يوجد تحديث".
++    """
++
++    serializer_class = AppVersionSerializer
++    permission_classes = [permissions.AllowAny]
++
++    def get_object(self) -> AppVersion:
++        platform = self.request.query_params.get("platform", Platform.ANDROID)
++        version = (
++            AppVersion.objects.filter(platform=platform, is_published=True)
++            .order_by("-version_code")
++            .first()
++        )
++        if version is None:
++            raise NotFound("لا توجد نسخة منشورة بعد")
++        return version
+diff --git a/chat/notifications.py b/chat/notifications.py
+new file mode 100644
+index 0000000..7a19099
+--- /dev/null
++++ b/chat/notifications.py
+@@ -0,0 +1,40 @@
++from accounts.models import User, UserRole
++
++from .models import ChatMessage, InquiryType
++
++
++def _recipients_for(message: ChatMessage):
++    case = message.case
++    if message.inquiry_type == InquiryType.TECHNICAL:
++        clinic = case.device.clinic if case.device else None
++        engineer = clinic.responsible_engineer if clinic else None
++        if engineer:
++            return [engineer]
++        # حالة غير مسندة لمهندس مسؤول بعد — نفس منطق عدّاد غير
++        # المقروء في UnreadCountView: تظهر لكل المهندسين إلى حين
++        # ربطها بعيادة/مهندس مسؤول.
++        return list(User.objects.filter(role=UserRole.ENGINEER))
++    return [case.patient, case.doctor]
++
++
++def notify_new_message(message: ChatMessage) -> None:
++    """يُستدعى بعد حفظ رسالة جديدة — يرسل إشعار push لكل طرف آخر في القناة."""
++    from notifications.services import send_push_to_users  # يتجنّب استيراد دائري عند إقلاع التطبيقات
++
++    recipients = [
++        u for u in _recipients_for(message) if u is not None and u.pk != message.sender_id
++    ]
++    if not recipients:
++        return
++
++    preview = message.text if len(message.text) <= 80 else message.text[:77] + "…"
++    send_push_to_users(
++        recipients,
++        title=f"رسالة جديدة من {message.sender.get_full_name() or message.sender.username}",
++        body=preview,
++        data={
++            "type": "chat_message",
++            "case_id": message.case_id,
++            "inquiry_type": message.inquiry_type,
++        },
++    )
+diff --git a/chat/views.py b/chat/views.py
+index 88baec7..95c54c9 100644
+--- a/chat/views.py
++++ b/chat/views.py
+@@ -8,6 +8,7 @@ from .models import ChatMessage
+ from .models import InquiryType
+ from .serializers import ChatMessageSerializer
+ from .permissions import IsCaseParticipant
++from .notifications import notify_new_message
+ 
+ 
+ class CaseMessagesView(generics.ListCreateAPIView):
+@@ -41,7 +42,7 @@ class CaseMessagesView(generics.ListCreateAPIView):
+ 
+     def perform_create(self, serializer):
+         serializer.save(case=self.get_case(), sender=self.request.user)
+-        # TODO لاحقًا: notify_new_message(serializer.instance)  عند تفعيل push
++        notify_new_message(serializer.instance)
+ 
+     def list(self, request, *args, **kwargs):
+         response = super().list(request, *args, **kwargs)
+diff --git a/config/settings.py b/config/settings.py
+index c2b5e74..a7a8f7b 100644
+--- a/config/settings.py
++++ b/config/settings.py
+@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
+ 
+ from datetime import timedelta
+ from pathlib import Path
++import os
+ 
+ # Build paths inside the project like this: BASE_DIR / 'subdir'.
+ BASE_DIR = Path(__file__).resolve().parent.parent
+@@ -47,6 +48,8 @@ INSTALLED_APPS = [
+     'treatments',
+     'feedback',
+     'chat',
++    'app_updates',
++    'notifications',
+ ]
+ 
+ MIDDLEWARE = [
+@@ -150,6 +153,16 @@ USE_TZ = True
+ 
+ STATIC_URL = 'static/'
+ 
++# ملفات مرفوعة من المستخدم/الأدمن (مثلاً ملفات APK لتحديثات التطبيق)
++MEDIA_URL = '/media/'
++MEDIA_ROOT = BASE_DIR / 'media'
++
++# مسار ملف اعتماد Firebase Admin SDK (Service Account JSON) لإرسال
++# إشعارات FCM. لا تضع المسار الفعلي هنا ولا ترفع الملف نفسه لأي مستودع
++# — اضبطه فقط عبر متغيّر بيئة على السيرفر. إشعارات FCM تُعطَّل بصمت
++# (بدون أي خطأ) طالما هذا المتغيّر غير مضبوط.
++FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH')
++
+ 
+ # Email
+ # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
+diff --git a/config/urls.py b/config/urls.py
+index cee7dc9..f0d8a37 100644
+--- a/config/urls.py
++++ b/config/urls.py
+@@ -1,3 +1,5 @@
++from django.conf import settings
++from django.conf.urls.static import static
+ from django.contrib import admin
+ from django.urls import path, include
+ 
+@@ -8,9 +10,16 @@ urlpatterns = [
+     path("api/", include("cases.urls")),
+     path("api/", include("treatments.urls")),
+     path("api/", include("feedback.urls")),
++    path("api/", include("app_updates.urls")),
++    path("api/", include("notifications.urls")),
+     path('api/chat/', include('chat.urls')),
+ ]
+ 
++# تقديم ملفات media (مثل APK) مباشرة أثناء التطوير فقط؛ في الإنتاج يجب
++# تقديمها عبر nginx/الخادم مباشرة وليس عبر Django.
++if settings.DEBUG:
++    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
++
+ # نقاط النهاية النهائية بعد هذا الربط (أمثلة):
+ #   POST /api/auth/register/
+ #   POST /api/auth/login/
+diff --git a/lib/core/network/api_endpoints.dart b/lib/core/network/api_endpoints.dart
+index 9eb670e..6897dfe 100644
+--- a/lib/core/network/api_endpoints.dart
++++ b/lib/core/network/api_endpoints.dart
+@@ -35,6 +35,12 @@ class ApiEndpoints {
+   // feedback
+   static const String feedback = '$api/feedback/';
+ 
++  // app updates
++  static const String appVersionLatest = '$api/app-version/latest/';
++
++  // notifications
++  static const String fcmToken = '$api/fcm-token/';
++
+     // chat
+   static String caseMessages(int caseId) => '$api/chat/cases/$caseId/messages/';
+   static const String chatUnreadCount = '$api/chat/unread-count/';
+diff --git a/lib/core/notifications/fcm_repository.dart b/lib/core/notifications/fcm_repository.dart
+new file mode 100644
+index 0000000..827d071
+--- /dev/null
++++ b/lib/core/notifications/fcm_repository.dart
+@@ -0,0 +1,36 @@
++import 'package:dio/dio.dart';
++
++import '../network/api_client.dart';
++import '../network/api_endpoints.dart';
++
++/// طبقة التواصل مع /api/fcm-token/ — تسجيل الفشل هنا بصمت دائماً، لأن
++/// تسجيل الدخول أو تسجيل الخروج يجب ألا يتعطل بسبب مشكلة إشعارات.
++class FcmRepository {
++  FcmRepository(this._client);
++  final ApiClient _client;
++
++  Future<void> registerToken({
++    required String token,
++    required String platform,
++  }) async {
++    try {
++      await _client.raw.post(
++        ApiEndpoints.fcmToken,
++        data: {'token': token, 'platform': platform},
++      );
++    } on DioException {
++      // فشل تسجيل التوكن (مثلاً الشبكة غير متاحة) لا يمنع استخدام التطبيق
++    }
++  }
++
++  Future<void> unregisterToken(String token) async {
++    try {
++      await _client.raw.delete(
++        ApiEndpoints.fcmToken,
++        data: {'token': token},
++      );
++    } on DioException {
++      // المستخدم يسجّل خروج على أي حال؛ لا داعي لإفشال العملية
++    }
++  }
++}
+diff --git a/lib/core/notifications/fcm_service.dart b/lib/core/notifications/fcm_service.dart
+new file mode 100644
+index 0000000..395c0f8
+--- /dev/null
++++ b/lib/core/notifications/fcm_service.dart
+@@ -0,0 +1,119 @@
++import 'package:firebase_messaging/firebase_messaging.dart';
++import 'package:flutter/foundation.dart';
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++
++import '../auth/auth_state.dart';
++import '../router/app_router.dart';
++import 'fcm_repository.dart';
++import 'global_keys.dart';
++
++/// يُستدعى عندما تصل رسالة FCM ونظام التشغيل يشغّل التطبيق بالخلفية/من
++/// جديد لمعالجتها. يجب أن تبقى top-level (وليست method داخل class)
++/// ومعلَّمة بـ @pragma('vm:entry-point') حتى لا يحذفها tree-shaking عند
++/// بناء نسخة release. مسجَّلة من main.dart عبر
++/// FirebaseMessaging.onBackgroundMessage.
++@pragma('vm:entry-point')
++Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
++  // لا حاجة لأي منطق هنا حالياً: نظام التشغيل هو من يعرض الإشعار تلقائياً
++  // من حقل "notification" بالرسالة عندما يكون التطبيق بالخلفية أو مغلقاً.
++  // هذه الدالة موجودة فقط لأن الحزمة تتطلب تسجيل معالج خلفية صراحةً.
++}
++
++/// طبقة واحدة تُدير كل ما يخص FCM: تسجيل/حذف توكن الجهاز، عرض رسائل
++/// المقدمة، والتنقّل عند الضغط على إشعار. تُهيَّأ مرة واحدة عند تسجيل
++/// الدخول (من main.dart عبر الاستماع لـ authStateProvider) وتُفكَّك عند
++/// تسجيل الخروج.
++class FcmService {
++  FcmService._();
++  static final FcmService instance = FcmService._();
++
++  Ref? _ref;
++  String? _currentToken;
++  bool _initialized = false;
++
++  FcmRepository get _repository => FcmRepository(_ref!.read(apiClientProvider));
++
++  String get _platform =>
++      defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
++
++  Future<void> init(Ref ref) async {
++    if (_initialized) return;
++    _initialized = true;
++    _ref = ref;
++
++    try {
++      await FirebaseMessaging.instance.requestPermission();
++      final token = await FirebaseMessaging.instance.getToken();
++      if (token != null) {
++        _currentToken = token;
++        await _repository.registerToken(token: token, platform: _platform);
++      }
++    } catch (_) {
++      // غياب google-services.json أو فشل الشبكة لا يجب أن يعطّل تسجيل الدخول
++    }
++
++    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
++      _currentToken = newToken;
++      _repository.registerToken(token: newToken, platform: _platform);
++    });
++
++    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
++    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
++
++    // إن فُتح التطبيق من صفر بالضغط على إشعار (وليس فقط من الخلفية)
++    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
++    if (initialMessage != null) {
++      _handleNotificationTap(initialMessage);
++    }
++  }
++
++  /// يُستدعى عند تسجيل الخروج — يحذف توكن هذا الجهاز من الخادم حتى لا
++  /// يستمر بتلقي إشعارات تخص حساباً لم يعد مسجَّلاً دخوله عليه.
++  Future<void> teardown() async {
++    if (_currentToken != null && _ref != null) {
++      await _repository.unregisterToken(_currentToken!);
++    }
++    _currentToken = null;
++    _initialized = false;
++    _ref = null;
++  }
++
++  /// عرض بسيط داخل التطبيق عند وصول رسالة والتطبيق مفتوح بالمقدمة —
++  /// أندرويد لا يعرض إشعار النظام تلقائياً في هذه الحالة.
++  void _handleForegroundMessage(RemoteMessage message) {
++    final notification = message.notification;
++    if (notification == null) return;
++    rootScaffoldMessengerKey.currentState?.showSnackBar(
++      SnackBar(
++        content: Text(
++          [
++            notification.title,
++            notification.body,
++          ].where((s) => s != null && s.isNotEmpty).join(': '),
++        ),
++        behavior: SnackBarBehavior.floating,
++      ),
++    );
++  }
++
++  /// عند الضغط على الإشعار (سواء التطبيق بالخلفية أو كان مغلقاً تماماً):
++  /// ننتقل مباشرة لشاشة محادثة الحالة المعنية إن كان دور المستخدم يدعمها.
++  void _handleNotificationTap(RemoteMessage message) {
++    final ref = _ref;
++    if (ref == null) return;
++    if (message.data['type'] != 'chat_message') return;
++
++    final caseId = message.data['case_id'];
++    if (caseId == null) return;
++
++    final authState = ref.read(authStateProvider);
++    if (authState is! AuthAuthenticated) return;
++
++    // شاشة المحادثة مُعرَّفة فقط ضمن فرعي المريض والطبيب بالراوتر الحالي.
++    final role = authState.user.role;
++    if (role != 'patient' && role != 'doctor') return;
++
++    ref.read(appRouterProvider).push('/$role/chat/$caseId');
++  }
++}
+diff --git a/lib/core/notifications/global_keys.dart b/lib/core/notifications/global_keys.dart
+new file mode 100644
+index 0000000..0f96a40
+--- /dev/null
++++ b/lib/core/notifications/global_keys.dart
+@@ -0,0 +1,7 @@
++import 'package:flutter/material.dart';
++
++/// مفتاح عام يسمح لأي كود خارج شجرة الودجت (مثل معالج إشعار FCM أثناء
++/// عمل التطبيق بالمقدمة) بعرض SnackBar دون الحاجة لـ BuildContext محلي.
++/// يُمرَّر إلى MaterialApp.router في main.dart.
++final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
++    GlobalKey<ScaffoldMessengerState>();
+diff --git a/lib/core/update/app_update_provider.dart b/lib/core/update/app_update_provider.dart
+new file mode 100644
+index 0000000..0cac067
+--- /dev/null
++++ b/lib/core/update/app_update_provider.dart
+@@ -0,0 +1,28 @@
++import 'dart:io' show Platform;
++
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:package_info_plus/package_info_plus.dart';
++
++import '../auth/auth_state.dart';
++import 'app_update_repository.dart';
++import 'app_version_model.dart';
++
++final appUpdateRepositoryProvider = Provider<AppUpdateRepository>((ref) {
++  return AppUpdateRepository(ref.read(apiClientProvider));
++});
++
++/// يفحص الخادم عند كل بدء تشغيل ويقارن أعلى version_code منشور
++/// بـ buildNumber الفعلي للنسخة المثبَّتة على الجهاز (وليس رقماً ثابتاً
++/// بالكود). يرجع null إن كانت النسخة الحالية محدَّثة أصلاً.
++final appUpdateProvider = FutureProvider<AppVersionInfo?>((ref) async {
++  final platform = Platform.isIOS ? 'ios' : 'android';
++  final latest = await ref
++      .read(appUpdateRepositoryProvider)
++      .fetchLatest(platform: platform);
++  if (latest == null) return null;
++
++  final packageInfo = await PackageInfo.fromPlatform();
++  final currentVersionCode = int.tryParse(packageInfo.buildNumber) ?? 0;
++
++  return latest.versionCode > currentVersionCode ? latest : null;
++});
+diff --git a/lib/core/update/app_update_repository.dart b/lib/core/update/app_update_repository.dart
+new file mode 100644
+index 0000000..4be82e7
+--- /dev/null
++++ b/lib/core/update/app_update_repository.dart
+@@ -0,0 +1,27 @@
++import 'package:dio/dio.dart';
++
++import '../network/api_client.dart';
++import '../network/api_endpoints.dart';
++import 'app_version_model.dart';
++
++/// طبقة التواصل مع /api/app-version/latest/ — منفصلة عن منطق المقارنة
++/// (AppUpdateProvider) حتى يسهل اختبارها.
++class AppUpdateRepository {
++  AppUpdateRepository(this._client);
++  final ApiClient _client;
++
++  /// يرجع آخر نسخة منشورة لهذه المنصة، أو null إذا لم يُنشر أي إصدار بعد
++  /// (404) أو تعذّر الوصول للخادم. فشل الفحص لا يجب أبداً أن يمنع
++  /// المستخدم من استخدام التطبيق.
++  Future<AppVersionInfo?> fetchLatest({required String platform}) async {
++    try {
++      final response = await _client.raw.get(
++        ApiEndpoints.appVersionLatest,
++        queryParameters: {'platform': platform},
++      );
++      return AppVersionInfo.fromJson(response.data as Map<String, dynamic>);
++    } on DioException {
++      return null;
++    }
++  }
++}
+diff --git a/lib/core/update/app_version_model.dart b/lib/core/update/app_version_model.dart
+new file mode 100644
+index 0000000..f5ad923
+--- /dev/null
++++ b/lib/core/update/app_version_model.dart
+@@ -0,0 +1,29 @@
++/// يطابق استجابة /api/app-version/latest/ من الـ backend
++class AppVersionInfo {
++  const AppVersionInfo({
++    required this.platform,
++    required this.versionName,
++    required this.versionCode,
++    required this.releaseNotes,
++    required this.isMandatory,
++    required this.downloadLink,
++  });
++
++  final String platform;
++  final String versionName;
++  final int versionCode;
++  final String releaseNotes;
++  final bool isMandatory;
++  final String downloadLink;
++
++  factory AppVersionInfo.fromJson(Map<String, dynamic> json) {
++    return AppVersionInfo(
++      platform: json['platform'] as String? ?? '',
++      versionName: json['version_name'] as String? ?? '',
++      versionCode: json['version_code'] as int? ?? 0,
++      releaseNotes: json['release_notes'] as String? ?? '',
++      isMandatory: json['is_mandatory'] as bool? ?? false,
++      downloadLink: json['download_link'] as String? ?? '',
++    );
++  }
++}
+diff --git a/lib/core/update/update_dialog.dart b/lib/core/update/update_dialog.dart
+new file mode 100644
+index 0000000..343e55e
+--- /dev/null
++++ b/lib/core/update/update_dialog.dart
+@@ -0,0 +1,91 @@
++import 'package:flutter/material.dart';
++import 'package:url_launcher/url_launcher.dart';
++
++import '../widgets/glass_container.dart';
++import 'app_version_model.dart';
++
++/// نافذة إشعار التحديث — تُعرض من splash_screen عندما يكتشف
++/// [appUpdateProvider] نسخة أحدث منشورة من لوحة الأدمن.
++///
++/// إن كانت [AppVersionInfo.isMandatory] مفعّلة: لا يوجد زر "لاحقاً" ولا
++/// إمكانية إغلاق النافذة (لا بالضغط خارجها ولا بزر الرجوع) — المستخدم
++/// يجب أن يحدّث قبل متابعة استخدام التطبيق.
++class UpdateDialog extends StatelessWidget {
++  const UpdateDialog({super.key, required this.info});
++
++  final AppVersionInfo info;
++
++  /// يعرض النافذة وينتظر إغلاقها (فقط ممكن فعلياً إن لم يكن التحديث إلزامياً).
++  static Future<void> show(BuildContext context, AppVersionInfo info) {
++    return showDialog<void>(
++      context: context,
++      barrierDismissible: !info.isMandatory,
++      builder: (_) => PopScope(
++        canPop: !info.isMandatory,
++        child: UpdateDialog(info: info),
++      ),
++    );
++  }
++
++  Future<void> _openDownloadLink() async {
++    final uri = Uri.tryParse(info.downloadLink);
++    if (uri == null) return;
++    await launchUrl(uri, mode: LaunchMode.externalApplication);
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return GlassDialog(
++      title: info.isMandatory ? 'تحديث مطلوب' : 'يتوفر تحديث جديد',
++      content: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          Text(
++            'النسخة ${info.versionName} متوفرة الآن.',
++            style: const TextStyle(color: Colors.white, fontSize: 14),
++          ),
++          if (info.releaseNotes.trim().isNotEmpty) ...[
++            const SizedBox(height: 10),
++            Text(
++              info.releaseNotes,
++              style: const TextStyle(
++                color: Colors.white70,
++                fontSize: 13,
++                height: 1.4,
++              ),
++            ),
++          ],
++          if (info.isMandatory) ...[
++            const SizedBox(height: 14),
++            const Text(
++              'هذا التحديث إلزامي ولا يمكن متابعة استخدام التطبيق قبل تثبيته.',
++              style: TextStyle(
++                color: Colors.white70,
++                fontSize: 12,
++                fontStyle: FontStyle.italic,
++              ),
++            ),
++          ],
++        ],
++      ),
++      actions: [
++        if (!info.isMandatory)
++          TextButton(
++            onPressed: () => Navigator.of(context).pop(),
++            child: const Text('لاحقاً', style: TextStyle(color: Colors.white70)),
++          ),
++        const SizedBox(width: 8),
++        FilledButton(
++          onPressed: () async {
++            await _openDownloadLink();
++            if (!info.isMandatory && context.mounted) {
++              Navigator.of(context).pop();
++            }
++          },
++          child: const Text('تحديث الآن'),
++        ),
++      ],
++    );
++  }
++}
+diff --git a/lib/features/auth/splash_screen.dart b/lib/features/auth/splash_screen.dart
+index 5a3baf8..7993472 100644
+--- a/lib/features/auth/splash_screen.dart
++++ b/lib/features/auth/splash_screen.dart
+@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
+ import '../../core/router/splash_gate.dart';
++import '../../core/update/app_update_provider.dart';
++import '../../core/update/update_dialog.dart';
+ 
+ /// Splash Screen
+ ///
+@@ -91,7 +93,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
+     super.dispose();
+   }
+ 
+-  void _enter() {
++  Future<void> _enter() async {
++    // نتحقق من التحديثات أولاً: إن كان هناك إصدار أحدث منشور من لوحة
++    // الأدمن نعرض النافذة؛ وإن كان التحديث إلزامياً تبقى النافذة مفتوحة
++    // (لا "لاحقاً" ولا إغلاق) فلا نُكمل لرفع علم الدخول أبداً.
++    final update = await ref.read(appUpdateProvider.future);
++    if (update != null && mounted) {
++      await UpdateDialog.show(context, update);
++    }
++    if (!mounted) return;
+     // لا تنقّل مباشر هنا — فقط نرفع العلم، والـ router (app_router.dart)
+     // هو من يقرر الوجهة الصحيحة بناءً على حالة الـ auth الحالية.
+     ref.read(splashEnteredProvider.notifier).state = true;
+diff --git a/lib/main.dart b/lib/main.dart
+index 012567e..72b41c0 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -1,10 +1,25 @@
++import 'package:firebase_core/firebase_core.dart';
++import 'package:firebase_messaging/firebase_messaging.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_localizations/flutter_localizations.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
++import 'core/auth/auth_state.dart';
++import 'core/notifications/fcm_service.dart';
++import 'core/notifications/global_keys.dart';
+ import 'core/router/app_router.dart';
+ 
+-void main() {
++Future<void> main() async {
++  WidgetsFlutterBinding.ensureInitialized();
++  // يقرأ android/app/google-services.json تلقائياً — بدونه هذا الاستدعاء
++  // يفشل، لذا نلفّه بمحاولة حتى يبقى التطبيق يعمل قبل إعداد Firebase.
++  try {
++    await Firebase.initializeApp();
++    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
++  } catch (_) {
++    // Firebase غير مُعدّ بعد (google-services.json غير موجود) — الإشعارات
++    // فقط ستكون معطّلة، وبقية التطبيق يعمل بشكل طبيعي.
++  }
+   runApp(const ProviderScope(child: AxonApp()));
+ }
+ 
+@@ -15,9 +30,20 @@ class AxonApp extends ConsumerWidget {
+   Widget build(BuildContext context, WidgetRef ref) {
+     final router = ref.watch(appRouterProvider);
+ 
++    // تهيئة/تفكيك FCM يتبع حالة تسجيل الدخول تلقائياً: تسجيل توكن الجهاز
++    // فور نجاح الدخول (أو استعادة الجلسة)، وحذفه فور الخروج.
++    ref.listen<AuthStatus>(authStateProvider, (previous, next) {
++      if (next is AuthAuthenticated) {
++        FcmService.instance.init(ref);
++      } else if (next is AuthUnauthenticated) {
++        FcmService.instance.teardown();
++      }
++    });
++
+     return MaterialApp.router(
+       title: 'axon',
+       debugShowCheckedModeBanner: false,
++      scaffoldMessengerKey: rootScaffoldMessengerKey,
+       // TODO: عدّل الثيم لاحقاً حسب هوية العلامة التجارية
+       theme: ThemeData(
+         colorSchemeSeed: Colors.teal,
+diff --git a/notifications/__init__.py b/notifications/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/notifications/admin.py b/notifications/admin.py
+new file mode 100644
+index 0000000..b030af7
+--- /dev/null
++++ b/notifications/admin.py
+@@ -0,0 +1,11 @@
++from django.contrib import admin
++
++from .models import DeviceToken
++
++
++@admin.register(DeviceToken)
++class DeviceTokenAdmin(admin.ModelAdmin):
++    list_display = ("user", "platform", "updated_at")
++    list_filter = ("platform",)
++    search_fields = ("user__username", "token")
++    readonly_fields = ("created_at", "updated_at")
+diff --git a/notifications/apps.py b/notifications/apps.py
+new file mode 100644
+index 0000000..9288266
+--- /dev/null
++++ b/notifications/apps.py
+@@ -0,0 +1,7 @@
++from django.apps import AppConfig
++
++
++class NotificationsConfig(AppConfig):
++    default_auto_field = "django.db.models.BigAutoField"
++    name = "notifications"
++    verbose_name = "الإشعارات"
+diff --git a/notifications/firebase.py b/notifications/firebase.py
+new file mode 100644
+index 0000000..bacb860
+--- /dev/null
++++ b/notifications/firebase.py
+@@ -0,0 +1,39 @@
++import logging
++
++import firebase_admin
++from django.conf import settings
++from firebase_admin import credentials
++
++logger = logging.getLogger(__name__)
++
++_app = None
++_init_failed = False
++
++
++def get_firebase_app():
++    """
++    يهيّئ Firebase Admin SDK مرة واحدة فقط عند أول استخدام فعلي (وليس
++    عند إقلاع Django) حتى لا يتعطل تشغيل السيرفر إن لم يُضبط ملف
++    الاعتماد بعد. يرجع None إن تعذّرت التهيئة (يُسجَّل تحذير مرة واحدة
++    فقط عبر logging) — الإرسال يفشل بصمت وقتها بدل تعطيل باقي الطلب.
++    """
++    global _app, _init_failed
++    if _app is not None:
++        return _app
++    if _init_failed:
++        return None
++
++    credentials_path = getattr(settings, "FIREBASE_CREDENTIALS_PATH", None)
++    if not credentials_path:
++        logger.warning("FIREBASE_CREDENTIALS_PATH غير مضبوط — إشعارات FCM معطّلة.")
++        _init_failed = True
++        return None
++
++    try:
++        cred = credentials.Certificate(credentials_path)
++        _app = firebase_admin.initialize_app(cred)
++        return _app
++    except Exception:
++        logger.exception("تعذّرت تهيئة Firebase Admin SDK — إشعارات FCM معطّلة.")
++        _init_failed = True
++        return None
+diff --git a/notifications/migrations/0001_initial.py b/notifications/migrations/0001_initial.py
+new file mode 100644
+index 0000000..b6d5795
+--- /dev/null
++++ b/notifications/migrations/0001_initial.py
+@@ -0,0 +1,28 @@
++# Generated by Django 6.1.1 on 2026-09-27 07:00
++
++import django.db.models.deletion
++from django.conf import settings
++from django.db import migrations, models
++
++
++class Migration(migrations.Migration):
++
++    initial = True
++
++    dependencies = [
++        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
++    ]
++
++    operations = [
++        migrations.CreateModel(
++            name='DeviceToken',
++            fields=[
++                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
++                ('token', models.CharField(max_length=255, unique=True)),
++                ('platform', models.CharField(choices=[('android', 'Android'), ('ios', 'iOS')], max_length=10)),
++                ('created_at', models.DateTimeField(auto_now_add=True)),
++                ('updated_at', models.DateTimeField(auto_now=True)),
++                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='device_tokens', to=settings.AUTH_USER_MODEL)),
++            ],
++        ),
++    ]
+diff --git a/notifications/migrations/__init__.py b/notifications/migrations/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/notifications/models.py b/notifications/models.py
+new file mode 100644
+index 0000000..b5f878d
+--- /dev/null
++++ b/notifications/models.py
+@@ -0,0 +1,28 @@
++from django.conf import settings
++from django.db import models
++
++
++class Platform(models.TextChoices):
++    ANDROID = "android", "Android"
++    IOS = "ios", "iOS"
++
++
++class DeviceToken(models.Model):
++    """
++    توكن FCM لجهاز واحد مرتبط بمستخدم. التوكن نفسه هو المفتاح الفريد
++    (وليس user+token) لأن نفس الجهاز قد يُستخدم لاحقاً من مستخدم آخر
++    (تسجيل خروج/دخول)، فعندها يُعاد ربط نفس التوكن بالمستخدم الجديد
++    بدل ترك سجلين يشيران لنفس الجهاز الفعلي.
++    """
++
++    user = models.ForeignKey(
++        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_tokens"
++    )
++    token = models.CharField(max_length=255, unique=True)
++    platform = models.CharField(max_length=10, choices=Platform.choices)
++
++    created_at = models.DateTimeField(auto_now_add=True)
++    updated_at = models.DateTimeField(auto_now=True)
++
++    def __str__(self) -> str:
++        return f"{self.user} — {self.platform} — {self.token[:16]}…"
+diff --git a/notifications/serializers.py b/notifications/serializers.py
+new file mode 100644
+index 0000000..83caf8e
+--- /dev/null
++++ b/notifications/serializers.py
+@@ -0,0 +1,9 @@
++from rest_framework import serializers
++
++from .models import DeviceToken
++
++
++class DeviceTokenSerializer(serializers.ModelSerializer):
++    class Meta:
++        model = DeviceToken
++        fields = ["token", "platform"]
+diff --git a/notifications/services.py b/notifications/services.py
+new file mode 100644
+index 0000000..a654b33
+--- /dev/null
++++ b/notifications/services.py
+@@ -0,0 +1,52 @@
++import logging
++
++from firebase_admin import messaging
++
++from .firebase import get_firebase_app
++from .models import DeviceToken
++
++logger = logging.getLogger(__name__)
++
++
++def send_push_to_users(users, title: str, body: str, data: dict | None = None) -> None:
++    """
++    يرسل إشعار push لكل توكنات الأجهزة المسجَّلة لهذه القائمة من
++    المستخدمين. لا يرفع أي استثناء عند الفشل (Firebase غير مضبوط،
++    خطأ شبكة، توكن منتهي...) — الإشعار وسيلة تحسين تجربة وليس جزءاً
++    حرجاً من حفظ الرسالة، فلا يجوز أن يفشل الطلب الأساسي بسببه.
++    """
++    app = get_firebase_app()
++    if app is None:
++        return
++
++    user_ids = [u.pk for u in users if u is not None]
++    if not user_ids:
++        return
++
++    tokens = list(
++        DeviceToken.objects.filter(user_id__in=user_ids).values_list("token", flat=True)
++    )
++    if not tokens:
++        return
++
++    message = messaging.MulticastMessage(
++        notification=messaging.Notification(title=title, body=body),
++        data={str(k): str(v) for k, v in (data or {}).items()},
++        tokens=tokens,
++    )
++
++    try:
++        response = messaging.send_each_for_multicast(message, app=app)
++    except Exception:
++        logger.exception("فشل إرسال إشعار FCM")
++        return
++
++    # نحذف أي توكن رفضته FCM نهائياً (تطبيق أُلغي تثبيته مثلاً) حتى لا
++    # نستمر بمحاولة الإرسال إليه في كل مرة.
++    invalid_tokens = [
++        tokens[i]
++        for i, result in enumerate(response.responses)
++        if not result.success and isinstance(result.exception, messaging.UnregisteredError)
++    ]
++    if invalid_tokens:
++        DeviceToken.objects.filter(token__in=invalid_tokens).delete()
+diff --git a/notifications/urls.py b/notifications/urls.py
+new file mode 100644
+index 0000000..0544ef5
+--- /dev/null
++++ b/notifications/urls.py
+@@ -0,0 +1,7 @@
++from django.urls import path
++
++from .views import DeviceTokenView
++
++urlpatterns = [
++    path("fcm-token/", DeviceTokenView.as_view(), name="fcm-token"),
++]
+diff --git a/notifications/views.py b/notifications/views.py
+new file mode 100644
+index 0000000..809973d
+--- /dev/null
++++ b/notifications/views.py
+@@ -0,0 +1,39 @@
++from rest_framework import permissions, status
++from rest_framework.response import Response
++from rest_framework.views import APIView
++
++from .models import DeviceToken
++from .serializers import DeviceTokenSerializer
++
++
++class DeviceTokenView(APIView):
++    """
++    POST /api/fcm-token/  {token, platform}
++        يسجّل/يحدّث توكن FCM لهذا الجهاز ويربطه بالمستخدم الحالي. إن كان
++        التوكن مسجّلاً سابقاً لمستخدم آخر (تسجيل خروج ثم دخول بحساب مختلف
++        على نفس الجهاز) يُعاد ربطه بالمستخدم الحالي تلقائياً.
++
++    DELETE /api/fcm-token/  {token}
++        يُستدعى عند تسجيل الخروج — يحذف التوكن حتى لا يستمر الجهاز
++        بتلقي إشعارات تخص حساباً لم يعد مسجَّلاً دخوله عليه.
++    """
++
++    permission_classes = [permissions.IsAuthenticated]
++
++    def post(self, request):
++        serializer = DeviceTokenSerializer(data=request.data)
++        serializer.is_valid(raise_exception=True)
++        DeviceToken.objects.update_or_create(
++            token=serializer.validated_data["token"],
++            defaults={
++                "user": request.user,
++                "platform": serializer.validated_data["platform"],
++            },
++        )
++        return Response(status=status.HTTP_204_NO_CONTENT)
++
++    def delete(self, request):
++        token = request.data.get("token")
++        if token:
++            DeviceToken.objects.filter(token=token, user=request.user).delete()
++        return Response(status=status.HTTP_204_NO_CONTENT)
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 1123371..28109f6 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -27,6 +27,16 @@ dependencies:
+   # تخزين آمن للتوكنات — يدعم Android/iOS/macOS/Windows/Linux
+   flutter_secure_storage: ^9.2.2
+ 
++  # قراءة رقم/اسم النسخة الفعلية المثبَّتة على الجهاز (لفحص التحديثات)
++  package_info_plus: ^8.0.0
++
++  # فتح رابط تحميل APK أو رابط المتجر عند الضغط على "تحديث الآن"
++  url_launcher: ^6.3.0
++
++  # الإشعارات (FCM) — رسائل جديدة في المحادثة
++  firebase_core: ^3.6.0
++  firebase_messaging: ^15.1.3
++
+ dev_dependencies:
+   flutter_test:
+     sdk: flutter
+diff --git a/requirements.txt b/requirements.txt
+index acd8a0d57225197a4e592da8d6358f8d10210316..cbe63963b3aa5719a33183534772fea88e48b686 100644
+GIT binary patch
+delta 85
+zcmaFB)WkeNVWN`EL<h5pn=~da5SX~hYvMnd$uf)zlkFJgOt=_$8MqkI7%~}(7*ZLM
+g7!nzZfwV4=PGQIeismuc0-+g$9)l$i8-P^<00$lt>Hq)$
+
+delta 76
+zcmZo-e!w(AfsuEjyeyEgHU|=gmLNiN;w2?{UIs3P0ES8iFNSc25C&TyG-A+WFk~<W
+Wk_HUClld7H8F?q`Gs?4oR005W=M8rN
+

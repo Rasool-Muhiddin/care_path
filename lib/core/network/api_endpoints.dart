@@ -35,6 +35,12 @@ class ApiEndpoints {
   // feedback
   static const String feedback = '$api/feedback/';
 
+  // app updates
+  static const String appVersionLatest = '$api/app-version/latest/';
+
+  // notifications
+  static const String fcmToken = '$api/fcm-token/';
+
     // chat
   static String caseMessages(int caseId) => '$api/chat/cases/$caseId/messages/';
   static const String chatUnreadCount = '$api/chat/unread-count/';

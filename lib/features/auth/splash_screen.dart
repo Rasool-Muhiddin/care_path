@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/router/splash_gate.dart';
+import '../../core/update/app_update_provider.dart';
+import '../../core/update/update_dialog.dart';
 
 /// Splash Screen
 ///
@@ -91,7 +93,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
-  void _enter() {
+  Future<void> _enter() async {
+    // نتحقق من التحديثات أولاً: إن كان هناك إصدار أحدث منشور من لوحة
+    // الأدمن نعرض النافذة؛ وإن كان التحديث إلزامياً تبقى النافذة مفتوحة
+    // (لا "لاحقاً" ولا إغلاق) فلا نُكمل لرفع علم الدخول أبداً.
+    final update = await ref.read(appUpdateProvider.future);
+    if (update != null && mounted) {
+      await UpdateDialog.show(context, update);
+    }
+    if (!mounted) return;
     // لا تنقّل مباشر هنا — فقط نرفع العلم، والـ router (app_router.dart)
     // هو من يقرر الوجهة الصحيحة بناءً على حالة الـ auth الحالية.
     ref.read(splashEnteredProvider.notifier).state = true;

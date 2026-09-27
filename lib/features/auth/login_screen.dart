@@ -159,7 +159,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Brand mark — replace with your existing logo if available:
-                // Image.asset('assets/images/logo.png', width: 40, height: 40)
+                // Image.asset('assets/images/logo.png', width: 40, height: 40),
                 Center(
                   child: Container(
                     width: 56,

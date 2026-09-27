@@ -17,16 +17,21 @@ def send_push_to_users(users, title: str, body: str, data: dict | None = None) -
     """
     app = get_firebase_app()
     if app is None:
+        logger.warning("لم يُرسل إشعار: Firebase غير مهيّأ (تحقق من FIREBASE_CREDENTIALS_PATH)")
         return
 
     user_ids = [u.pk for u in users if u is not None]
     if not user_ids:
+        logger.warning("لم يُرسل إشعار: لا يوجد مستلمون بعد استثناء المرسِل")
         return
 
     tokens = list(
         DeviceToken.objects.filter(user_id__in=user_ids).values_list("token", flat=True)
     )
     if not tokens:
+        logger.warning(
+            "لم يُرسل إشعار: لا يوجد توكن FCM مسجَّل للمستخدمين %s", user_ids
+        )
         return
 
     message = messaging.MulticastMessage(
@@ -40,6 +45,11 @@ def send_push_to_users(users, title: str, body: str, data: dict | None = None) -
     except Exception:
         logger.exception("فشل إرسال إشعار FCM")
         return
+
+    logger.warning(
+        "معلومة — إشعار FCM: نجح %s من %s توكن للمستخدمين %s",
+        response.success_count, len(tokens), user_ids,
+    )
 
     # نحذف أي توكن رفضته FCM نهائياً (تطبيق أُلغي تثبيته مثلاً) حتى لا
     # نستمر بمحاولة الإرسال إليه في كل مرة.

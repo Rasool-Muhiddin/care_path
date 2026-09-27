@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_state.dart';
+import '../permissions/user_role.dart';
 import '../router/app_router.dart';
 import 'fcm_repository.dart';
 import 'global_keys.dart';
@@ -28,7 +29,7 @@ class FcmService {
   FcmService._();
   static final FcmService instance = FcmService._();
 
-  Ref? _ref;
+  WidgetRef? _ref;
   String? _currentToken;
   bool _initialized = false;
 
@@ -37,7 +38,7 @@ class FcmService {
   String get _platform =>
       defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
 
-  Future<void> init(Ref ref) async {
+  Future<void> init(WidgetRef ref) async {
     if (_initialized) return;
     _initialized = true;
     _ref = ref;
@@ -112,8 +113,8 @@ class FcmService {
 
     // شاشة المحادثة مُعرَّفة فقط ضمن فرعي المريض والطبيب بالراوتر الحالي.
     final role = authState.user.role;
-    if (role != 'patient' && role != 'doctor') return;
+    if (role != UserRole.patient && role != UserRole.doctor) return;
 
-    ref.read(appRouterProvider).push('/$role/chat/$caseId');
+    ref.read(appRouterProvider).push('/${role.name}/chat/$caseId');
   }
 }

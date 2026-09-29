@@ -45,3 +45,5 @@ app.*.map.json
 /android/app/release
 axon-f7a96-firebase-adminsdk-fbsvc-b9ed1e56ff.json 
 firebase-service-account.json
+google-services.json
+db.sqlite3

@@ -28,9 +28,11 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     """
-    تسجيل مستخدم جديد. مهم: تسجيل دور "engineer" يجب أن يقتصر على
-    استدعاء داخلي من فريقكم (مثلاً عبر Django admin أو endpoint محمي)،
-    وليس متاحاً للعامة — بخلاف تسجيل الطبيب والمريض.
+    إنشاء حساب جديد. لا يوجد تسجيل ذاتي عام: الطلب يجب أن يأتي من مستخدم
+    مسجَّل دخوله (انظر RegisterView)، وما يستطيع إنشاءه يعتمد على دوره:
+      - الطبيب: مرضى فقط (يستخدمها حوار "إضافة مريض" في التطبيق).
+      - المهندس: مرضى أو أطباء.
+      - حسابات المهندسين: من Django admin فقط، لا عبر هذا الـ API إطلاقاً.
     """
 
     password = serializers.CharField(write_only=True, min_length=8)
@@ -53,8 +55,19 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_role(self, value):
         if value == UserRole.ENGINEER:
             raise serializers.ValidationError(
-                "لا يمكن تسجيل حساب مهندس عبر التسجيل العام."
+                "لا يمكن إنشاء حساب مهندس عبر الـ API. استخدم لوحة Django admin."
             )
+
+        request = self.context.get("request")
+        creator = getattr(request, "user", None)
+        creator_role = getattr(creator, "role", None)
+
+        if creator_role == UserRole.DOCTOR and value != UserRole.PATIENT:
+            raise serializers.ValidationError(
+                "يستطيع الطبيب تسجيل مرضى فقط."
+            )
+        if creator_role not in {UserRole.DOCTOR, UserRole.ENGINEER}:
+            raise serializers.ValidationError("غير مصرّح لك بإنشاء حسابات.")
         return value
 
     def create(self, validated_data):

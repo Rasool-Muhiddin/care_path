@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- مطلوب للاتصال بالخادم في نسخة release (نسخة debug تضيفه تلقائياً فقط) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+: مطلوب لعرض إشعارات FCM (الرسائل الجديدة في المحادثة) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="axon"
         android:name="${applicationName}"

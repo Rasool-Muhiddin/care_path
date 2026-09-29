@@ -1,0 +1,7 @@
+# انسخ هذا الملف باسم key.properties (في نفس المجلد android/) واملأ القيم.
+# لا ترفع key.properties على Git (مستثنى في android/.gitignore).
+storePassword=ضع_كلمة_مرور_المخزن
+keyPassword=ضع_كلمة_مرور_المفتاح
+keyAlias=upload
+# مسار نسبي من مجلد android/app أو مسار كامل. مثال ويندوز بشرطات مائلة عادية:
+storeFile=C:/keys/care_path-upload.jks

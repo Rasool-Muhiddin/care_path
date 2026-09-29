@@ -17,10 +17,15 @@ User = get_user_model()
 
 
 class RegisterView(generics.CreateAPIView):
-    """POST /api/auth/register/  -- تسجيل مريض أو طبيب جديد (وليس مهندس)."""
+    """
+    POST /api/auth/register/
+    إنشاء حساب مريض/طبيب. مقيَّد بمن سجّل دخوله كطبيب أو مهندس فقط —
+    لا يوجد تسجيل عام بدون مصادقة، حتى لا يستطيع أي شخص إنشاء حساب طبيب
+    والوصول لبيانات المرضى. القيود حسب دور المنشئ داخل RegisterSerializer.
+    """
 
     serializer_class = RegisterSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated, IsDoctorOrEngineer]
 
 
 class MeView(APIView):

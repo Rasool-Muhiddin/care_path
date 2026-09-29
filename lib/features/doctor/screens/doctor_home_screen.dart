@@ -34,7 +34,7 @@ class DoctorHomeScreen extends ConsumerWidget {
         extendBodyBehindAppBar: true,
         backgroundColor: AppGlassColors.baseDark,
         appBar: AppBar(
-          title: Text('Dr. $username', style: const TextStyle(color: Colors.white)),
+          title: _DrTitle(username: username),
           backgroundColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.white),
@@ -141,6 +141,58 @@ class _Accent {
   static const Color device = Color(0xFFA78BFA);
   static const Color unlinked = Color(0xFFF87171);
   static const Color clinic = Color(0xFF22D3EE);
+}
+
+/// AppBar title: a small glass-style "Dr" badge followed by the doctor's
+/// name — replaces the plain "Dr. name" text. Long names wrap to a second
+/// line instead of being cut with "...".
+class _DrTitle extends StatelessWidget {
+  const _DrTitle({required this.username});
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = _Accent.doctor;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: accent.withValues(alpha: 0.5)),
+          ),
+          child: const Text(
+            'Dr',
+            style: TextStyle(
+              color: accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        if (username.isNotEmpty) ...[
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              username,
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.visible,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// Fixed text styles so every screen stays visually consistent.

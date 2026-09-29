@@ -21,6 +21,58 @@ class _Accent {
   static const Color clinic = Color(0xFF22D3EE);
 }
 
+/// AppBar title: a small glass-style "BME" badge (Biomedical Engineer)
+/// followed by the user's name — replaces the plain "Eng. name" text.
+class _BmeTitle extends StatelessWidget {
+  const _BmeTitle({required this.username});
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = _Accent.clinic;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: accent.withValues(alpha: 0.5)),
+          ),
+          child: const Text(
+            'BME',
+            style: TextStyle(
+              color: accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        if (username.isNotEmpty) ...[
+          const SizedBox(width: 10),
+          Flexible(
+            // الاسم الطويل ينزل لسطر ثاني بدل ما ينقطع بـ (...)
+            child: Text(
+              username,
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.visible,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 /// A TabBar tab with a fixed-color icon (from [_Accent]) next to the
 /// label, instead of an icon that just follows the selected/unselected
 /// label color like a plain [Tab] would.
@@ -87,7 +139,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
       backgroundColor: Colors.transparent,
       elevation: 0,
       foregroundColor: Colors.white,
-      title: Text('Eng. $username', style: const TextStyle(color: Colors.white)),
+      title: _BmeTitle(username: username),
       actions: [
         IconButton(
           icon: const Icon(Icons.logout, color: Colors.white),

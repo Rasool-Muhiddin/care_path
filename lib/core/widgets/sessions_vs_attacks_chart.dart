@@ -24,6 +24,13 @@ class SessionsVsAttacksChart extends StatefulWidget {
 class _SessionsVsAttacksChartState extends State<SessionsVsAttacksChart> {
   _ChartGranularity _granularity = _ChartGranularity.monthly;
 
+  /// لون بار الجلسات (رصاصي فاتح مائل للأبيض) — يُستخدم بالبار والـ legend
+  static const Color _sessionsColor = Color(0xFFD9DCE1);
+
+  /// عرض كل مجموعة أعمدة (جلسات + نوبات) — إذا عدد المجموعات كبير
+  /// (مثلاً 5 شهور بالأسبوعي) الشارت يصير قابل للتمرير أفقياً.
+  static const double _groupWidth = 44;
+
   String _twoDigit(int n) => n.toString().padLeft(2, '0');
 
   /// Builds (label, sessionCount, attackCount) triples, sorted by time,
@@ -69,23 +76,32 @@ class _SessionsVsAttacksChartState extends State<SessionsVsAttacksChart> {
     final bars = _buildBars();
     final colorScheme = Theme.of(context).colorScheme;
 
+    // maxY رقم صحيح دائماً (حتى ما يطلع 8.2 ويتداخل مع أرقام المحور)
     final maxY = bars.isEmpty
         ? 10.0
-        : bars
-            .map((b) => b.$2 > b.$3 ? b.$2 : b.$3)
-            .reduce((a, b) => a > b ? a : b) *
-            1.2 + 1;
+        : (bars
+                    .map((b) => b.$2 > b.$3 ? b.$2 : b.$3)
+                    .reduce((a, b) => a > b ? a : b) *
+                1.2)
+            .ceilToDouble() +
+        1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            _LegendDot(color: colorScheme.primary, label: 'Sessions'),
+            _LegendDot(color: _sessionsColor, label: 'Sessions'),
             const SizedBox(width: 16),
             _LegendDot(color: colorScheme.error, label: 'Attacks'),
             const Spacer(),
             SegmentedButton<_ChartGranularity>(
+              // بدون علامة ✓ حتى ما يزيد عرض الزر ويصير right overflow
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               segments: const [
                 ButtonSegment(value: _ChartGranularity.monthly, label: Text('Monthly')),
                 ButtonSegment(value: _ChartGranularity.weekly, label: Text('Weekly')),
@@ -99,61 +115,82 @@ class _SessionsVsAttacksChartState extends State<SessionsVsAttacksChart> {
         if (bars.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('Not enough data yet for this view.'),
+            child: Text(
+              'Not enough data yet for this view.',
+              style: TextStyle(color: Colors.white),
+            ),
           )
         else
-          SizedBox(
-            height: 220,
-            child: BarChart(
-              BarChartData(
-                maxY: maxY,
-                alignment: BarChartAlignment.spaceAround,
-                gridData: const FlGridData(show: true, drawVerticalLine: false),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: true, reservedSize: 28),
-                  ),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      getTitlesWidget: (value, meta) {
-                        final i = value.toInt();
-                        if (i < 0 || i >= bars.length) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(bars[i].$1, style: Theme.of(context).textTheme.bodySmall),
-                        );
-                      },
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final neededWidth = bars.length * _groupWidth;
+              final chartWidth =
+                  neededWidth > constraints.maxWidth ? neededWidth : constraints.maxWidth;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: chartWidth,
+                  height: 220,
+                  child: BarChart(
+                    BarChartData(
+                      maxY: maxY,
+                      alignment: BarChartAlignment.spaceAround,
+                      gridData: const FlGridData(show: true, drawVerticalLine: false),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: (value, meta) => Text(
+                              value.toInt().toString(),
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i < 0 || i >= bars.length) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(bars[i].$1, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      barGroups: [
+                        for (var i = 0; i < bars.length; i++)
+                          BarChartGroupData(
+                            x: i,
+                            barRods: [
+                              BarChartRodData(
+                                toY: bars[i].$2,
+                                color: _sessionsColor,
+                                width: 10,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              BarChartRodData(
+                                toY: bars[i].$3,
+                                color: colorScheme.error,
+                                width: 10,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ],
+                            barsSpace: 4,
+                          ),
+                      ],
                     ),
                   ),
                 ),
-                barGroups: [
-                  for (var i = 0; i < bars.length; i++)
-                    BarChartGroupData(
-                      x: i,
-                      barRods: [
-                        BarChartRodData(
-                          toY: bars[i].$2,
-                          color: colorScheme.primary,
-                          width: 10,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        BarChartRodData(
-                          toY: bars[i].$3,
-                          color: colorScheme.error,
-                          width: 10,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ],
-                      barsSpace: 4,
-                    ),
-                ],
-              ),
-            ),
+              );
+            },
           ),
       ],
     );
@@ -172,7 +209,7 @@ class _LegendDot extends StatelessWidget {
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     );
   }

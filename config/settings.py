@@ -14,8 +14,14 @@ from datetime import timedelta
 from pathlib import Path
 import os
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# تحميل متغيرات البيئة من ملف .env (إن وُجد) في جذر المشروع.
+# على السيرفر يمكن أيضاً تمريرها عبر systemd (EnvironmentFile) وسيعمل الكود كما هو.
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -109,12 +115,31 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# DB_ENGINE=sqlite (الافتراضي) -> تطوير محلي بدون أي إعداد إضافي.
+# DB_ENGINE=postgres            -> PostgreSQL، والقيم تُقرأ من .env
+DB_ENGINE = os.environ.get('DB_ENGINE', 'sqlite').lower()
+
+if DB_ENGINE in ('postgres', 'postgresql'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['DB_NAME'],
+            'USER': os.environ['DB_USER'],
+            'PASSWORD': os.environ['DB_PASSWORD'],
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            # إبقاء الاتصال مفتوحاً 60 ثانية بدل فتح اتصال جديد لكل طلب
+            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+            'CONN_HEALTH_CHECKS': True,
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation

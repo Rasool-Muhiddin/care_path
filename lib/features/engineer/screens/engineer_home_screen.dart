@@ -41,7 +41,7 @@ class _BmeTitle extends StatelessWidget {
             border: Border.all(color: accent.withValues(alpha: 0.5)),
           ),
           child: const Text(
-            'BME',
+            'BME.',
             style: TextStyle(
               color: accent,
               fontSize: 12,

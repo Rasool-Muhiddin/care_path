@@ -47,3 +47,12 @@ axon-f7a96-firebase-adminsdk-fbsvc-b9ed1e56ff.json
 firebase-service-account.json
 google-services.json
 db.sqlite3
+android/key.properties
+*.jks
+*.keystore
+android/key.properties.example
+.env
+*.sql.gz
+backups/
+media/
+staticfiles/

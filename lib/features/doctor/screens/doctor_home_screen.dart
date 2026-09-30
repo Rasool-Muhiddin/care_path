@@ -164,7 +164,7 @@ class _DrTitle extends StatelessWidget {
             border: Border.all(color: accent.withValues(alpha: 0.5)),
           ),
           child: const Text(
-            'Dr',
+            'Dr.',
             style: TextStyle(
               color: accent,
               fontSize: 12,

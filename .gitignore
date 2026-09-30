@@ -50,7 +50,7 @@ db.sqlite3
 android/key.properties
 *.jks
 *.keystore
-android/key.properties.example
+android/key.properties
 .env
 *.sql.gz
 backups/

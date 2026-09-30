@@ -2,7 +2,7 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  static const String baseUrl = 'http://192.168.100.140:8000';
+  static const String baseUrl = 'https://axon.tera-software1.com';
   static const String api = '$baseUrl/api';
 
   // accounts

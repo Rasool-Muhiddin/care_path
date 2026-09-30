@@ -1,4 +1,4 @@
-storePassword=123@@1233
-keyPassword=123@@1233
+storePassword=passs
+keyPassword=pass
 keyAlias=upload
 storeFile=C:/keys/care_path-upload.jks

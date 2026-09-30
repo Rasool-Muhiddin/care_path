@@ -1,0 +1,10 @@
+# /etc/systemd/system/axon-backup.timer
+[Unit]
+Description=Run Axon DB backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

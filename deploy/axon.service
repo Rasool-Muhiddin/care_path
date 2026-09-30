@@ -1,0 +1,25 @@
+# /etc/systemd/system/axon.service
+[Unit]
+Description=Axon (care_path) Django API - gunicorn
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=axon
+Group=www-data
+WorkingDirectory=/var/www/axon/app
+EnvironmentFile=/etc/axon/axon.env
+RuntimeDirectory=axon
+RuntimeDirectoryMode=0750
+ExecStart=/var/www/axon/venv/bin/gunicorn config.wsgi:application -c /var/www/axon/app/deploy/gunicorn.conf.py
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+# تقوية أمنية
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

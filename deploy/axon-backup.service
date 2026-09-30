@@ -1,0 +1,8 @@
+# /etc/systemd/system/axon-backup.service
+[Unit]
+Description=Axon daily PostgreSQL backup
+
+[Service]
+Type=oneshot
+User=axon
+ExecStart=/usr/local/bin/axon-backup.sh

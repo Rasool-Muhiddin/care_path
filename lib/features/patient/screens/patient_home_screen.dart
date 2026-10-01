@@ -46,22 +46,26 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   /// تلقائياً لحد ما يكمّلها كلها.
   Future<void> _maybeShowWeeklyEpisodePrompt(CaseModel myCase) async {
     if (_isWeeklyDialogShowing) return;
-    final week = myCase.pendingWeeklyEpisodeWeek;
-    if (week == null) return;
-
+    // يبقى العلم true طوال فترة عرض الحوار وإعادة جلب الحالة، حتى لا تفتح
+    // إعادة بناء الشاشة حواراً ثانياً بالبيانات القديمة (نفس الأسبوع).
     _isWeeklyDialogShowing = true;
-    await _showWeeklyEpisodeDialog(caseId: myCase.id, weekStart: week);
-    _isWeeklyDialogShowing = false;
-
-    if (!mounted) return;
     try {
-      final latest = await ref.refresh(myCaseProvider.future);
-      if (latest != null && latest.pendingWeeklyEpisodeWeek != null && mounted) {
-        await _maybeShowWeeklyEpisodePrompt(latest);
+      CaseModel? current = myCase;
+      while (mounted &&
+          current != null &&
+          current.pendingWeeklyEpisodeWeek != null) {
+        await _showWeeklyEpisodeDialog(
+          caseId: current.id,
+          weekStart: current.pendingWeeklyEpisodeWeek!,
+        );
+        if (!mounted) return;
+        final latest = await ref.refresh(myCaseProvider.future);
+        current = latest;
       }
     } catch (_) {
-      // تجاهل أي خطأ بإعادة الجلب هنا — لو لسا فيه أسبوع مستحق، الشاشة
-      // ستحاول عرض الرسالة مرة ثانية بمجرد نجاح أي إعادة بناء لاحقة
+      // تجاهل أخطاء الشبكة هنا — الشاشة ستحاول مجدداً عند إعادة البناء التالية
+    } finally {
+      _isWeeklyDialogShowing = false;
     }
   }
 
@@ -140,6 +144,15 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                                   );
                               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
                             } catch (e) {
+                              // ربما سُجّل هذا الأسبوع مسبقاً (حوار قديم): تحقق من الباكند
+                              try {
+                                final latest = await ref.refresh(myCaseProvider.future);
+                                final stillPending = latest?.pendingWeeklyEpisodeWeek;
+                                if (stillPending == null || stillPending != weekStart) {
+                                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                                  return;
+                                }
+                              } catch (_) {}
                               setStateDialog(() {
                                 isSubmitting = false;
                                 errorText = 'حدث خطأ، حاول مرة أخرى';
@@ -510,7 +523,11 @@ class _SessionCounters extends StatelessWidget {
     }
 
     if (remaining == null) {
-      return counter('الجلسات المكتملة', completed, _Accent.patient);
+      // counter() يُرجع Expanded، ولا يجوز وضعه مباشرة داخل ListView — لازم
+      // يكون داخل Row/Column، وإلا ينهار البناء ويظهر مربع رمادي بالـ release.
+      return Row(
+        children: [counter('الجلسات المكتملة', completed, _Accent.patient)],
+      );
     }
     return Row(
       children: [

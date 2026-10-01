@@ -78,12 +78,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authSettled =
           authState is AuthAuthenticated || authState is AuthUnauthenticated;
 
-      // 1. إلى أن يضغط المستخدم "Enter" بشاشة الترحيب، أو إلى أن تستقر
-      //    حالة الـ auth (أيهما أبطأ): أبقِه بشاشة الانتظار. لا يوجد حد
-      //    زمني تلقائي — البقاء هنا بالكامل بيد المستخدم.
-      if (!hasEnteredSplash || !authSettled) {
+      // 1. قبل أن يضغط المستخدم "Enter" بشاشة الترحيب: أبقِه بشاشة الانتظار.
+      if (!hasEnteredSplash) {
         return location == '/splash' ? null : '/splash';
       }
+
+      // 1.5. الحالة لسا قيد التحميل (استعادة جلسة محفوظة، أو تسجيل دخول
+      //      جارٍ الآن): لا تنقل المستخدم من مكانه. على /splash ينتظر
+      //      استقرار الحالة، وعلى /login يبقى بمكانه مع مؤشر التحميل —
+      //      وهذا ما يمنع الرجوع لشاشة الترحيب بعد الضغط على "تسجيل الدخول".
+      //      عند استقرار الحالة يُعاد تقييم الـ redirect تلقائياً عبر
+      //      refreshListenable.
+      if (!authSettled) return null;
 
       // 2. غير مسجّل دخول: اسمح فقط بالمسارات العامة
       if (authState is AuthUnauthenticated) {

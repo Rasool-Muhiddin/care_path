@@ -24,7 +24,7 @@ class WeeklyEpisodeLogModel {
       caseId: json['case'] as int,
       weekStartDate: DateTime.parse(json['week_start_date'] as String),
       episodeCount: json['episode_count'] as int,
-      submittedAt: DateTime.parse(json['submitted_at'] as String),
+      submittedAt: DateTime.parse(json['submitted_at'] as String).toLocal(),
     );
   }
 }

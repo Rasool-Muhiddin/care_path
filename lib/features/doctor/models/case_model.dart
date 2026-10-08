@@ -173,8 +173,9 @@ class CaseModel {
       guarantorEmail: json['guarantor_email'] as String? ?? '',
       initialEvaluation: json['initial_evaluation'] as String? ?? '',
       treatmentPlan: json['treatment_plan'] as String? ?? '',
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      // الخادم يرسل الأوقات مع الإزاحة؛ نحوّلها لتوقيت الجهاز قبل العرض
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+      updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
     );
   }
 }

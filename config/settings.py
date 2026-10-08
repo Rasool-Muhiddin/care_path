@@ -214,7 +214,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+# "اليوم" في قواعد العمل (جلسة واحدة يومياً، الأسبوع في التقارير الأسبوعية)
+# هو يوم بغداد. التخزين يبقى UTC (USE_TZ=True)، والتحويل عند حساب التاريخ.
+TIME_ZONE = 'Asia/Baghdad'
 USE_I18N = True
 USE_TZ = True
 

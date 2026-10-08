@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/auth_state.dart';
 import '../../core/router/splash_gate.dart';
 import '../../core/update/app_update_provider.dart';
 import '../../core/update/update_dialog.dart';
@@ -111,6 +112,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isCompact = size.width < 420;
+    final authState = ref.watch(authStateProvider);
 
     return Scaffold(
       backgroundColor: _AppPalette.navyDeep,
@@ -238,6 +240,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     opacity: _buttonFade,
                     child: _EnterButton(onPressed: _enter),
                   ),
+                  // جلسة محفوظة تعذّر التحقق منها (لا إنترنت): المستخدم ما زال
+                  // مسجّلاً دخوله، والـ router ينتظر هنا إلى أن تنجح المحاولة.
+                  if (authState is AuthOffline) ...[
+                    const SizedBox(height: 24),
+                    _OfflineNotice(
+                      message: authState.message,
+                      onRetry: () => ref.read(authStateProvider.notifier).retry(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -288,6 +299,47 @@ class _BrandMark extends StatelessWidget {
         Icons.graphic_eq_rounded,
         size: 40,
         color: _AppPalette.iceBlue,
+      ),
+    );
+  }
+}
+
+class _OfflineNotice extends StatelessWidget {
+  const _OfflineNotice({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off, color: _AppPalette.textSecondary, size: 18),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _AppPalette.textSecondary, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, color: _AppPalette.textPrimary),
+            label: const Text(
+              'إعادة المحاولة',
+              style: TextStyle(color: _AppPalette.textPrimary),
+            ),
+          ),
+        ],
       ),
     );
   }

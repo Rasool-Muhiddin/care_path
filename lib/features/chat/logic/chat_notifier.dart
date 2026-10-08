@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/auth/auth_state.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
 
@@ -44,12 +45,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
         conversation.caseId,
         conversation.inquiryType,
       );
+      // الشاشة قد تُغلق أثناء الطلب (autoDispose) — لا نكتب حالة بعد التفكيك
+      if (!mounted) return;
       state = state.copyWith(messages: messages, isLoading: false);
     } catch (_) {
-      if (!silent) state = state.copyWith(isLoading: false);
+      if (!silent && mounted) state = state.copyWith(isLoading: false);
     }
   }
 
+  /// يرمي الاستثناء عند الفشل كي تُبقي الشاشة النص وتعرض الخطأ.
   Future<void> send(String text) async {
     if (text.trim().isEmpty) return;
     final sent = await _repo.sendMessage(
@@ -57,6 +61,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       conversation.inquiryType,
       text.trim(),
     );
+    if (!mounted) return;
     state = state.copyWith(messages: [...state.messages, sent]);
   }
 
@@ -67,31 +72,41 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, ChatConversation>(
+/// autoDispose: يتوقف مؤقّت الـ polling (عبر ChatNotifier.dispose) فور
+/// مغادرة شاشة المحادثة، ولا تُعلَّم الرسائل كمقروءة في الخلفية.
+final chatProvider =
+    StateNotifierProvider.autoDispose.family<ChatNotifier, ChatState, ChatConversation>(
   (ref, conversation) => ChatNotifier(ref.watch(chatRepositoryProvider), conversation),
 );
 
-final unreadCountProvider = StreamProvider<int>((ref) async* {
-  final repo = ref.watch(chatRepositoryProvider);
-  while (true) {
+/// يكرر [fetch] كل 15 ثانية ما دام المستخدم مسجّل دخوله وهناك من يستمع.
+/// مشاهدة authStateProvider تعيد بناء الـ provider عند الخروج، فيُفكَّك
+/// الـ stream القديم وتتوقف الحلقة حتى لو بقيت شاشة تستمع لحظة الانتقال.
+Stream<T> _pollWhileLoggedIn<T>(
+  Ref ref,
+  Future<T> Function() fetch,
+  T fallback,
+) async* {
+  if (ref.watch(authStateProvider) is! AuthAuthenticated) return;
+  var active = true;
+  ref.onDispose(() => active = false);
+  while (active) {
     try {
-      yield await repo.getUnreadTotal();
+      yield await fetch();
     } catch (_) {
-      yield 0;
+      yield fallback;
     }
     await Future.delayed(const Duration(seconds: 15));
   }
+}
+
+final unreadCountProvider = StreamProvider.autoDispose<int>((ref) {
+  final repo = ref.watch(chatRepositoryProvider);
+  return _pollWhileLoggedIn(ref, repo.getUnreadTotal, 0);
 });
 
 /// خريطة {caseId: عدد غير المقروء} — تُستخدم لعرض badge بجانب كل Case بالواجهة
-final unreadByCaseProvider = StreamProvider<Map<int, int>>((ref) async* {
+final unreadByCaseProvider = StreamProvider.autoDispose<Map<int, int>>((ref) {
   final repo = ref.watch(chatRepositoryProvider);
-  while (true) {
-    try {
-      yield await repo.getUnreadByCase();
-    } catch (_) {
-      yield {};
-    }
-    await Future.delayed(const Duration(seconds: 15));
-  }
+  return _pollWhileLoggedIn(ref, repo.getUnreadByCase, const <int, int>{});
 });

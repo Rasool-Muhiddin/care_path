@@ -241,7 +241,9 @@ def pending_weekly_episode_week(case):
         return None
 
     today = timezone.localdate()
-    first_week_start = _week_start(case.created_at.date())
+    # تاريخ الإنشاء بتوقيت بغداد، وليس UTC: حالة أُنشئت ليلة الاثنين
+    # الساعة 00:30 هي يوم الاثنين محلياً لكنها الأحد في UTC.
+    first_week_start = _week_start(timezone.localdate(case.created_at))
     reported_weeks = set(
         case.weekly_episode_logs.values_list("week_start_date", flat=True)
     )

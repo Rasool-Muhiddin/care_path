@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase
 from config.testing import CareWorldMixin
 
 from .models import ChatMessage, InquiryType
+from .notifications import notify_new_message
 
 
 def messages_url(case):
@@ -67,3 +68,24 @@ class ChatPermissionTests(CareWorldMixin, APITestCase):
     def test_unread_count_doctor_only_counts_own_medical(self, _notify):
         response = self.client_for(self.doctor_a).get("/api/chat/unread-count/")
         self.assertEqual(response.data, {"total_unread": 1, "by_case": {self.case_1.pk: 1}})
+
+
+class GenericNotificationTests(CareWorldMixin, APITestCase):
+    """C5: الإشعار لا يحمل نص الرسالة الطبية ولا اسم المرسل."""
+
+    @mock.patch("notifications.services.send_push_to_users")
+    def test_push_text_is_generic(self, send_push):
+        message = ChatMessage.objects.create(
+            case=self.case_1, sender=self.patient_1, text="أعاني من صداع شديد منذ أمس",
+            inquiry_type=InquiryType.MEDICAL,
+        )
+        notify_new_message(message)
+
+        send_push.assert_called_once()
+        recipients = send_push.call_args.args[0]
+        kwargs = send_push.call_args.kwargs
+        self.assertEqual(recipients, [self.doctor_a])
+        self.assertEqual(kwargs["body"], "لديك رسالة جديدة")
+        self.assertNotIn("صداع", kwargs["title"] + kwargs["body"])
+        self.assertNotIn(self.patient_1.username, kwargs["title"])
+        self.assertEqual(kwargs["data"]["case_id"], self.case_1.pk)

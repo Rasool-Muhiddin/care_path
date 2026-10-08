@@ -29,7 +29,7 @@ class UserModel {
       phoneNumber: json['phone_number'] as String?,
       specialty: json['specialty'] as String?,
       dateJoined: json['date_joined'] != null
-          ? DateTime.parse(json['date_joined'] as String)
+          ? DateTime.parse(json['date_joined'] as String).toLocal()
           : null,
     );
   }
@@ -41,6 +41,6 @@ class UserModel {
         'role': role.toApiValue(),
         'phone_number': phoneNumber,
         'specialty': specialty,
-        'date_joined': dateJoined?.toIso8601String(),
+        'date_joined': dateJoined?.toUtc().toIso8601String(),
       };
 }

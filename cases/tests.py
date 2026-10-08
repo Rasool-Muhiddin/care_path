@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 from unittest import mock
 
 from django.db import IntegrityError, transaction
@@ -9,7 +10,7 @@ from rest_framework.test import APITestCase
 from config.testing import CareWorldMixin
 from feedback.models import Feedback
 
-from .models import Case, CaseProgressNote, CaseStatus, WeeklyEpisodeLog
+from .models import Case, CaseProgressNote, CaseStatus, WeeklyEpisodeLog, pending_weekly_episode_week
 from .serializers import CaseSerializer, WeeklyEpisodeLogSerializer
 
 CASES = "/api/cases/"
@@ -338,3 +339,29 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
     def test_engineer_still_sees_everything(self):
         response = self.client_for(self.engineer).get(CASES)
         self.assertEqual(len(response.data), 3)
+
+
+class WeeklyWeekTimezoneTests(CareWorldMixin, APITestCase):
+    """H7: أسبوع التقرير يُحسب من تاريخ إنشاء الحالة بتوقيت بغداد."""
+
+    def setUp(self):
+        # 00:30 بغداد يوم الاثنين 2026-10-05 = 21:30 UTC يوم الأحد 2026-10-04
+        Case.objects.filter(pk=self.case_1.pk).update(
+            created_at=datetime(2026, 10, 4, 21, 30, tzinfo=dt_timezone.utc)
+        )
+        self.case_1.refresh_from_db()
+
+    def pending_at(self, now_utc):
+        with mock.patch("django.utils.timezone.now", return_value=now_utc):
+            return pending_weekly_episode_week(self.case_1)
+
+    def test_first_week_starts_on_baghdad_monday(self):
+        # الخميس 8 أكتوبر: أسبوع 5 أكتوبر لم يكتمل بعد. لو حُسب بـ UTC لصار
+        # تاريخ الإنشاء الأحد 4 أكتوبر، وأسبوعه (28 سبتمبر) مستحقاً بالخطأ.
+        self.assertIsNone(self.pending_at(datetime(2026, 10, 8, 7, 0, tzinfo=dt_timezone.utc)))
+
+    def test_week_becomes_due_on_next_baghdad_monday(self):
+        self.assertEqual(
+            self.pending_at(datetime(2026, 10, 12, 7, 0, tzinfo=dt_timezone.utc)),
+            date(2026, 10, 5),
+        )

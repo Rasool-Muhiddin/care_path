@@ -32,7 +32,7 @@ class CaseProgressNoteModel {
       note: json['note'] as String? ?? '',
       sessionsCompletedSnapshot: json['sessions_completed_snapshot'] as int? ?? 0,
       totalSessionsPlannedSnapshot: json['total_sessions_planned_snapshot'] as int?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 }

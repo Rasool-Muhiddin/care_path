@@ -238,7 +238,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               children: [
                 caseAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (error, _) => _ErrorView(
+                    message: error.toString(),
+                    onRetry: () => ref.invalidate(myCaseProvider),
+                  ),
                   data: (myCase) {
                     if (myCase == null) return const SizedBox.shrink();
                     return _CaseSummaryCard(myCase: myCase);
@@ -247,11 +250,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 const SizedBox(height: 16),
                 caseAsync.when(
                   loading: () => const SizedBox.shrink(),
+                  // خطأ تحميل الحالة معروض مرة واحدة بأعلى الشاشة مع زر إعادة المحاولة
                   error: (_, __) => const SizedBox.shrink(),
                   data: (myCase) {
                     if (myCase == null) return const SizedBox.shrink();
                     return sessionsAsync.when(
                       loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      // خطأ الجلسات معروض في قسم "جلساتي" بالأسفل مع زر إعادة المحاولة
                       error: (_, __) => const SizedBox.shrink(),
                       data: (sessions) {
                         final hasCompletedToday = sessions.any(
@@ -294,6 +299,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 const SizedBox(height: 16),
                 caseAsync.when(
                   loading: () => const SizedBox.shrink(),
+                  // خطأ تحميل الحالة معروض مرة واحدة بأعلى الشاشة مع زر إعادة المحاولة
                   error: (_, __) => const SizedBox.shrink(),
                   data: (myCase) {
                     if (myCase == null || myCase.totalSessionsPlanned == null) {

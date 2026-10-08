@@ -48,7 +48,7 @@ class ChatMessageModel {
         senderRole: json['sender_role'],
         inquiryType: InquiryType.fromApiValue(json['inquiry_type'] as String?),
         text: json['text'] ?? '',
-        createdAt: DateTime.parse(json['created_at']),
+        createdAt: DateTime.parse(json['created_at']).toLocal(),
         isRead: json['is_read'] ?? false,
         isMine: json['is_mine'] ?? false,
       );

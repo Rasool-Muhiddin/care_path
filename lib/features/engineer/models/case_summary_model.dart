@@ -27,7 +27,7 @@ class CaseSummaryModel {
       doctorName: json['doctor_name'] as String?,
       diagnosisType: DiagnosisType.fromApiValue(json['diagnosis_type'] as String),
       status: CaseStatus.fromApiValue(json['status'] as String),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 }

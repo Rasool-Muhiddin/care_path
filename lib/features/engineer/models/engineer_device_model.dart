@@ -59,8 +59,8 @@ class EngineerDeviceModel {
       lastMaintenanceAt: json['last_maintenance_at'] != null
           ? DateTime.parse(json['last_maintenance_at'] as String)
           : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+      updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
     );
   }
 }

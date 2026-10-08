@@ -11,7 +11,7 @@ class SessionModel {
   final int id;
   final int caseId;
   final String? deviceId;
-  final int performedById;
+  final int? performedById; // null إذا حُذف حساب من نفّذ الجلسة (SET_NULL)
   final String performedByName;
   final DateTime sessionDate;
   final int? durationMinutes;
@@ -24,7 +24,7 @@ class SessionModel {
     required this.id,
     required this.caseId,
     this.deviceId,
-    required this.performedById,
+    this.performedById,
     required this.performedByName,
     required this.sessionDate,
     this.durationMinutes,
@@ -39,15 +39,15 @@ class SessionModel {
       id: json['id'] as int,
       caseId: json['case'] as int,
       deviceId: json['device'] as String?,
-      performedById: json['performed_by'] as int,
+      performedById: json['performed_by'] as int?,
       performedByName: json['performed_by_name'] as String? ?? '',
-      sessionDate: DateTime.parse(json['session_date'] as String),
+      sessionDate: DateTime.parse(json['session_date'] as String).toLocal(),
       durationMinutes: json['duration_minutes'] as int?,
       deviceParameters:
           (json['device_parameters'] as Map<String, dynamic>?) ?? const {},
       doctorNotes: json['doctor_notes'] as String? ?? '',
       patientResponse: json['patient_response'] as String? ?? '',
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 }
@@ -81,7 +81,9 @@ class NewSessionPayload {
 
   Map<String, dynamic> toJson() => {
         'case': caseId,
-        'session_date': DateTime.now().toIso8601String(),
+        // UTC صريحاً: بدون إزاحة كان الخادم يفسّر الوقت المحلي على أنه UTC.
+        // (للمريض يستبدله الخادم بوقته هو على أي حال)
+        'session_date': DateTime.now().toUtc().toIso8601String(),
         if (durationMinutes != null) 'duration_minutes': durationMinutes,
         'patient_response':
             (note != null && note!.trim().isNotEmpty) ? '${feeling.label}: ${note!.trim()}' : feeling.label,

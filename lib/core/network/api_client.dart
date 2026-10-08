@@ -109,8 +109,9 @@ class ApiClient {
       }
       return newAccess;
     } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (status == 400 || status == 401 || status == 403) {
+      // 401 فقط = الخادم رفض الـ refresh token (منتهٍ/غير صالح). أي شيء
+      // آخر (شبكة، مهلة، 5xx) فشل مؤقت لا يُنهي الجلسة.
+      if (e.response?.statusCode == 401) {
         await TokenStorage.instance.clear();
         onSessionExpired();
       }

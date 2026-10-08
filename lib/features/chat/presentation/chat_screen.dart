@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart'; // عدّل المسار إذا كان مختلفًا
 import '../../../core/auth/auth_state.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/permissions/user_role.dart';
 import '../data/chat_message_model.dart';
 import '../logic/chat_notifier.dart';
@@ -78,6 +79,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   InquiryType? _selectedInquiryType;
+  bool _isSending = false;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +215,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.send, color: Colors.white),
-                          onPressed: _send,
+                          onPressed: _isSending ? null : _send,
                         ),
                       ],
                     ),
@@ -229,9 +231,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return isStaff ? LtrScope(child: content) : content;
   }
 
-  void _send() {
+  /// يُمسح الحقل فقط بعد نجاح الإرسال؛ عند الفشل يبقى النص كما هو
+  /// ليعيد المستخدم المحاولة، ويظهر سبب الخطأ.
+  Future<void> _send() async {
     final text = _controller.text;
-    _controller.clear();
+    if (_isSending || text.trim().isEmpty) return;
     final authState = ref.read(authStateProvider);
     final currentRole = authState is AuthAuthenticated ? authState.user.role : null;
     final inquiryType = currentRole == UserRole.doctor
@@ -239,9 +243,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         : _selectedInquiryType ?? InquiryType.technical;
     // حماية إضافية: المهندس لا يرسل في القناة الطبية (والـ backend يرفض أيضاً).
     if (currentRole == UserRole.engineer && inquiryType == InquiryType.medical) return;
-    ref
-        .read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier)
-        .send(text);
+
+    setState(() => _isSending = true);
+    try {
+      await ref
+          .read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier)
+          .send(text);
+      // لا نمسح ما كتبه المستخدم أثناء الإرسال — فقط النص الذي أُرسل
+      if (mounted && _controller.text == text) _controller.clear();
+    } catch (e) {
+      if (!mounted) return;
+      final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر إرسال الرسالة: $reason')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_state.dart';
+import '../auth/token_storage.dart';
 import '../permissions/user_role.dart';
 import '../router/app_router.dart';
 import 'fcm_repository.dart';
@@ -71,13 +72,25 @@ class FcmService {
 
   /// يُستدعى عند تسجيل الخروج — يحذف توكن هذا الجهاز من الخادم حتى لا
   /// يستمر بتلقي إشعارات تخص حساباً لم يعد مسجَّلاً دخوله عليه.
+  ///
+  /// يجب استدعاؤها قبل مسح JWT (AuthNotifier.logout يفعل ذلك) حتى يكون
+  /// طلب الحذف مصادَقاً. الحقول تُصفَّر قبل أي انتظار حتى لا يتكرر الحذف
+  /// لو استُدعيت مرة ثانية أثناء الطلب (مسار انتهاء الجلسة).
   Future<void> teardown() async {
-    if (_currentToken != null && _ref != null) {
-      await _repository.unregisterToken(_currentToken!);
-    }
+    final token = _currentToken;
+    final repository = _ref != null ? _repository : null;
     _currentToken = null;
     _initialized = false;
     _ref = null;
+
+    // بلا JWT صالح سيُرفض الحذف أصلاً (الجلسة انتهت) — لا داعي للطلب
+    if (token == null || repository == null || !await TokenStorage.instance.hasTokens) {
+      return;
+    }
+    // لا نؤخّر تسجيل الخروج طويلاً إن كانت الشبكة بطيئة
+    await repository
+        .unregisterToken(token)
+        .timeout(const Duration(seconds: 5), onTimeout: () {});
   }
 
   /// عرض بسيط داخل التطبيق عند وصول رسالة والتطبيق مفتوح بالمقدمة —

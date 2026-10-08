@@ -18,7 +18,7 @@ def _recipients_for(message: ChatMessage):
 
 
 def notify_new_message(message: ChatMessage) -> None:
-    """يُستدعى بعد حفظ رسالة جديدة — يرسل إشعار push لكل طرف آخر في القناة."""
+    """يُستدعى بعد حفظ رسالة جديدة — يرسل إشعار push عاماً لكل طرف آخر في القناة."""
     from notifications.services import send_push_to_users  # يتجنّب استيراد دائري عند إقلاع التطبيقات
 
     recipients = [
@@ -27,11 +27,12 @@ def notify_new_message(message: ChatMessage) -> None:
     if not recipients:
         return
 
-    preview = message.text if len(message.text) <= 80 else message.text[:77] + "…"
+    # نص عام بلا محتوى الرسالة ولا اسم المرسل: الإشعار يظهر على شاشة القفل
+    # ويمر عبر خوادم Google، والمحادثة طبية.
     send_push_to_users(
         recipients,
-        title=f"رسالة جديدة من {message.sender.get_full_name() or message.sender.username}",
-        body=preview,
+        title="رسالة جديدة",
+        body="لديك رسالة جديدة",
         data={
             "type": "chat_message",
             "case_id": message.case_id,

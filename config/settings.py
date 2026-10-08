@@ -120,6 +120,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    # خرق قيود قاعدة البيانات (طلبات متزامنة مثلاً) يرجع 400 وليس 500
+    "EXCEPTION_HANDLER": "config.drf.api_exception_handler",
     # تحديد المعدّل: يحمي تسجيل الدخول من تخمين كلمات المرور. الطلبات غير
     # المسجّلة (login / فحص التحديث) محدودة لكل IP، والمسجّلة لكل مستخدم.
     # الدردشة تعمل بالـ polling فالحد المسجّل مرتفع عمداً.

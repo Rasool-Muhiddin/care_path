@@ -1,41 +1,21 @@
 from rest_framework import viewsets, permissions
 
-from accounts.permissions import IsDoctorOrEngineer
+from accounts.models import UserRole
+from accounts.permissions import IsDoctor, IsDoctorOrEngineer, IsEngineer, IsPatient
+from config.drf import AtomicSaveMixin
 from .models import Case, CaseProgressNote, WeeklyEpisodeLog
+from .scoping import scope_by_case, scoped_cases
 from .serializers import CaseProgressNoteSerializer, CaseSerializer, WeeklyEpisodeLogSerializer
 
 
-class IsDoctorUser(permissions.BasePermission):
-    """يسمح فقط للطبيب — يُستخدم لإضافة/تعديل/حذف ملاحظات التطور
-    (المهندس يقرأها لكن لا يكتبها، والمريض ممنوع بالكامل)."""
-
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and getattr(request.user, "role", None) == "doctor"
-        )
-
-
-class IsPatientUser(permissions.BasePermission):
-    """يسمح فقط للمريض — يُستخدم لتسجيل تقرير النوبات الأسبوعي (الطبيب
-    والمهندس يقرآن فقط، لا يكتبان)."""
-
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and getattr(request.user, "role", None) == "patient"
-        )
-
-
-class CaseViewSet(viewsets.ModelViewSet):
+class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     """
-    - المريض: يرى فقط حالاته الخاصة (قراءة فقط عمليًا عبر فحص الـ Serializer).
-    - الطبيب: يرى فقط الحالات المسندة إليه، ويستطيع تعديلها.
-    - المهندس: يرى كل الحالات (لغرض ربطها بالأجهزة ومتابعة الاستخدام)، ويستطيع تعديل
-      الحقول المتعلقة بالجهاز (device) لكن ليس الحقول الطبية البحتة عمليًا هذا يُترك
-      كاتفاق فريق عمل موثّق، ويمكن تشديده أكثر بصلاحية منفصلة لاحقاً إن احتجتم.
+    - المريض: قراءة حالاته الخاصة فقط — لا تعديل ولا حذف.
+    - الطبيب: يرى الحالات المسندة إليه، ينشئ حالات لنفسه ويعدّلها، ولا يحذف.
+    - المهندس: يرى ويعدّل كل الحالات (لربطها بالأجهزة ومتابعة الاستخدام)،
+      وهو الوحيد الذي يحذف — الحذف يمسح بالتسلسل كل الجلسات والتقارير
+      والمحادثات المرتبطة.
+    - أي دور آخر: لا شيء (راجع cases/scoping.py).
 
     فلترة اختيارية: ?device=<uuid> — تُستخدم من شاشة تفاصيل الجهاز عند
     المهندس لعرض الحالات المرتبطة بجهاز معيّن فقط.
@@ -45,20 +25,14 @@ class CaseViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action == "create":
-            # إنشاء حالة جديدة يكون من الطبيب أو المهندس فقط، وليس المريض مباشرة
+        if self.action == "destroy":
+            return [permissions.IsAuthenticated(), IsEngineer()]
+        if self.action in ["create", "update", "partial_update"]:
             return [permissions.IsAuthenticated(), IsDoctorOrEngineer()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == "patient":
-            queryset = Case.objects.filter(patient=user)
-        elif user.role == "doctor":
-            queryset = Case.objects.filter(doctor=user)
-        else:
-            # engineer
-            queryset = Case.objects.all()
+        queryset = scoped_cases(self.request.user)
 
         device_id = self.request.query_params.get("device")
         if device_id:
@@ -72,12 +46,12 @@ class CaseViewSet(viewsets.ModelViewSet):
         return context
 
 
-class CaseProgressNoteViewSet(viewsets.ModelViewSet):
+class CaseProgressNoteViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     """
     ملاحظات تطور الحالة عبر الزمن (سجل متعدد، وليس حقل واحد يُستبدل).
     - الطبيب: يرى ويكتب فقط لحالاته الخاصة.
     - المهندس: يرى الكل (قراءة فقط).
-    - المريض: ممنوع بالكامل — لا رؤية ولا كتابة.
+    - المريض وأي دور آخر: ممنوع بالكامل — لا رؤية ولا كتابة.
 
     فلترة اختيارية: ?case=<id> — لعرض ملاحظات حالة معيّنة فقط (هذا هو
     الاستخدام الطبيعي الوحيد تقريباً من شاشة تفاصيل الحالة عند الطبيب).
@@ -88,18 +62,14 @@ class CaseProgressNoteViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [permissions.IsAuthenticated(), IsDoctorUser()]
+            return [permissions.IsAuthenticated(), IsDoctor()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == "doctor":
-            queryset = CaseProgressNote.objects.filter(case__doctor=user)
-        elif user.role == "engineer":
-            queryset = CaseProgressNote.objects.all()
-        else:
-            # المريض لا يرى شيئاً من هنا إطلاقاً
+        if user.role == UserRole.PATIENT:
             return CaseProgressNote.objects.none()
+        queryset = scope_by_case(CaseProgressNote.objects.all(), user)
 
         case_id = self.request.query_params.get("case")
         if case_id:
@@ -112,13 +82,17 @@ class CaseProgressNoteViewSet(viewsets.ModelViewSet):
         context["request"] = self.request
         return context
 
-class WeeklyEpisodeLogViewSet(viewsets.ModelViewSet):
+
+class WeeklyEpisodeLogViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     """
     تقارير النوبات الأسبوعية.
     - المريض: يرسل (create) فقط تقاريره الخاصة عن الأسبوع المستحق —
       لا تعديل ولا حذف بعد الإرسال (سجل تاريخي ثابت).
     - الطبيب: يقرأ تقارير حالاته فقط (لبناء التحليل الإحصائي بالشارت).
     - المهندس: يقرأ الكل (للاتساق مع باقي الـ viewsets).
+
+    إرسال نفس الأسبوع مرتين بالتزامن يصطدم بـ unique_together ويرجع 400
+    (config.drf.api_exception_handler).
 
     فلترة اختيارية: ?case=<id> — لعرض تقارير حالة معيّنة فقط.
     """
@@ -129,18 +103,11 @@ class WeeklyEpisodeLogViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [permissions.IsAuthenticated(), IsPatientUser()]
+            return [permissions.IsAuthenticated(), IsPatient()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == "patient":
-            queryset = WeeklyEpisodeLog.objects.filter(case__patient=user)
-        elif user.role == "doctor":
-            queryset = WeeklyEpisodeLog.objects.filter(case__doctor=user)
-        else:
-            # engineer
-            queryset = WeeklyEpisodeLog.objects.all()
+        queryset = scope_by_case(WeeklyEpisodeLog.objects.all(), self.request.user)
 
         case_id = self.request.query_params.get("case")
         if case_id:

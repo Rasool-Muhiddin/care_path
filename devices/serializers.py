@@ -32,13 +32,14 @@ class DeviceSerializer(serializers.ModelSerializer):
     device_type_setup_schema = serializers.JSONField(
         source="device_type.setup_schema", read_only=True
     )
-    # False إذا كان الجهاز مرتبطاً فعلياً بأي Case (أي مباع لمريض)، بصرف
-    # النظر عن حالة الجهاز نفسه (status). يستثني حالة "exclude_case_id"
-    # الممرّرة من الـ view (لعرض جهاز الحالة الحالية كـ "متاح" أثناء تعديلها)
+    # False إذا كان الجهاز مرتبطاً بحالة غير مغلقة (أي مع مريض حالياً)، بصرف
+    # النظر عن حالة الجهاز نفسه (status). الحالات المغلقة (جهاز مُرجَع) لا
+    # تُحتسب. يستثني حالة "exclude_case_id" الممرّرة من الـ view (لعرض جهاز
+    # الحالة الحالية كـ "متاح" أثناء تعديلها)
     is_available = serializers.SerializerMethodField()
 
     def get_is_available(self, obj):
-        linked_cases = obj.cases.all()
+        linked_cases = obj.cases.exclude(status="closed")
         exclude_case_id = self.context.get("exclude_case_id")
         if exclude_case_id:
             linked_cases = linked_cases.exclude(pk=exclude_case_id)

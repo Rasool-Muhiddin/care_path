@@ -36,11 +36,12 @@ class DeviceViewSet(viewsets.ModelViewSet):
       حتى يستطيع اختيار جهاز عند إنشاء أول حالة له.
     - المريض: لا يصل لهذا الـ Endpoint إطلاقاً (يرى جهازه فقط من خلال Case الخاص به).
 
-    دعم فلترة "التوفر": كل جهاز يُباع لمريض واحد فقط، فبمجرد ربطه بأي Case
-    يصبح غير متاح لأي Case آخر. مرّر ?available=true لإرجاع الأجهزة غير
-    المرتبطة بأي حالة فقط (تُستخدم في شاشة "New Case"). عند تعديل حالة
-    موجودة، مرّر أيضاً ?exclude_case=<case_id> حتى يبقى الجهاز الحالي لتلك
-    الحالة ضمن القائمة رغم كونه مرتبطاً بها.
+    دعم فلترة "التوفر": الجهاز مع مريض واحد في كل وقت. يكون غير متاح ما
+    دام مرتبطاً بحالة غير مغلقة؛ عند إرجاعه تُغلق الحالة فيعود متاحاً لأي
+    مريض (الحالات المغلقة لا تُحتسب). مرّر ?available=true لإرجاع الأجهزة
+    المتاحة فقط (تُستخدم في شاشة "New Case"). عند تعديل حالة موجودة، مرّر
+    أيضاً ?exclude_case=<case_id> حتى يبقى الجهاز الحالي لتلك الحالة ضمن
+    القائمة رغم كونه مرتبطاً بها.
     """
 
     serializer_class = DeviceSerializer
@@ -63,9 +64,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
         if self.request.query_params.get("available") == "true":
             # استيراد محلي لتفادي أي استيراد دائري بين التطبيقين
-            from cases.models import Case
+            from cases.models import Case, CaseStatus
 
-            linked_cases = Case.objects.exclude(device__isnull=True)
+            linked_cases = Case.objects.exclude(device__isnull=True).exclude(
+                status=CaseStatus.CLOSED
+            )
 
             exclude_case_id = self.request.query_params.get("exclude_case")
             if exclude_case_id:

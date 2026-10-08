@@ -1,8 +1,9 @@
-from rest_framework import generics
+from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from accounts.models import UserRole
 from cases.models import Case
 from .models import ChatMessage
 from .models import InquiryType
@@ -13,7 +14,9 @@ from .notifications import notify_new_message
 
 class CaseMessagesView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
-    permission_classes = [IsCaseParticipant]
+    # IsAuthenticated صراحةً: تحديد permission_classes يستبدل الافتراضي، وبدونه
+    # كان الطلب المجهول يجتاز IsCaseParticipant لحالة طبيبها null (None == None).
+    permission_classes = [permissions.IsAuthenticated, IsCaseParticipant]
 
     def get_case(self):
         if not hasattr(self, '_case'):
@@ -68,8 +71,13 @@ class UnreadCountView(APIView):
                 | Q(device__clinic__isnull=True)
                 | Q(device__clinic__responsible_engineer__isnull=True)
             ).distinct()
+        elif getattr(user, 'role', None) == UserRole.DOCTOR:
+            cases = Case.objects.filter(doctor=user)
+        elif getattr(user, 'role', None) == UserRole.PATIENT:
+            cases = Case.objects.filter(patient=user)
         else:
-            cases = (Case.objects.filter(patient=user) | Case.objects.filter(doctor=user)).distinct()
+            # الرفض كافتراض: أي دور آخر لا يملك محادثات
+            cases = Case.objects.none()
         by_case, total = {}, 0
         for case in cases:
             messages = ChatMessage.objects.filter(case=case, is_read=False).exclude(sender=user)

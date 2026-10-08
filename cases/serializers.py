@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.models import UserRole
+
 from .models import (
     Case,
     CaseProgressNote,
@@ -81,38 +83,76 @@ class CaseSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        1. منع إنشاء أكثر من حالة (Case) نشطة واحدة لنفس المريض. المريض
-           يجب أن يرتبط بجهاز واحد فقط، والجهاز مرتبط بالمريض عبر
-           Case.device — فلو صار عنده حالتين نشطتين بجهازين مختلفين،
-           تُسجَّل جلساته أحياناً على هذا الجهاز وأحياناً على ذاك حسب أي
-           حالة يرجعها fetchMyCase() بالواجهة. هذا الفحص يمنع المشكلة من
-           جذرها بدل معالجة أعراضها بالواجهة.
-        2. المريض لا يجب أن يستطيع تعديل حقول الحالة السريرية (status,
-           doctor, treatment_plan, initial_evaluation,
-           device_setup_parameters, disease_type, monthly_episode_count,
-           episode_duration_minutes, symptoms, current_medications,
-           total_sessions_planned) حتى لو أرسلها ضمن الطلب. هذا فحص
-           إضافي على مستوى الـ Serializer فوق فحص الصلاحيات في الـ View.
-        3. disease_type (إن أُرسل) يجب أن ينتمي فعلاً لأنواع تشخيص
-           الحالة (diagnosis_type) — نوع فرعي خاص بالصرع لا يُقبل مع
-           حالة تشخيصها شقيقة والعكس. راجع DISEASE_TYPE_CHOICES_BY_DIAGNOSIS
-           بـ models.py.
+        المريض لا يصل هنا إطلاقاً (الحالة للقراءة فقط عنده — راجع
+        CaseViewSet.get_permissions). القواعد هنا للطبيب والمهندس:
+
+        1. لا يمكن نقل حالة موجودة إلى مريض آخر.
+        2. الطبيب ينشئ الحالات لنفسه فقط ولا يغيّر طبيب الحالة.
+        3. حالة واحدة غير مغلقة لكل مريض — عند الإنشاء، وعند إعادة فتح
+           حالة مغلقة. لو صار للمريض حالتان نشطتان بجهازين مختلفين،
+           تُسجَّل جلساته أحياناً على هذا الجهاز وأحياناً على ذاك.
+        4. جهاز واحد لكل مريض: الجهاز المرتبط بحالة أخرى غير مغلقة لا
+           يُقبل. الحالة المغلقة (جهاز مُرجَع) لا تحجز الجهاز، وإعادة فتحها
+           تُرفض إن صار جهازها مرتبطاً بحالة نشطة أخرى.
+        5. disease_type (إن أُرسل) يجب أن ينتمي فعلاً لأنواع تشخيص
+           الحالة (diagnosis_type). راجع DISEASE_TYPE_CHOICES_BY_DIAGNOSIS.
+
+        القواعد 3 و4 مدعومة أيضاً بقيود في قاعدة البيانات (Case.Meta)
+        تلتقط الطلبات المتزامنة التي تتجاوز هذا الفحص.
         """
-        if self.instance is None:
-            # فحص فقط عند الإنشاء (POST)، وليس عند التعديل (PATCH/PUT)
-            patient = attrs.get("patient")
-            if patient is not None:
-                has_active_case = (
-                    Case.objects.filter(patient=patient)
-                    .exclude(status=CaseStatus.CLOSED)
-                    .exists()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if self.instance is not None and "patient" in attrs:
+            if attrs["patient"] != self.instance.patient:
+                raise serializers.ValidationError(
+                    {"patient": "لا يمكن نقل الحالة إلى مريض آخر."}
                 )
-                if has_active_case:
+
+        if getattr(user, "role", None) == UserRole.DOCTOR:
+            current_doctor = self.instance.doctor if self.instance else user
+            if "doctor" in attrs and attrs["doctor"] not in (None, current_doctor):
+                raise serializers.ValidationError(
+                    {"doctor": "لا يمكنك إسناد الحالة لطبيب آخر."}
+                )
+            if self.instance is None:
+                attrs["doctor"] = user
+
+        patient = attrs.get("patient", getattr(self.instance, "patient", None))
+        status = attrs.get("status", getattr(self.instance, "status", CaseStatus.NEW))
+        if patient is not None and status != CaseStatus.CLOSED:
+            other_active = Case.objects.filter(patient=patient).exclude(status=CaseStatus.CLOSED)
+            if self.instance is not None:
+                other_active = other_active.exclude(pk=self.instance.pk)
+            if other_active.exists():
+                raise serializers.ValidationError(
+                    "هذا المريض لديه حالة نشطة بالفعل. أغلق حالته "
+                    "الحالية (status=closed) أولاً قبل إنشاء أو إعادة "
+                    "فتح حالة أخرى له."
+                )
+
+        device = attrs.get("device", getattr(self.instance, "device", None))
+        if device is not None and status != CaseStatus.CLOSED:
+            taken = Case.objects.filter(device=device).exclude(status=CaseStatus.CLOSED)
+            if self.instance is not None:
+                taken = taken.exclude(pk=self.instance.pk)
+            if taken.exists():
+                reopening = (
+                    self.instance is not None
+                    and self.instance.status == CaseStatus.CLOSED
+                    and "device" not in attrs
+                )
+                if reopening:
                     raise serializers.ValidationError(
-                        "هذا المريض لديه حالة نشطة بالفعل. أغلق حالته "
-                        "الحالية (status=closed) أولاً قبل إنشاء حالة "
-                        "جديدة له."
+                        {"device": (
+                            f"لا يمكن إعادة فتح الحالة: جهازها ({device.serial_number}) "
+                            "مرتبط الآن بحالة نشطة لمريض آخر. اختر جهازاً آخر "
+                            "أو أعد فتحها بدون جهاز."
+                        )}
                     )
+                raise serializers.ValidationError(
+                    {"device": "هذا الجهاز مرتبط بحالة نشطة أخرى (جهاز واحد لكل مريض)."}
+                )
 
         disease_type = attrs.get("disease_type")
         if disease_type:
@@ -128,32 +168,6 @@ class CaseSerializer(serializers.ModelSerializer):
                             f'"{disease_type}" غير صالح لتشخيص "{diagnosis_type}".'
                         )
                     }
-                )
-
-        request = self.context.get("request")
-        if request and request.user.role == "patient":
-            clinical_fields = {
-                "status",
-                "doctor",
-                "device",
-                "device_setup_parameters",
-                "disease_type",
-                "monthly_episode_count",
-                "episode_duration_minutes",
-                "symptoms",
-                "current_medications",
-                "total_sessions_planned",
-                "guarantor_name",
-                "guarantor_address",
-                "guarantor_phone_number",
-                "guarantor_email",
-                "treatment_plan",
-                "initial_evaluation",
-            }
-            forbidden = clinical_fields & set(self.initial_data.keys())
-            if forbidden:
-                raise serializers.ValidationError(
-                    f"لا يمكن للمريض تعديل الحقول التالية: {', '.join(forbidden)}"
                 )
         return attrs
 

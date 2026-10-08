@@ -174,7 +174,9 @@ class _OverviewBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // الحالة المغلقة تعني أن الجهاز أُرجع، فيعود متاحاً لمريض آخر
     final linkedDeviceIds = cases
+        .where((caseModel) => caseModel.status != CaseStatus.closed)
         .map((caseModel) => caseModel.deviceId)
         .whereType<String>()
         .toSet();

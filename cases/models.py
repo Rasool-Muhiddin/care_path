@@ -154,6 +154,24 @@ class Case(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        # قواعد العمل على مستوى قاعدة البيانات (خط الدفاع الأخير ضد
+        # الطلبات المتزامنة التي تتجاوز فحص الـ serializer):
+        # - حالة واحدة غير مغلقة لكل مريض.
+        # - الجهاز مرتبط بحالة واحدة غير مغلقة على الأكثر. عند إرجاع الجهاز
+        #   تُغلق الحالة فيصبح الجهاز متاحاً لأي مريض آخر، وتبقى الحالة
+        #   المغلقة (بجلساتها وتقييماتها وتقاريرها) مرتبطة به كسجل تاريخي.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["patient"],
+                condition=~models.Q(status="closed"),
+                name="one_active_case_per_patient",
+            ),
+            models.UniqueConstraint(
+                fields=["device"],
+                condition=models.Q(device__isnull=False) & ~models.Q(status="closed"),
+                name="one_case_per_device",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Case #{self.pk} - {self.patient} ({self.get_diagnosis_type_display()})"

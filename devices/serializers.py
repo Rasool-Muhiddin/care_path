@@ -39,11 +39,12 @@ class DeviceSerializer(serializers.ModelSerializer):
     is_available = serializers.SerializerMethodField()
 
     def get_is_available(self, obj):
-        linked_cases = obj.cases.exclude(status="closed")
-        exclude_case_id = self.context.get("exclude_case_id")
-        if exclude_case_id:
-            linked_cases = linked_cases.exclude(pk=exclude_case_id)
-        return not linked_cases.exists()
+        # is_linked محسوبة في DeviceViewSet.get_queryset (مع احترام
+        # ?exclude_case)؛ الاستعلام المنفصل فقط لنسخة لم تمر عليه (رد الإنشاء/التعديل).
+        is_linked = getattr(obj, "is_linked", None)
+        if is_linked is None:
+            is_linked = obj.cases.exclude(status="closed").exists()
+        return not is_linked
 
     class Meta:
         model = Device

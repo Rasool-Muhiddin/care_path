@@ -23,6 +23,10 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        indexes = [
+            # الـ polling وعدّاد غير المقروء: رسائل حالة معيّنة بقناة معيّنة وحالة قراءة
+            models.Index(fields=['case', 'inquiry_type', 'is_read'], name='chat_case_type_read_idx'),
+        ]
 
     def __str__(self):
         return f"{self.sender} -> case #{self.case_id}: {self.text[:30]}"

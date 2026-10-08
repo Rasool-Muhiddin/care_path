@@ -1,12 +1,14 @@
 from unittest import mock
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from config.testing import CareWorldMixin
 
 from .models import ChatMessage, InquiryType
-from .notifications import notify_new_message
+from .notifications import notify_message_by_id, notify_new_message
 
 
 def messages_url(case):
@@ -14,7 +16,7 @@ def messages_url(case):
 
 
 # لا نرسل إشعارات FCM حقيقية أثناء الاختبارات
-@mock.patch("chat.views.notify_new_message")
+@mock.patch("chat.views.notify_in_background")
 class ChatPermissionTests(CareWorldMixin, APITestCase):
     def setUp(self):
         ChatMessage.objects.create(case=self.case_1, sender=self.patient_1, text="medical",
@@ -55,11 +57,16 @@ class ChatPermissionTests(CareWorldMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_participant_can_send(self, notify):
-        response = self.client_for(self.patient_1).post(
-            messages_url(self.case_1), {"text": "hello", "inquiry_type": "medical"}, format="json"
-        )
+        # الإشعار يُجدول بعد نجاح الحفظ (on_commit) وليس داخل الطلب
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            response = self.client_for(self.patient_1).post(
+                messages_url(self.case_1), {"text": "hello", "inquiry_type": "medical"}, format="json"
+            )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        notify.assert_called_once()
+        notify.assert_not_called()
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
+        notify.assert_called_once_with(response.data["id"])
 
     def test_unread_count_for_unknown_role_is_empty(self, _notify):
         response = self.client_for(self.no_role).get("/api/chat/unread-count/")
@@ -89,3 +96,80 @@ class GenericNotificationTests(CareWorldMixin, APITestCase):
         self.assertNotIn("صداع", kwargs["title"] + kwargs["body"])
         self.assertNotIn(self.patient_1.username, kwargs["title"])
         self.assertEqual(kwargs["data"]["case_id"], self.case_1.pk)
+
+
+
+@mock.patch("chat.views.notify_in_background")
+class ChatPollingTests(CareWorldMixin, APITestCase):
+    """P3 + P5: عدّاد غير المقروء باستعلام واحد، والـ polling التزايدي."""
+
+    def add_message(self, case, sender, inquiry_type=InquiryType.MEDICAL, text="m"):
+        return ChatMessage.objects.create(case=case, sender=sender, text=text, inquiry_type=inquiry_type)
+
+    def test_unread_count_is_one_query(self, _notify):
+        client = self.client_for(self.engineer)
+        with self.assertNumQueries(1):
+            client.get("/api/chat/unread-count/")
+        for case in (self.case_1, self.case_2, self.orphan_case):
+            for _ in range(3):
+                self.add_message(case, case.patient, InquiryType.TECHNICAL)
+        with self.assertNumQueries(1):
+            response = client.get("/api/chat/unread-count/")
+        self.assertEqual(response.data["total_unread"], 9)
+        self.assertEqual(
+            response.data["by_case"],
+            {self.case_1.pk: 3, self.case_2.pk: 3, self.orphan_case.pk: 3},
+        )
+
+    def test_after_id_returns_only_newer_messages(self, _notify):
+        old = self.add_message(self.case_1, self.patient_1, text="old")
+        new = self.add_message(self.case_1, self.patient_1, text="new")
+        response = self.client_for(self.doctor_a).get(
+            messages_url(self.case_1), {"inquiry_type": "medical", "after_id": old.pk}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([m["id"] for m in response.data], [new.pk])
+
+    def test_after_id_marks_only_new_messages_read(self, _notify):
+        old = self.add_message(self.case_1, self.patient_1)
+        new = self.add_message(self.case_1, self.patient_1)
+        self.client_for(self.doctor_a).get(messages_url(self.case_1), {"after_id": old.pk})
+        old.refresh_from_db()
+        new.refresh_from_db()
+        self.assertFalse(old.is_read)
+        self.assertTrue(new.is_read)
+
+    def test_message_list_query_count_is_constant(self, _notify):
+        client = self.client_for(self.doctor_a)
+        url = messages_url(self.case_1)
+        with CaptureQueriesContext(connection) as before:
+            client.get(url)
+        for _ in range(5):
+            self.add_message(self.case_1, self.patient_1)
+        with CaptureQueriesContext(connection) as after:
+            client.get(url)
+        self.assertEqual(len(before), len(after))
+
+    def test_invalid_after_id_returns_400(self, _notify):
+        response = self.client_for(self.doctor_a).get(messages_url(self.case_1), {"after_id": "abc"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_messages_are_not_paginated(self, _notify):
+        response = self.client_for(self.doctor_a).get(messages_url(self.case_1))
+        self.assertIsInstance(response.data, list)
+
+
+class BackgroundNotificationTests(CareWorldMixin, APITestCase):
+    @mock.patch("chat.notifications.notify_new_message")
+    def test_notify_by_id_loads_message_and_sends(self, notify):
+        message = ChatMessage.objects.create(case=self.case_1, sender=self.patient_1, text="x")
+        with mock.patch("chat.notifications.connection") as conn:
+            notify_message_by_id(message.pk)
+        notify.assert_called_once_with(message)
+        conn.close.assert_called_once()
+
+    @mock.patch("chat.notifications.notify_new_message", side_effect=RuntimeError("fcm down"))
+    def test_notify_by_id_never_raises(self, _notify):
+        message = ChatMessage.objects.create(case=self.case_1, sender=self.patient_1, text="x")
+        with mock.patch("chat.notifications.connection"):
+            notify_message_by_id(message.pk)  # يُسجَّل الخطأ فقط

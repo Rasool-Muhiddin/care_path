@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from config.testing import CareWorldMixin
+from config.testing import CareWorldMixin, results
 from treatments.models import TreatmentSession
 
 from .models import Feedback
@@ -78,7 +78,7 @@ class FeedbackOwnershipTests(CareWorldMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_engineer_can_read_all_feedback(self):
-        self.assertEqual(len(self.client_for(self.engineer).get(FEEDBACK).data), 2)
+        self.assertEqual(len(results(self.client_for(self.engineer).get(FEEDBACK))), 2)
 
     def test_engineer_cannot_add_feedback(self):
         # قرار عمل: التقييم من المريض أو الطبيب فقط، حتى على جلسة يراها المهندس
@@ -95,4 +95,4 @@ class FeedbackOwnershipTests(CareWorldMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_unknown_role_sees_nothing(self):
-        self.assertEqual(self.client_for(self.no_role).get(FEEDBACK).data, [])
+        self.assertEqual(results(self.client_for(self.no_role).get(FEEDBACK)), [])

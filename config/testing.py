@@ -23,6 +23,11 @@ from treatments.models import TreatmentSession
 PASSWORD = "Passw0rd!x-test"
 
 
+def results(response):
+    """عناصر الصفحة من رد قائمة مرقّمة (DEFAULT_PAGINATION_CLASS)."""
+    return response.data["results"]
+
+
 def make_user(username, role, **extra):
     return User.objects.create_user(username=username, password=PASSWORD, role=role, **extra)
 

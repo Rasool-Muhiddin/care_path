@@ -15,16 +15,11 @@ class DoctorRepository {
   DoctorRepository(this._client);
   final ApiClient _client;
 
-  List<T> _extractList<T>(dynamic data, T Function(Map<String, dynamic>) fromJson) {
-    final results = data is Map && data.containsKey('results') ? data['results'] as List : data as List;
-    return results.map((e) => fromJson(e as Map<String, dynamic>)).toList();
-  }
-
   /// حالات الطبيب الحالي فقط (الفلترة تلقائية من الـ backend عبر get_queryset)
   Future<List<CaseModel>> fetchMyCases() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.cases);
-      return _extractList(response.data, CaseModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.cases);
+      return items.map(CaseModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -33,8 +28,8 @@ class DoctorRepository {
   /// كل المرضى المسجلين بالنظام — لاختيار المريض عند إنشاء حالة جديدة
   Future<List<PatientModel>> fetchPatients() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.patients);
-      return _extractList(response.data, PatientModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.patients);
+      return items.map(PatientModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -49,14 +44,14 @@ class DoctorRepository {
     int? excludeCaseId,
   }) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.devices,
         queryParameters: {
           if (availableOnly) 'available': 'true',
           if (excludeCaseId != null) 'exclude_case': excludeCaseId,
         },
       );
-      return _extractList(response.data, DeviceModel.fromJson);
+      return items.map(DeviceModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -87,11 +82,11 @@ class DoctorRepository {
   /// جلسات حالة معيّنة — لعرض تاريخ الجلسات بشاشة تفاصيل الحالة
   Future<List<SessionModel>> fetchSessionsForCase(int caseId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.sessions,
         queryParameters: {'case': caseId},
       );
-      return _extractList(response.data, SessionModel.fromJson);
+      return items.map(SessionModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -100,11 +95,11 @@ class DoctorRepository {
   /// ملاحظات تطور حالة معيّنة (الأحدث أولاً — ordering من الـ backend)
   Future<List<CaseProgressNoteModel>> fetchProgressNotes(int caseId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.caseProgressNotes,
         queryParameters: {'case': caseId},
       );
-      return _extractList(response.data, CaseProgressNoteModel.fromJson);
+      return items.map(CaseProgressNoteModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -126,11 +121,11 @@ class DoctorRepository {
   /// لبناء التحليل الإحصائي (barplot: جلسات مقابل نوبات عبر الزمن)
   Future<List<WeeklyEpisodeLogModel>> fetchWeeklyEpisodeLogs(int caseId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.weeklyEpisodeLogs,
         queryParameters: {'case': caseId},
       );
-      return _extractList(response.data, WeeklyEpisodeLogModel.fromJson);
+      return items.map(WeeklyEpisodeLogModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

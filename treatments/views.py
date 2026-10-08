@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions
 
 from accounts.permissions import IsDoctorOrEngineer
 from cases.scoping import scope_by_case
-from config.drf import AtomicSaveMixin
+from config.drf import AtomicSaveMixin, int_query_param
 from .models import TreatmentSession
 from .serializers import TreatmentSessionSerializer
 
@@ -32,8 +32,8 @@ class TreatmentSessionViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = scope_by_case(TreatmentSession.objects.all(), self.request.user)
 
-        case_id = self.request.query_params.get("case")
-        if case_id:
+        case_id = int_query_param(self.request, "case")
+        if case_id is not None:
             queryset = queryset.filter(case_id=case_id)
 
         return queryset

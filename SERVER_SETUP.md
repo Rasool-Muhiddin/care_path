@@ -78,7 +78,9 @@
 احتفظ بنسخة احتياطية أولاً:
     sudo cp -a /etc/nginx /etc/nginx.bak-$(date +%F)
     sudo cp /var/www/axon/app/deploy/axon-proxy.conf /etc/nginx/snippets/axon-proxy.conf
+    sudo cp /var/www/axon/app/deploy/nginx-cloudflare-realip.conf /etc/nginx/snippets/axon-cloudflare-realip.conf
     sudo cp /var/www/axon/app/deploy/nginx-axon.conf /etc/nginx/sites-available/axon
+    sudo apt -y install apache2-utils && sudo htpasswd -c /etc/nginx/axon-admin.htpasswd ADMIN_NAME
     sudo ln -s /etc/nginx/sites-available/axon /etc/nginx/sites-enabled/axon
     sudo nginx -t
 إن نجح `nginx -t` فقط:
@@ -86,8 +88,8 @@
 إن فشل، احذف الرابط وتراجع فوراً: `sudo rm /etc/nginx/sites-enabled/axon && sudo nginx -t`.
 لا تحذف `sites-enabled/default` ولا أي ملف آخر.
 
-ملاحظة Cloudflare: إن كان سجل الدومين Proxied (سحابة برتقالية)، فعدّاد الحد على المعدّل سيرى IP خوادم Cloudflare بدل IP المستخدم.
-الحل الأبسط أثناء الاختبار: اجعل السجل DNS only (سحابة رمادية) حتى تنتهي التجربة. وإن أردت Proxied فأخبرني لأضيف إعداد real_ip.
+ملاحظة Cloudflare: الملف axon-cloudflare-realip.conf يستعيد IP المستخدم الحقيقي من CF-Connecting-IP (للطلبات القادمة من نطاقات Cloudflare فقط)،
+فيعمل حد المعدّل في nginx وDjango على IP المستخدم سواء كان السجل Proxied أو DNS only.
 وإذا فعّلت Proxied فاجعل SSL/TLS في Cloudflare على وضع Full (strict) بعد إصدار الشهادة، وإلا ستحدث حلقة إعادة توجيه.
 
 ## 9) شهادة HTTPS (للدومين الجديد فقط)

@@ -9,11 +9,23 @@ plugins {
 }
 
 // يقرأ بيانات التوقيع من android/key.properties (غير مرفوع على Git).
-// إن لم يوجد الملف يعود البناء لمفتاح debug كي لا يتعطل التطوير.
+// بناء debug يعمل بدونه، أما بناء release فيفشل صراحةً (انظر الأسفل): نسخة
+// موقّعة بمفتاح debug لا يمكن تحديثها لاحقاً بالنسخة الموقّعة بالمفتاح الحقيقي.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { it.project == project && it.name.contains("Release") }
+    if (buildsRelease && !keystorePropertiesFile.exists()) {
+        throw GradleException(
+            "Release build stopped: android/key.properties not found. " +
+                "Release APKs must be signed with the real upload key, never the debug key. " +
+                "Copy android/key.properties.example to android/key.properties and fill it in."
+        )
+    }
 }
 
 android {
@@ -50,11 +62,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // لا رجوع لمفتاح debug أبداً — غياب key.properties يوقف البناء أعلاه
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

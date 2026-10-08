@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +35,17 @@ class FcmService {
   WidgetRef? _ref;
   String? _currentToken;
   bool _initialized = false;
+  // اشتراكات FCM الحالية — تُلغى عند الخروج حتى لا تتكرر بعد كل دخول جديد
+  // (SnackBar مزدوج، أو فتح شاشة المحادثة مرتين عند الضغط على إشعار).
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  // getInitialMessage يخص فتح التطبيق نفسه: يُعالج مرة واحدة فقط لكل تشغيل
+  bool _initialMessageHandled = false;
+
+  final _chatMessages = StreamController<int>.broadcast();
+
+  /// رقم الحالة (case_id) لكل رسالة محادثة تصل والتطبيق مفتوح — تستمع لها
+  /// شاشة المحادثة وعدّاد غير المقروء ليتحدّثا فوراً بدل انتظار الـ polling.
+  Stream<int> get chatMessages => _chatMessages.stream;
 
   FcmRepository get _repository => FcmRepository(_ref!.read(apiClientProvider));
 
@@ -45,28 +58,36 @@ class FcmService {
     _ref = ref;
 
     try {
+      // الاشتراك أولاً وبشكل متزامن: لو سجّل المستخدم خروجه أثناء الانتظار
+      // بالأسفل، تلغيها teardown كلها ولا يبقى اشتراك يتيم.
+      _subscriptions.addAll([
+        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+          _currentToken = newToken;
+          _repository.registerToken(token: newToken, platform: _platform);
+        }),
+        FirebaseMessaging.onMessage.listen(_handleForegroundMessage),
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap),
+      ]);
+
       await FirebaseMessaging.instance.requestPermission();
       final token = await FirebaseMessaging.instance.getToken();
+      // خرج المستخدم أثناء الانتظار: لا نسجّل توكناً لحساب لم يعد موجوداً
+      if (!_initialized) return;
       if (token != null) {
         _currentToken = token;
         await _repository.registerToken(token: token, platform: _platform);
       }
+
+      // إن فُتح التطبيق من صفر بالضغط على إشعار (وليس فقط من الخلفية)
+      if (!_initialMessageHandled) {
+        _initialMessageHandled = true;
+        final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+        if (initialMessage != null && _initialized) {
+          _handleNotificationTap(initialMessage);
+        }
+      }
     } catch (_) {
       // غياب google-services.json أو فشل الشبكة لا يجب أن يعطّل تسجيل الدخول
-    }
-
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-      _currentToken = newToken;
-      _repository.registerToken(token: newToken, platform: _platform);
-    });
-
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-    // إن فُتح التطبيق من صفر بالضغط على إشعار (وليس فقط من الخلفية)
-    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
     }
   }
 
@@ -82,6 +103,11 @@ class FcmService {
     _currentToken = null;
     _initialized = false;
     _ref = null;
+    final subscriptions = List.of(_subscriptions);
+    _subscriptions.clear();
+    for (final subscription in subscriptions) {
+      subscription.cancel();
+    }
 
     // بلا JWT صالح سيُرفض الحذف أصلاً (الجلسة انتهت) — لا داعي للطلب
     if (token == null || repository == null || !await TokenStorage.instance.hasTokens) {
@@ -96,6 +122,10 @@ class FcmService {
   /// عرض بسيط داخل التطبيق عند وصول رسالة والتطبيق مفتوح بالمقدمة —
   /// أندرويد لا يعرض إشعار النظام تلقائياً في هذه الحالة.
   void _handleForegroundMessage(RemoteMessage message) {
+    if (message.data['type'] == 'chat_message') {
+      final caseId = int.tryParse('${message.data['case_id']}');
+      if (caseId != null) _chatMessages.add(caseId);
+    }
     final notification = message.notification;
     if (notification == null) return;
     rootScaffoldMessengerKey.currentState?.showSnackBar(

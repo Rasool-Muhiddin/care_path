@@ -1,8 +1,9 @@
+from django.db.models import Count
 from rest_framework import viewsets, permissions
 
 from accounts.models import UserRole
 from accounts.permissions import IsDoctor, IsDoctorOrEngineer, IsEngineer, IsPatient
-from config.drf import AtomicSaveMixin
+from config.drf import AtomicSaveMixin, int_query_param, uuid_query_param
 from .models import Case, CaseProgressNote, WeeklyEpisodeLog
 from .scoping import scope_by_case, scoped_cases
 from .serializers import CaseProgressNoteSerializer, CaseSerializer, WeeklyEpisodeLogSerializer
@@ -32,9 +33,17 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = scoped_cases(self.request.user)
+        # كل ما يحتاجه CaseSerializer في عدد ثابت من الاستعلامات مهما كثرت
+        # الحالات: الأسماء ونوع الجهاز بـ JOIN، عدد الجلسات بـ annotate،
+        # والتقارير الأسبوعية (للأسبوع المستحق) بـ prefetch.
+        queryset = (
+            scoped_cases(self.request.user)
+            .select_related("patient", "doctor", "device__device_type")
+            .annotate(sessions_count=Count("sessions", distinct=True))
+            .prefetch_related("weekly_episode_logs")
+        )
 
-        device_id = self.request.query_params.get("device")
+        device_id = uuid_query_param(self.request, "device")
         if device_id:
             queryset = queryset.filter(device_id=device_id)
 
@@ -71,8 +80,8 @@ class CaseProgressNoteViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
             return CaseProgressNote.objects.none()
         queryset = scope_by_case(CaseProgressNote.objects.all(), user)
 
-        case_id = self.request.query_params.get("case")
-        if case_id:
+        case_id = int_query_param(self.request, "case")
+        if case_id is not None:
             queryset = queryset.filter(case_id=case_id)
 
         return queryset
@@ -109,8 +118,8 @@ class WeeklyEpisodeLogViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = scope_by_case(WeeklyEpisodeLog.objects.all(), self.request.user)
 
-        case_id = self.request.query_params.get("case")
-        if case_id:
+        case_id = int_query_param(self.request, "case")
+        if case_id is not None:
             queryset = queryset.filter(case_id=case_id)
 
         return queryset

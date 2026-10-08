@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/auth/auth_state.dart';
+import '../../../core/notifications/fcm_service.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
 
@@ -32,25 +33,67 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final ChatRepository _repo;
   final ChatConversation conversation;
   Timer? _pollTimer;
+  StreamSubscription<int>? _incomingSubscription;
 
-  ChatNotifier(this._repo, this.conversation) : super(ChatState()) {
+  /// أحدث id جاء من الخادم عبر الـ polling. لا يتأثر برسائل أرسلناها نحن،
+  /// حتى لا نتخطى رسالة من الطرف الآخر حُفظت قبل رسالتنا مباشرة.
+  int? _lastPolledId;
+  bool _isLoading = false;
+  bool _reloadQueued = false;
+
+  static const _pollInterval = Duration(seconds: 8);
+
+  ChatNotifier(this._repo, this.conversation, Stream<int> incomingChatMessages)
+      : super(ChatState()) {
     _load();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _load(silent: true));
+    _pollTimer = Timer.periodic(_pollInterval, (_) => _load(silent: true));
+    // رسالة FCM لهذه الحالة والتطبيق مفتوح: نحدّث فوراً بدل انتظار المؤقّت
+    _incomingSubscription = incomingChatMessages
+        .where((caseId) => caseId == conversation.caseId)
+        .listen((_) => _load(silent: true));
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_isLoading) {
+      // طلب جارٍ بدأ قبل وصول الرسالة الجديدة ربما — نعيد مرة بعد انتهائه
+      _reloadQueued = true;
+      return;
+    }
+    _isLoading = true;
     if (!silent) state = state.copyWith(isLoading: true);
     try {
-      final messages = await _repo.getMessages(
+      final fetched = await _repo.getMessages(
         conversation.caseId,
         conversation.inquiryType,
+        afterId: _lastPolledId,
       );
       // الشاشة قد تُغلق أثناء الطلب (autoDispose) — لا نكتب حالة بعد التفكيك
       if (!mounted) return;
-      state = state.copyWith(messages: messages, isLoading: false);
+      for (final message in fetched) {
+        if (_lastPolledId == null || message.id > _lastPolledId!) _lastPolledId = message.id;
+      }
+      state = state.copyWith(messages: _merge(state.messages, fetched), isLoading: false);
     } catch (_) {
       if (!silent && mounted) state = state.copyWith(isLoading: false);
+    } finally {
+      _isLoading = false;
+      if (_reloadQueued && mounted) {
+        _reloadQueued = false;
+        _load(silent: true);
+      }
     }
+  }
+
+  /// يضيف الجديد فقط (بلا تكرار لرسالة أرسلناها وجاءت أيضاً من الـ polling)
+  /// ويرتّب حسب الـ id، أي حسب ترتيب الحفظ في الخادم.
+  static List<ChatMessageModel> _merge(
+    List<ChatMessageModel> existing,
+    List<ChatMessageModel> incoming,
+  ) {
+    if (incoming.isEmpty) return existing;
+    final knownIds = existing.map((m) => m.id).toSet();
+    return [...existing, ...incoming.where((m) => !knownIds.contains(m.id))]
+      ..sort((a, b) => a.id.compareTo(b.id));
   }
 
   /// يرمي الاستثناء عند الفشل كي تُبقي الشاشة النص وتعرض الخطأ.
@@ -62,12 +105,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
       text.trim(),
     );
     if (!mounted) return;
-    state = state.copyWith(messages: [...state.messages, sent]);
+    state = state.copyWith(messages: _merge(state.messages, [sent]));
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _incomingSubscription?.cancel();
     super.dispose();
   }
 }
@@ -76,37 +120,40 @@ class ChatNotifier extends StateNotifier<ChatState> {
 /// مغادرة شاشة المحادثة، ولا تُعلَّم الرسائل كمقروءة في الخلفية.
 final chatProvider =
     StateNotifierProvider.autoDispose.family<ChatNotifier, ChatState, ChatConversation>(
-  (ref, conversation) => ChatNotifier(ref.watch(chatRepositoryProvider), conversation),
+  (ref, conversation) => ChatNotifier(
+    ref.watch(chatRepositoryProvider),
+    conversation,
+    FcmService.instance.chatMessages,
+  ),
 );
 
-/// يكرر [fetch] كل 15 ثانية ما دام المستخدم مسجّل دخوله وهناك من يستمع.
-/// مشاهدة authStateProvider تعيد بناء الـ provider عند الخروج، فيُفكَّك
-/// الـ stream القديم وتتوقف الحلقة حتى لو بقيت شاشة تستمع لحظة الانتقال.
-Stream<T> _pollWhileLoggedIn<T>(
-  Ref ref,
-  Future<T> Function() fetch,
-  T fallback,
-) async* {
+/// خريطة {caseId: عدد غير المقروء} — تُستخدم لعرض badge بجانب كل Case بالواجهة.
+/// الـ polling الوحيد لعدّاد غير المقروء: كل 15 ثانية، أو فوراً عند وصول
+/// رسالة FCM. يتوقف حين لا يستمع أحد (autoDispose)، وفور تسجيل الخروج:
+/// مشاهدة authStateProvider تعيد بناء الـ provider فيُفكَّك الـ stream القديم.
+final unreadByCaseProvider = StreamProvider.autoDispose<Map<int, int>>((ref) async* {
   if (ref.watch(authStateProvider) is! AuthAuthenticated) return;
+  final repo = ref.watch(chatRepositoryProvider);
+
   var active = true;
-  ref.onDispose(() => active = false);
+  Completer<void>? wake;
+  final incoming = FcmService.instance.chatMessages.listen((_) {
+    final pending = wake;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  });
+  ref.onDispose(() {
+    active = false;
+    incoming.cancel();
+  });
+
   while (active) {
     try {
-      yield await fetch();
+      yield await repo.getUnreadByCase();
     } catch (_) {
-      yield fallback;
+      yield const <int, int>{};
     }
-    await Future.delayed(const Duration(seconds: 15));
+    final next = Completer<void>();
+    wake = next;
+    await Future.any([Future<void>.delayed(const Duration(seconds: 15)), next.future]);
   }
-}
-
-final unreadCountProvider = StreamProvider.autoDispose<int>((ref) {
-  final repo = ref.watch(chatRepositoryProvider);
-  return _pollWhileLoggedIn(ref, repo.getUnreadTotal, 0);
-});
-
-/// خريطة {caseId: عدد غير المقروء} — تُستخدم لعرض badge بجانب كل Case بالواجهة
-final unreadByCaseProvider = StreamProvider.autoDispose<Map<int, int>>((ref) {
-  final repo = ref.watch(chatRepositoryProvider);
-  return _pollWhileLoggedIn(ref, repo.getUnreadByCase, const <int, int>{});
 });

@@ -11,18 +11,13 @@ class PatientRepository {
   PatientRepository(this._client);
   final ApiClient _client;
 
-  List<T> _extractList<T>(dynamic data, T Function(Map<String, dynamic>) fromJson) {
-    final results = data is Map && data.containsKey('results') ? data['results'] as List : data as List;
-    return results.map((e) => fromJson(e as Map<String, dynamic>)).toList();
-  }
-
   /// يجلب جلسات المريض الحالي.
   /// الـ backend يفلتر تلقائياً حسب هوية المستخدم المسجّل دخوله
   /// (نفس منطق queryset في CaseViewSet)، لذا لا حاجة لإرسال أي معرف هنا.
   Future<List<SessionModel>> fetchMySessions() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.sessions);
-      return _extractList(response.data, SessionModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.sessions);
+      return items.map(SessionModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -33,8 +28,8 @@ class PatientRepository {
   /// نُفضّل أحدث حالة غير مغلقة.
   Future<CaseModel?> fetchMyCase() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.cases);
-      final cases = _extractList(response.data, CaseModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.cases);
+      final cases = items.map(CaseModel.fromJson).toList();
       if (cases.isEmpty) return null;
       final active = cases.where((c) => c.status.apiValue != 'closed');
       return active.isNotEmpty ? active.first : cases.first;

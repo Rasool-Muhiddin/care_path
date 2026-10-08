@@ -67,7 +67,22 @@ class AuthRepository {
     }
   }
 
+  /// يُبطل الـ refresh token في الخادم (blacklist) ثم يمسح التوكنات محلياً.
+  /// Dio مستقل بلا interceptor: لا نريد محاولة تجديد إن رُفض الطلب، ولا
+  /// نؤخّر الخروج أكثر من 5 ثوانٍ. بلا شبكة يُمسح محلياً فقط ويبقى الـ
+  /// refresh صالحاً في الخادم إلى أن تنتهي مدته.
   Future<void> logout() async {
+    final refreshToken = await TokenStorage.instance.refreshToken;
+    if (refreshToken != null) {
+      try {
+        await Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        )).post(ApiEndpoints.logout, data: {'refresh': refreshToken});
+      } catch (_) {
+        // الخروج يكتمل محلياً على أي حال
+      }
+    }
     await TokenStorage.instance.clear();
   }
 }

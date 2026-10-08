@@ -1,6 +1,8 @@
+from django.db.models import Exists, OuterRef
 from rest_framework import viewsets, permissions
 
 from accounts.permissions import IsEngineer
+from config.drf import int_query_param
 from .models import Clinic, Device, DeviceType
 from .serializers import ClinicSerializer, DeviceSerializer, DeviceTypeSerializer
 
@@ -11,7 +13,7 @@ class ClinicViewSet(viewsets.ModelViewSet):
     لا يحتاج الطبيب أو المريض رؤية قائمة العيادات إطلاقاً.
     """
 
-    queryset = Clinic.objects.all()
+    queryset = Clinic.objects.order_by("name", "pk")
     serializer_class = ClinicSerializer
     permission_classes = [permissions.IsAuthenticated, IsEngineer]
 
@@ -23,7 +25,7 @@ class DeviceTypeViewSet(viewsets.ModelViewSet):
     DeviceSerializer (device_type_name, device_type_setup_schema).
     """
 
-    queryset = DeviceType.objects.all()
+    queryset = DeviceType.objects.order_by("name")
     serializer_class = DeviceTypeSerializer
     permission_classes = [permissions.IsAuthenticated, IsEngineer]
 
@@ -54,32 +56,25 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == "engineer":
-            queryset = Device.objects.all()
-        elif user.role == "doctor":
-            queryset = Device.objects.all()
-        else:
+        if user.role not in ("engineer", "doctor"):
             # أي دور آخر (بما فيه المريض) لا يرى شيئاً من هنا
             return Device.objects.none()
 
+        # استيراد محلي لتفادي أي استيراد دائري بين التطبيقين
+        from cases.models import Case, CaseStatus
+
+        # is_linked: هل الجهاز مع مريض حالياً (حالة غير مغلقة)؟ يُحسب داخل
+        # نفس الاستعلام (EXISTS) بدل استعلام لكل جهاز في DeviceSerializer.
+        active_cases = Case.objects.filter(device=OuterRef("pk")).exclude(status=CaseStatus.CLOSED)
+        exclude_case_id = int_query_param(self.request, "exclude_case")
+        if exclude_case_id is not None:
+            active_cases = active_cases.exclude(pk=exclude_case_id)
+
+        queryset = (
+            Device.objects.select_related("clinic", "device_type")
+            .annotate(is_linked=Exists(active_cases))
+            .order_by("serial_number")
+        )
         if self.request.query_params.get("available") == "true":
-            # استيراد محلي لتفادي أي استيراد دائري بين التطبيقين
-            from cases.models import Case, CaseStatus
-
-            linked_cases = Case.objects.exclude(device__isnull=True).exclude(
-                status=CaseStatus.CLOSED
-            )
-
-            exclude_case_id = self.request.query_params.get("exclude_case")
-            if exclude_case_id:
-                linked_cases = linked_cases.exclude(pk=exclude_case_id)
-
-            linked_device_ids = linked_cases.values_list("device_id", flat=True)
-            queryset = queryset.exclude(id__in=linked_device_ids)
-
-        return queryset.distinct()
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context["exclude_case_id"] = self.request.query_params.get("exclude_case")
-        return context
+            queryset = queryset.filter(is_linked=False)
+        return queryset

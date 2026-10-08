@@ -68,13 +68,19 @@ class CaseSerializer(serializers.ModelSerializer):
             return None
         return obj.doctor.get_full_name() or obj.doctor.username
 
+    def _sessions_count(self, obj):
+        # sessions_count محسوبة مسبقاً في CaseViewSet.get_queryset (annotate)؛
+        # الاستعلام المنفصل فقط لنسخة لم تمر عليه (مثل رد الإنشاء).
+        count = getattr(obj, "sessions_count", None)
+        return obj.sessions.count() if count is None else count
+
     def get_completed_sessions_count(self, obj):
-        return obj.sessions.count()
+        return self._sessions_count(obj)
 
     def get_remaining_sessions_count(self, obj):
         if obj.total_sessions_planned is None:
             return None
-        remaining = obj.total_sessions_planned - obj.sessions.count()
+        remaining = obj.total_sessions_planned - self._sessions_count(obj)
         return max(remaining, 0)
 
     def get_pending_weekly_episode_week(self, obj):

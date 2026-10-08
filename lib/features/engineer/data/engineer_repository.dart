@@ -18,17 +18,12 @@ class EngineerRepository {
   EngineerRepository(this._client);
   final ApiClient _client;
 
-  List<T> _extractList<T>(dynamic data, T Function(Map<String, dynamic>) fromJson) {
-    final results = data is Map && data.containsKey('results') ? data['results'] as List : data as List;
-    return results.map((e) => fromJson(e as Map<String, dynamic>)).toList();
-  }
-
   // --- Devices ---
 
   Future<List<EngineerDeviceModel>> fetchDevices() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.devices);
-      return _extractList(response.data, EngineerDeviceModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.devices);
+      return items.map(EngineerDeviceModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -57,11 +52,11 @@ class EngineerRepository {
   /// كل الحالات (عبر الزمن) التي ارتبطت بجهاز معيّن — لشاشة تفاصيل الجهاز
   Future<List<CaseSummaryModel>> fetchCasesForDevice(String deviceId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.cases,
         queryParameters: {'device': deviceId},
       );
-      return _extractList(response.data, CaseSummaryModel.fromJson);
+      return items.map(CaseSummaryModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -70,13 +65,12 @@ class EngineerRepository {
   /// عدد الجلسات المسجّلة لحالة معيّنة — لعرض "حالة الالتزام" ببساطة
   Future<int> fetchSessionsCountForCase(int caseId) async {
     try {
+      // حقل count من الترقيم: لا داعي لتحميل الجلسات نفسها لعدّها
       final response = await _client.raw.get(
         ApiEndpoints.sessions,
-        queryParameters: {'case': caseId},
+        queryParameters: {'case': caseId, 'page_size': 1},
       );
-      final data = response.data;
-      final results = data is Map && data.containsKey('results') ? data['results'] as List : data as List;
-      return results.length;
+      return (response.data as Map<String, dynamic>)['count'] as int;
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -85,11 +79,11 @@ class EngineerRepository {
   /// كل جلسات حالة معيّنة (مع التواريخ) — لشاشة تفاصيل المريض عند المهندس
   Future<List<SessionModel>> fetchSessionsForCase(int caseId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.sessions,
         queryParameters: {'case': caseId},
       );
-      return _extractList(response.data, SessionModel.fromJson);
+      return items.map(SessionModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -98,11 +92,11 @@ class EngineerRepository {
   /// تقارير النوبات الأسبوعية لحالة معيّنة — لبناء شارت (جلسات مقابل نوبات)
   Future<List<WeeklyEpisodeLogModel>> fetchWeeklyEpisodeLogs(int caseId) async {
     try {
-      final response = await _client.raw.get(
+      final items = await _client.getAllPages(
         ApiEndpoints.weeklyEpisodeLogs,
         queryParameters: {'case': caseId},
       );
-      return _extractList(response.data, WeeklyEpisodeLogModel.fromJson);
+      return items.map(WeeklyEpisodeLogModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -112,8 +106,8 @@ class EngineerRepository {
 
   Future<List<ClinicModel>> fetchClinics() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.clinics);
-      return _extractList(response.data, ClinicModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.clinics);
+      return items.map(ClinicModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -142,8 +136,8 @@ class EngineerRepository {
   /// فريق المهندسين — لاختيار "المهندس المسؤول" عند إنشاء عيادة
   Future<List<EngineerModel>> fetchEngineers() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.engineers);
-      return _extractList(response.data, EngineerModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.engineers);
+      return items.map(EngineerModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -152,8 +146,8 @@ class EngineerRepository {
   /// قائمة الأطباء كاملة، حتى إن لم ترتبط بهم حالات حتى الآن.
   Future<List<DoctorModel>> fetchDoctors() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.doctors);
-      return _extractList(response.data, DoctorModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.doctors);
+      return items.map(DoctorModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -161,8 +155,8 @@ class EngineerRepository {
 
   Future<List<PatientModel>> fetchPatients() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.patients);
-      return _extractList(response.data, PatientModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.patients);
+      return items.map(PatientModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -171,8 +165,8 @@ class EngineerRepository {
   /// المهندس يملك صلاحية قراءة كل الحالات؛ يحتوي الرد على الجلسات المنجزة.
   Future<List<CaseModel>> fetchAllCases() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.cases);
-      return _extractList(response.data, CaseModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.cases);
+      return items.map(CaseModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }
@@ -182,8 +176,8 @@ class EngineerRepository {
 
   Future<List<DeviceTypeModel>> fetchDeviceTypes() async {
     try {
-      final response = await _client.raw.get(ApiEndpoints.deviceTypes);
-      return _extractList(response.data, DeviceTypeModel.fromJson);
+      final items = await _client.getAllPages(ApiEndpoints.deviceTypes);
+      return items.map(DeviceTypeModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

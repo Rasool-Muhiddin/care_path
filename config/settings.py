@@ -84,6 +84,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "rest_framework",
     "rest_framework_simplejwt",
+    # جدول refresh tokens المُبطلة (بعد التدوير أو تسجيل الخروج)
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "accounts",
     "devices",
@@ -122,6 +124,8 @@ REST_FRAMEWORK = {
     ),
     # خرق قيود قاعدة البيانات (طلبات متزامنة مثلاً) يرجع 400 وليس 500
     "EXCEPTION_HANDLER": "config.drf.api_exception_handler",
+    # كل القوائم مرقّمة (50 افتراضياً، حتى 200 بـ ?page_size=)
+    "DEFAULT_PAGINATION_CLASS": "config.drf.DefaultPagination",
     # تحديد المعدّل: يحمي تسجيل الدخول من تخمين كلمات المرور. الطلبات غير
     # المسجّلة (login / فحص التحديث) محدودة لكل IP، والمسجّلة لكل مستخدم.
     # الدردشة تعمل بالـ polling فالحد المسجّل مرتفع عمداً.
@@ -134,14 +138,19 @@ REST_FRAMEWORK = {
         "user": os.environ.get('THROTTLE_USER', '1200/min'),
     },
     # عدد الـ proxies أمام Django (nginx = 1) ليُقرأ IP العميل الحقيقي
-    # من X-Forwarded-For بدل IP الـ proxy نفسه.
+    # من X-Forwarded-For بدل IP الـ proxy نفسه. Cloudflare لا يُحتسب هنا:
+    # nginx يستعيد IP العميل من CF-Connecting-IP (deploy/nginx-cloudflare-realip.conf)
+    # ثم يضعه وحده في X-Forwarded-For (deploy/axon-proxy.conf).
     "NUM_PROXIES": env_int('NUM_PROXIES', 1 if not DEBUG else 0) or None,
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    # كل تجديد يعطي refresh جديداً ويُبطل القديم؛ وتسجيل الخروج يُبطل
+    # الحالي (POST /api/auth/logout/) — refresh مسروق لا يعيش بعد ذلك.
     "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 

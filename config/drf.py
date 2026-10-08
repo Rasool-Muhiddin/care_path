@@ -5,12 +5,18 @@
   واضحة بدل 500.
 - AtomicSaveMixin: يحفظ داخل transaction.atomic حتى يُلغى الـ savepoint
   عند IntegrityError وتبقى بقية الطلب (والاختبارات) سليمة.
+- DefaultPagination: ترقيم صفحات افتراضي لكل القوائم.
+- int_query_param / uuid_query_param: قراءة معاملات الفلترة (?case=,
+  ?device=, ...) مع إرجاع 400 عند قيمة غير صالحة بدل 500.
 """
 
 import logging
+import uuid
 
 from django.db import IntegrityError, transaction
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -57,3 +63,40 @@ class AtomicSaveMixin:
     def perform_update(self, serializer):
         with transaction.atomic():
             serializer.save()
+
+
+class DefaultPagination(PageNumberPagination):
+    """
+    50 عنصراً في الصفحة افتراضياً، والعميل يطلب حتى 200 بـ ?page_size=.
+    تطبيق Flutter يتبع رابط "next" ليجمع القوائم التي يحتاجها كاملة
+    (ApiClient.getAllPages)، فلا يُرجع أي طلب واحد أكثر من 200 عنصر.
+    """
+
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
+def int_query_param(request, name):
+    """يرجع قيمة ?name= كعدد صحيح، أو None إن لم تُرسل؛ 400 إن كانت غير صالحة."""
+    raw = request.query_params.get(name)
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValidationError({name: "يجب أن يكون رقماً صحيحاً."})
+    if value < 0:
+        raise ValidationError({name: "يجب أن يكون رقماً صحيحاً."})
+    return value
+
+
+def uuid_query_param(request, name):
+    """يرجع قيمة ?name= كـ UUID، أو None إن لم تُرسل؛ 400 إن كانت غير صالحة."""
+    raw = request.query_params.get(name)
+    if raw in (None, ""):
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        raise ValidationError({name: "معرّف غير صالح."})

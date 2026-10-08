@@ -34,6 +34,33 @@ class ApiClient {
 
   Dio get raw => _dio;
 
+  /// أكبر صفحة يقبلها الخادم (config.drf.DefaultPagination.max_page_size)
+  static const maxPageSize = 200;
+
+  /// يجلب كل عناصر قائمة مرقّمة: يطلب الصفحات بالترتيب (?page=1,2,...)
+  /// إلى أن يصبح "next" فارغاً. نبني رقم الصفحة بأنفسنا بدل اتباع رابط
+  /// "next" المطلق، لأن الخادم خلف proxy قد يكتبه بـ http بدل https.
+  /// يقبل أيضاً endpoint غير مرقّم (يرجع List مباشرة).
+  Future<List<Map<String, dynamic>>> getAllPages(
+    String url, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final items = <Map<String, dynamic>>[];
+    for (var page = 1;; page++) {
+      final response = await _dio.get(url, queryParameters: {
+        ...?queryParameters,
+        'page': page,
+        'page_size': maxPageSize,
+      });
+      final data = response.data;
+      if (data is List) {
+        return items..addAll(data.cast<Map<String, dynamic>>());
+      }
+      items.addAll((data['results'] as List).cast<Map<String, dynamic>>());
+      if (data['next'] == null) return items;
+    }
+  }
+
   /// تجديد واحد فقط في أي لحظة: إذا انتهى الـ token وفشلت عدة طلبات معاً
   /// (مثلاً جلسات + تقارير نوبات عند فتح شاشة)، تنتظر كلها نفس عملية التجديد
   /// بدل أن يبدأ كل طلب تجديداً خاصاً به ويتسابقون على الكتابة في التخزين.
@@ -97,7 +124,9 @@ class ApiClient {
         data: {'refresh': refreshToken},
       );
       final newAccess = response.data['access'] as String;
-      // إن فعّلت ROTATE_REFRESH_TOKENS يرجع الخادم refresh جديداً أيضاً.
+      // ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: الخادم يرجع refresh
+      // جديداً ويُبطل القديم، فيجب حفظه فوراً. التجديد يجري مرة واحدة فقط
+      // حتى لو فشلت عدة طلبات معاً (_refreshing)، فلا يُستعمل refresh مُبطل.
       final newRefresh = response.data['refresh'] as String?;
       if (newRefresh != null) {
         await TokenStorage.instance.saveTokens(

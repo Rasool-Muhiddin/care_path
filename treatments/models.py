@@ -43,6 +43,10 @@ class TreatmentSession(models.Model):
 
     class Meta:
         ordering = ["-session_date"]
+        indexes = [
+            # قاعدة "جلسة واحدة يومياً" (case + created_at__date) وجلسات الحالة
+            models.Index(fields=["case", "created_at"], name="session_case_created_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"Session {self.session_date:%Y-%m-%d} - Case #{self.case_id}"

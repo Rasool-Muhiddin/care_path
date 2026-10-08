@@ -7,7 +7,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from config.testing import CareWorldMixin
+from config.testing import CareWorldMixin, make_user, results
+from treatments.models import TreatmentSession
 from feedback.models import Feedback
 
 from .models import Case, CaseProgressNote, CaseStatus, WeeklyEpisodeLog, pending_weekly_episode_week
@@ -26,7 +27,7 @@ class PatientCaseReadOnlyTests(CareWorldMixin, APITestCase):
     def test_patient_lists_only_own_case(self):
         response = self.client_for(self.patient_1).get(CASES)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([c["id"] for c in response.data], [self.case_1.pk])
+        self.assertEqual([c["id"] for c in results(response)], [self.case_1.pk])
 
     def test_patient_cannot_retrieve_other_patients_case(self):
         response = self.client_for(self.patient_1).get(case_url(self.case_2))
@@ -324,7 +325,7 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
         for url in (CASES, "/api/case-progress-notes/", "/api/weekly-episode-logs/"):
             response = client.get(url)
             self.assertEqual(response.status_code, status.HTTP_200_OK, url)
-            self.assertEqual(response.data, [], url)
+            self.assertEqual(results(response), [], url)
 
     def test_unknown_role_cannot_create_case(self):
         response = self.client_for(self.no_role).post(
@@ -334,11 +335,11 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
 
     def test_patient_sees_no_progress_notes(self):
         response = self.client_for(self.patient_1).get("/api/case-progress-notes/")
-        self.assertEqual(response.data, [])
+        self.assertEqual(results(response), [])
 
     def test_engineer_still_sees_everything(self):
         response = self.client_for(self.engineer).get(CASES)
-        self.assertEqual(len(response.data), 3)
+        self.assertEqual(len(results(response)), 3)
 
 
 class WeeklyWeekTimezoneTests(CareWorldMixin, APITestCase):
@@ -365,3 +366,76 @@ class WeeklyWeekTimezoneTests(CareWorldMixin, APITestCase):
             self.pending_at(datetime(2026, 10, 12, 7, 0, tzinfo=dt_timezone.utc)),
             date(2026, 10, 5),
         )
+
+
+
+class CaseListQueryCountTests(CareWorldMixin, APITestCase):
+    """P1: عدد استعلامات قائمة الحالات ثابت مهما زادت الحالات (لا N+1)."""
+
+    # count (الترقيم) + الحالات مع JOIN وعدد الجلسات + prefetch التقارير الأسبوعية
+    EXPECTED_QUERIES = 3
+
+    def add_cases(self, n):
+        for i in range(n):
+            patient = make_user(f"extra_patient_{i}", "patient")
+            case = Case.objects.create(patient=patient, doctor=self.doctor_a, diagnosis_type="migraine")
+            TreatmentSession.objects.create(case=case, session_date=timezone.now())
+            WeeklyEpisodeLog.objects.create(case=case, week_start_date=timezone.localdate(), episode_count=1)
+
+    def test_case_list_query_count_is_constant(self):
+        client = self.client_for(self.engineer)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            client.get(CASES)
+        self.add_cases(5)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            response = client.get(CASES)
+        self.assertEqual(response.data["count"], 8)
+
+    def test_session_counts_are_still_correct(self):
+        TreatmentSession.objects.create(case=self.case_1, session_date=timezone.now())
+        Case.objects.filter(pk=self.case_1.pk).update(total_sessions_planned=10)
+        data = {c["id"]: c for c in results(self.client_for(self.engineer).get(CASES))}
+        self.assertEqual(data[self.case_1.pk]["completed_sessions_count"], 2)
+        self.assertEqual(data[self.case_1.pk]["remaining_sessions_count"], 8)
+        self.assertEqual(data[self.case_2.pk]["completed_sessions_count"], 1)
+
+
+class PaginationTests(CareWorldMixin, APITestCase):
+    """P4: القوائم مرقّمة، والحد الأقصى للصفحة 200."""
+
+    def test_list_is_paginated(self):
+        response = self.client_for(self.engineer).get(CASES, {"page_size": 2})
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertIsNotNone(response.data["next"])
+
+    def test_page_size_is_capped(self):
+        for i in range(205):
+            make_user(f"bulk_{i}", "patient")
+        response = self.client_for(self.engineer).get("/api/patients/", {"page_size": 1000})
+        self.assertEqual(len(response.data["results"]), 200)
+
+
+class InvalidQueryParamTests(CareWorldMixin, APITestCase):
+    """Q13: معاملات فلترة غير صالحة ترجع 400 وليس 500."""
+
+    def test_invalid_filters_return_400(self):
+        client = self.client_for(self.engineer)
+        for url, params in (
+            (CASES, {"device": "abc"}),
+            ("/api/case-progress-notes/", {"case": "abc"}),
+            ("/api/weekly-episode-logs/", {"case": "abc"}),
+            ("/api/sessions/", {"case": "abc"}),
+            ("/api/sessions/", {"case": "-1"}),
+            ("/api/devices/", {"exclude_case": "abc"}),
+            ("/api/devices/", {"available": "true", "exclude_case": "1.5"}),
+        ):
+            response = client.get(url, params)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, (url, params))
+
+    def test_valid_filters_still_work(self):
+        client = self.client_for(self.engineer)
+        response = client.get(CASES, {"device": str(self.device_1.pk)})
+        self.assertEqual([c["id"] for c in results(response)], [self.case_1.pk])
+        response = client.get("/api/sessions/", {"case": self.case_2.pk})
+        self.assertEqual([s["id"] for s in results(response)], [self.session_2.pk])

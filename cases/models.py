@@ -172,6 +172,10 @@ class Case(models.Model):
                 name="one_case_per_device",
             ),
         ]
+        indexes = [
+            # فحص "حالة نشطة واحدة" وقائمة حالات المريض
+            models.Index(fields=["patient", "status"], name="case_patient_status_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"Case #{self.pk} - {self.patient} ({self.get_diagnosis_type_display()})"
@@ -244,9 +248,8 @@ def pending_weekly_episode_week(case):
     # تاريخ الإنشاء بتوقيت بغداد، وليس UTC: حالة أُنشئت ليلة الاثنين
     # الساعة 00:30 هي يوم الاثنين محلياً لكنها الأحد في UTC.
     first_week_start = _week_start(timezone.localdate(case.created_at))
-    reported_weeks = set(
-        case.weekly_episode_logs.values_list("week_start_date", flat=True)
-    )
+    # .all() (وليس values_list) حتى يستفيد من prefetch_related في قائمة الحالات
+    reported_weeks = {log.week_start_date for log in case.weekly_episode_logs.all()}
 
     week = first_week_start
     while week + timedelta(days=7) <= today:

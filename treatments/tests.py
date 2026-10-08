@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from cases.models import Case, CaseStatus
-from config.testing import CareWorldMixin
+from config.testing import CareWorldMixin, results
 
 from .models import TreatmentSession
 
@@ -64,11 +64,11 @@ class SessionScopeTests(CareWorldMixin, APITestCase):
 
     def test_patient_sees_only_own_sessions(self):
         response = self.client_for(self.patient_1).get(SESSIONS)
-        self.assertEqual([s["id"] for s in response.data], [self.session_1.pk])
+        self.assertEqual([s["id"] for s in results(response)], [self.session_1.pk])
 
     def test_unknown_role_sees_and_creates_nothing(self):
         client = self.client_for(self.no_role)
-        self.assertEqual(client.get(SESSIONS).data, [])
+        self.assertEqual(results(client.get(SESSIONS)), [])
         response = client.post(SESSIONS, payload(self.case_1), format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 

@@ -9,11 +9,20 @@ class ChatRepository {
   final ApiClient _apiClient;
   ChatRepository(this._apiClient);
 
-  Future<List<ChatMessageModel>> getMessages(int caseId, InquiryType inquiryType) async {
+  /// [afterId]: يرجع فقط الرسائل الأحدث من هذا الـ id (polling تزايدي)؛
+  /// بدونه يرجع المحادثة كاملة (أول تحميل للشاشة).
+  Future<List<ChatMessageModel>> getMessages(
+    int caseId,
+    InquiryType inquiryType, {
+    int? afterId,
+  }) async {
     try {
       final response = await _apiClient.raw.get(
         ApiEndpoints.caseMessages(caseId),
-        queryParameters: {'inquiry_type': inquiryType.apiValue},
+        queryParameters: {
+          'inquiry_type': inquiryType.apiValue,
+          if (afterId != null) 'after_id': afterId,
+        },
       );
       return (response.data as List).map((e) => ChatMessageModel.fromJson(e)).toList();
     } on DioException catch (e) {
@@ -28,15 +37,6 @@ class ChatRepository {
         data: {'text': text, 'inquiry_type': inquiryType.apiValue},
       );
       return ChatMessageModel.fromJson(response.data);
-    } on DioException catch (e) {
-      throw _apiClient.mapError(e);
-    }
-  }
-
-  Future<int> getUnreadTotal() async {
-    try {
-      final response = await _apiClient.raw.get(ApiEndpoints.chatUnreadCount);
-      return response.data['total_unread'] ?? 0;
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }

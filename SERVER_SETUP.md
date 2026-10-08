@@ -79,6 +79,8 @@
     sudo cp -a /etc/nginx /etc/nginx.bak-$(date +%F)
     sudo cp /var/www/axon/app/deploy/axon-proxy.conf /etc/nginx/snippets/axon-proxy.conf
     sudo cp /var/www/axon/app/deploy/nginx-cloudflare-realip.conf /etc/nginx/snippets/axon-cloudflare-realip.conf
+    sudo cp /var/www/axon/app/deploy/nginx-cloudflare-geo.conf /etc/nginx/snippets/axon-cloudflare-geo.conf
+    sudo cp /var/www/axon/app/deploy/nginx-cloudflare-only.conf /etc/nginx/snippets/axon-cloudflare-only.conf
     sudo cp /var/www/axon/app/deploy/nginx-axon.conf /etc/nginx/sites-available/axon
     sudo apt -y install apache2-utils && sudo htpasswd -c /etc/nginx/axon-admin.htpasswd ADMIN_NAME
     sudo ln -s /etc/nginx/sites-available/axon /etc/nginx/sites-enabled/axon
@@ -89,12 +91,28 @@
 لا تحذف `sites-enabled/default` ولا أي ملف آخر.
 
 ملاحظة Cloudflare: الملف axon-cloudflare-realip.conf يستعيد IP المستخدم الحقيقي من CF-Connecting-IP (للطلبات القادمة من نطاقات Cloudflare فقط)،
-فيعمل حد المعدّل في nginx وDjango على IP المستخدم سواء كان السجل Proxied أو DNS only.
-وإذا فعّلت Proxied فاجعل SSL/TLS في Cloudflare على وضع Full (strict) بعد إصدار الشهادة، وإلا ستحدث حلقة إعادة توجيه.
+فيعمل حد المعدّل في nginx وDjango على IP المستخدم الحقيقي.
+اجعل SSL/TLS في Cloudflare على وضع Full (strict) بعد إصدار الشهادة، وإلا ستحدث حلقة إعادة توجيه.
+
+> **⚠️ مهم قبل النشر: سجل DNS الخاص بـ axon يجب أن يكون Proxied (السحابة البرتقالية) في Cloudflare.**
+> كتلة 443 تقبل فقط الطلبات القادمة من خوادم Cloudflare (axon-cloudflare-only.conf، الخطوة 9).
+> لو كان السجل DNS only (سحابة رمادية)، تصل كل الطلبات مباشرة إلى السيرفر فيُغلق nginx **كل** الاتصالات بـ 444 (بلا رد)، ويتوقف التطبيق بالكامل.
+> تحقّق: `dig +short axon.tera-software1.com` يجب أن يرجع عناوين Cloudflare (مثل 104.x أو 172.6x) وليس IP السيرفر.
+> القفل على axon فقط: مواقع السيرفر الأخرى غير متأثرة، والمنفذ 80 غير مقفل (يبقى تحويل HTTP وتجديد certbot يعملان).
 
 ## 9) شهادة HTTPS (للدومين الجديد فقط)
     sudo certbot --nginx -d axon.tera-software1.com -m YOUR_EMAIL --agree-tos --redirect
 certbot يعدّل كتلة هذا الدومين فقط. التجديد التلقائي موجود؛ تحقق: `sudo certbot renew --dry-run`.
+
+بعد certbot، اقفل كتلة 443 على Cloudflare فقط (وليس كتلة المنفذ 80). افتح `/etc/nginx/sites-available/axon`،
+وداخل كتلة `server { ... listen 443 ssl ... }` الخاصة بـ axon أضف هذا السطر بجانب سطر include الخاص بـ realip:
+    include /etc/nginx/snippets/axon-cloudflare-only.conf;
+ثم (بعد التأكد أن سجل DNS على Proxied):
+    sudo nginx -t && sudo systemctl reload nginx
+تحقّق: عبر الدومين يعمل (`curl -sI https://axon.tera-software1.com/api/app-version/latest/`)،
+والاتصال المباشر بـ IP السيرفر يُغلق بلا رد:
+    curl -skI --resolve axon.tera-software1.com:443:SERVER_IP https://axon.tera-software1.com/   # يجب: Empty reply from server
+للتراجع فوراً: احذف سطر include هذا ثم `sudo nginx -t && sudo systemctl reload nginx`.
 
 ## 10) النسخ الاحتياطي اليومي (لقاعدة axon_db فقط)
     sudo cp /var/www/axon/app/deploy/backup_db.sh /usr/local/bin/axon-backup.sh

@@ -439,3 +439,69 @@ class InvalidQueryParamTests(CareWorldMixin, APITestCase):
         self.assertEqual([c["id"] for c in results(response)], [self.case_1.pk])
         response = client.get("/api/sessions/", {"case": self.case_2.pk})
         self.assertEqual([s["id"] for s in results(response)], [self.session_2.pk])
+
+
+
+class RelatedNameQueryCountTests(CareWorldMixin, APITestCase):
+    """Related 1: أسماء الكاتب/المنفّذ تُجلب بـ JOIN، لا استعلام لكل صف."""
+
+    # count (الترقيم) + القائمة مع JOIN على المستخدم
+    EXPECTED_QUERIES = 2
+
+    def assert_constant(self, url, add_rows):
+        # صف واحد على الأقل قبل القياس الأول: مع قائمة فارغة يكتفي DRF باستعلام العدّ
+        add_rows(1)
+        client = self.client_for(self.engineer)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            client.get(url)
+        add_rows(5)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            response = client.get(url)
+        self.assertGreaterEqual(response.data["count"], 5)
+
+    def test_progress_notes(self):
+        def add_rows(n):
+            for _ in range(n):
+                author = make_user(f"note_author_{CaseProgressNote.objects.count()}", "doctor")
+                CaseProgressNote.objects.create(
+                    case=self.case_1, author=author, note="n", sessions_completed_snapshot=0
+                )
+        self.assert_constant("/api/case-progress-notes/", add_rows)
+
+    def test_sessions(self):
+        def add_rows(n):
+            for _ in range(n):
+                performer = make_user(f"performer_{TreatmentSession.objects.count()}", "doctor")
+                TreatmentSession.objects.create(
+                    case=self.case_1, performed_by=performer, session_date=timezone.now()
+                )
+        self.assert_constant("/api/sessions/", add_rows)
+
+
+class OrderingTiebreakerTests(CareWorldMixin, APITestCase):
+    """Related 2: صفوف بنفس قيمة الترتيب لا تتكرر ولا تختفي بين الصفحات."""
+
+    def walk_pages(self, url):
+        client = self.client_for(self.engineer)
+        ids, page = [], 1
+        while True:
+            response = client.get(url, {"page": page, "page_size": 1})
+            ids += [row["id"] for row in results(response)]
+            if response.data["next"] is None:
+                return ids
+            page += 1
+
+    def test_cases_with_same_created_at(self):
+        Case.objects.update(created_at=timezone.now())
+        ids = self.walk_pages(CASES)
+        self.assertEqual(ids, sorted(ids, reverse=True))  # -created_at ثم -id
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_sessions_with_same_session_date(self):
+        same = timezone.now()
+        for _ in range(3):
+            TreatmentSession.objects.create(case=self.case_1, session_date=same)
+        TreatmentSession.objects.update(session_date=same)
+        ids = self.walk_pages("/api/sessions/")
+        self.assertEqual(ids, sorted(ids, reverse=True))
+        self.assertEqual(set(ids), set(TreatmentSession.objects.values_list("id", flat=True)))

@@ -24,9 +24,30 @@ class ChatConversation {
 class ChatState {
   final List<ChatMessageModel> messages;
   final bool isLoading;
-  ChatState({this.messages = const [], this.isLoading = false});
-  ChatState copyWith({List<ChatMessageModel>? messages, bool? isLoading}) =>
-      ChatState(messages: messages ?? this.messages, isLoading: isLoading ?? this.isLoading);
+
+  /// هل في الخادم رسائل أقدم من أول رسالة محمّلة؟
+  final bool hasOlder;
+  final bool isLoadingOlder;
+
+  ChatState({
+    this.messages = const [],
+    this.isLoading = false,
+    this.hasOlder = false,
+    this.isLoadingOlder = false,
+  });
+
+  ChatState copyWith({
+    List<ChatMessageModel>? messages,
+    bool? isLoading,
+    bool? hasOlder,
+    bool? isLoadingOlder,
+  }) =>
+      ChatState(
+        messages: messages ?? this.messages,
+        isLoading: isLoading ?? this.isLoading,
+        hasOlder: hasOlder ?? this.hasOlder,
+        isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+      );
 }
 
 class ChatNotifier extends StateNotifier<ChatState> {
@@ -62,6 +83,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _isLoading = true;
     if (!silent) state = state.copyWith(isLoading: true);
     try {
+      final isFirstPage = _lastPolledId == null;
       final fetched = await _repo.getMessages(
         conversation.caseId,
         conversation.inquiryType,
@@ -72,7 +94,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       for (final message in fetched) {
         if (_lastPolledId == null || message.id > _lastPolledId!) _lastPolledId = message.id;
       }
-      state = state.copyWith(messages: _merge(state.messages, fetched), isLoading: false);
+      state = state.copyWith(
+        messages: _merge(state.messages, fetched),
+        isLoading: false,
+        // أول تحميل يرجع آخر صفحة فقط؛ صفحة ممتلئة تعني غالباً وجود أقدم منها
+        hasOlder: isFirstPage ? fetched.length >= ChatRepository.pageSize : null,
+      );
     } catch (_) {
       if (!silent && mounted) state = state.copyWith(isLoading: false);
     } finally {
@@ -94,6 +121,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final knownIds = existing.map((m) => m.id).toSet();
     return [...existing, ...incoming.where((m) => !knownIds.contains(m.id))]
       ..sort((a, b) => a.id.compareTo(b.id));
+  }
+
+  /// يحمّل الصفحة الأقدم من أول رسالة معروضة (عند التمرير لأعلى المحادثة).
+  Future<void> loadOlder() async {
+    if (!state.hasOlder || state.isLoadingOlder || state.messages.isEmpty) return;
+    state = state.copyWith(isLoadingOlder: true);
+    try {
+      final older = await _repo.getMessages(
+        conversation.caseId,
+        conversation.inquiryType,
+        beforeId: state.messages.first.id,
+      );
+      if (!mounted) return;
+      state = state.copyWith(
+        messages: _merge(state.messages, older),
+        hasOlder: older.length >= ChatRepository.pageSize,
+        isLoadingOlder: false,
+      );
+    } catch (_) {
+      // فشل مؤقت: يمكن المحاولة مجدداً بالتمرير للأعلى مرة أخرى
+      if (mounted) state = state.copyWith(isLoadingOlder: false);
+    }
   }
 
   /// يرمي الاستثناء عند الفشل كي تُبقي الشاشة النص وتعرض الخطأ.

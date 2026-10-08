@@ -9,12 +9,18 @@ class ChatRepository {
   final ApiClient _apiClient;
   ChatRepository(this._apiClient);
 
-  /// [afterId]: يرجع فقط الرسائل الأحدث من هذا الـ id (polling تزايدي)؛
-  /// بدونه يرجع المحادثة كاملة (أول تحميل للشاشة).
+  /// حجم صفحة تاريخ المحادثة في الخادم (chat.views.CHAT_PAGE_SIZE)
+  static const pageSize = 50;
+
+  /// بلا معاملات: آخر [pageSize] رسالة (أول فتح للشاشة).
+  /// [afterId]: كل الرسائل الأحدث من هذا الـ id (polling تزايدي).
+  /// [beforeId]: الـ [pageSize] رسالة الأقدم منه (التمرير للأعلى).
+  /// الرد دائماً من الأقدم للأحدث.
   Future<List<ChatMessageModel>> getMessages(
     int caseId,
     InquiryType inquiryType, {
     int? afterId,
+    int? beforeId,
   }) async {
     try {
       final response = await _apiClient.raw.get(
@@ -22,6 +28,7 @@ class ChatRepository {
         queryParameters: {
           'inquiry_type': inquiryType.apiValue,
           if (afterId != null) 'after_id': afterId,
+          if (beforeId != null) 'before_id': beforeId,
         },
       );
       return (response.data as List).map((e) => ChatMessageModel.fromJson(e)).toList();

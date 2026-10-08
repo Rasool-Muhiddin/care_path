@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
@@ -17,20 +19,8 @@ import 'add_patient_dialog.dart';
 /// unit the doctor picked).
 enum _DurationUnit { minutes, hours }
 
-/// Category accent colors — every screen picks its palette from here so
-/// data reads by color instead of a flat, uniform white.
-class _Accent {
-  static const Color doctor = Color(0xFF5AC8FA);
-  static const Color patient = Color(0xFF34D399);
-  static const Color caseC = Color(0xFFFBBF24);
-  static const Color device = Color(0xFFA78BFA);
-  static const Color unlinked = Color(0xFFF87171);
-  static const Color clinic = Color(0xFF22D3EE);
-}
-
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
-  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
   static const sectionTitle = TextStyle(
     color: Colors.white,
     fontSize: 14,
@@ -38,38 +28,12 @@ class _Txt {
   );
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
   static const body = TextStyle(color: Colors.white, fontSize: 14);
-  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
-  static const error = TextStyle(color: Color(0xFFF87171));
-}
-
-/// Small circular badge behind a data-category icon: tinted fill,
-/// tinted border, colored icon — replaces flat white avatars/icons.
-class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.icon, required this.color, this.size = 40});
-  final IconData icon;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.18),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Icon(icon, color: color, size: size * 0.5),
-    );
-  }
 }
 
 /// A field label with a small colored leading icon, used above every
 /// section on this form instead of a plain white caption.
 class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text, {this.icon, this.color = _Accent.doctor});
+  const _FieldLabel(this.text, {this.icon, this.color = AppAccent.doctor});
   final String text;
   final IconData? icon;
   final Color color;
@@ -102,9 +66,9 @@ class _InlineErrorPanel extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 30),
+          IconBadge(icon: Icons.error_outline, color: AppAccent.unlinked, size: 30),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: _Txt.error)),
+          Expanded(child: Text(message, style: AppText.error)),
           const SizedBox(width: 8),
           _RetryButton(onPressed: onRetry),
         ],
@@ -205,14 +169,10 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
               deviceId: _selectedDevice?.id,
               diagnosisType: _selectedDiagnosis,
               diseaseType: _selectedDiseaseType,
-              monthlyEpisodeCount: _selectedDiagnosis.hasClinicalDetails
-                  ? int.tryParse(_monthlyEpisodeCountController.text.trim())
-                  : null,
-              episodeDurationMinutes:
-                  _selectedDiagnosis.hasClinicalDetails ? episodeDurationMinutes : null,
+              monthlyEpisodeCount: int.tryParse(_monthlyEpisodeCountController.text.trim()),
+              episodeDurationMinutes: episodeDurationMinutes,
               symptoms: _symptomsController.text.trim(),
-              currentMedications:
-                  _selectedDiagnosis.hasClinicalDetails ? _medicationsController.text.trim() : '',
+              currentMedications: _medicationsController.text.trim(),
               totalSessionsPlanned: int.tryParse(_totalSessionsController.text.trim()),
               initialEvaluation: _initialEvaluationController.text.trim(),
               treatmentPlan: _treatmentPlanController.text.trim(),
@@ -270,7 +230,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
     );
   }
 
-  Widget _sectionTitle(String text, {IconData? icon, Color color = _Accent.doctor}) =>
+  Widget _sectionTitle(String text, {IconData? icon, Color color = AppAccent.doctor}) =>
       _FieldLabel(text, icon: icon, color: color);
 
   @override
@@ -298,13 +258,13 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
                   // --- Attending doctor (auto-filled, read-only) ---
-                  _sectionTitle('Attending Doctor', icon: Icons.badge_outlined, color: _Accent.doctor),
+                  _sectionTitle('Attending Doctor', icon: Icons.badge_outlined, color: AppAccent.doctor),
                   const SizedBox(height: 8),
                   GlassContainer(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     child: Row(
                       children: [
-                        _IconBadge(icon: Icons.medical_services_outlined, color: _Accent.doctor, size: 32),
+                        IconBadge(icon: Icons.medical_services_outlined, color: AppAccent.doctor, size: 32),
                         const SizedBox(width: 10),
                         Text('Dr. $doctorDisplayName', style: _Txt.body),
                       ],
@@ -316,11 +276,11 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _sectionTitle('Patient', icon: Icons.person_outline, color: _Accent.patient),
+                      _sectionTitle('Patient', icon: Icons.person_outline, color: AppAccent.patient),
                       TextButton.icon(
                         onPressed: _isSubmitting ? null : _openAddPatientDialog,
                         style: TextButton.styleFrom(foregroundColor: Colors.white),
-                        icon: Icon(Icons.person_add_alt_1, size: 18, color: _Accent.patient),
+                        icon: Icon(Icons.person_add_alt_1, size: 18, color: AppAccent.patient),
                         label: const Text('Add New Patient'),
                       ),
                     ],
@@ -350,7 +310,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Device selection (optional) ---
-                  _sectionTitle('Device (optional)', icon: Icons.memory_outlined, color: _Accent.device),
+                  _sectionTitle('Device (optional)', icon: Icons.memory_outlined, color: AppAccent.device),
                   const SizedBox(height: 8),
                   devicesAsync.when(
                     loading: () => const LinearProgressIndicator(color: Colors.white),
@@ -378,7 +338,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Diagnosis type ---
-                  _sectionTitle('Diagnosis Type', icon: Icons.category_outlined, color: _Accent.caseC),
+                  _sectionTitle('Diagnosis Type', icon: Icons.category_outlined, color: AppAccent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<DiagnosisType>(
                     initialValue: _selectedDiagnosis,
@@ -405,7 +365,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // --- Disease sub-type — depends on the selected diagnosis:
                   // epilepsy types when Epilepsy is chosen, migraine types when
                   // Migraine is chosen. ---
-                  _sectionTitle('${_selectedDiagnosis.label} Type', icon: Icons.category_outlined, color: _Accent.caseC),
+                  _sectionTitle('${_selectedDiagnosis.label} Type', icon: Icons.category_outlined, color: AppAccent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _selectedDiseaseType,
@@ -421,7 +381,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   const SizedBox(height: 20),
 
                   // --- Symptoms ---
-                  _sectionTitle('Symptoms', icon: Icons.sick_outlined, color: _Accent.caseC),
+                  _sectionTitle('Symptoms', icon: Icons.sick_outlined, color: AppAccent.caseC),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _symptomsController,
@@ -433,70 +393,68 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   ),
 
                   // --- Clinical details (epilepsy/migraine only) ---
-                  if (_selectedDiagnosis.hasClinicalDetails) ...[
-                    const SizedBox(height: 20),
-                    _sectionTitle('Diagnosis Details', icon: Icons.analytics_outlined, color: _Accent.caseC),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _monthlyEpisodeCountController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  const SizedBox(height: 20),
+                  _sectionTitle('Diagnosis Details', icon: Icons.analytics_outlined, color: AppAccent.caseC),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _monthlyEpisodeCountController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          style: _Txt.body,
+                          cursorColor: Colors.white,
+                          decoration: glassInputDecoration('attack / month'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: TextFormField(
+                          controller: _episodeDurationController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          style: _Txt.body,
+                          cursorColor: Colors.white,
+                          decoration: glassInputDecoration('attack duration'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GlassContainer(
+                        borderRadius: 12,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<_DurationUnit>(
+                            value: _durationUnit,
+                            dropdownColor: AppGlassColors.baseDark,
                             style: _Txt.body,
-                            cursorColor: Colors.white,
-                            decoration: glassInputDecoration('attack / month'),
+                            iconEnabledColor: Colors.white70,
+                            items: const [
+                              DropdownMenuItem(value: _DurationUnit.minutes, child: Text('min')),
+                              DropdownMenuItem(value: _DurationUnit.hours, child: Text('hour')),
+                            ],
+                            onChanged: (value) => setState(() => _durationUnit = value!),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            controller: _episodeDurationController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            style: _Txt.body,
-                            cursorColor: Colors.white,
-                            decoration: glassInputDecoration('attack duration'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GlassContainer(
-                          borderRadius: 12,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<_DurationUnit>(
-                              value: _durationUnit,
-                              dropdownColor: AppGlassColors.baseDark,
-                              style: _Txt.body,
-                              iconEnabledColor: Colors.white70,
-                              items: const [
-                                DropdownMenuItem(value: _DurationUnit.minutes, child: Text('min')),
-                                DropdownMenuItem(value: _DurationUnit.hours, child: Text('hour')),
-                              ],
-                              onChanged: (value) => setState(() => _durationUnit = value!),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _medicationsController,
-                      maxLines: 2,
-                      style: _Txt.body,
-                      cursorColor: Colors.white,
-                      decoration: glassInputDecoration(
-                        'Current medications',
-                        helperText: null,
-                      ).copyWith(hintText: 'Enter medication names...'),
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _medicationsController,
+                    maxLines: 2,
+                    style: _Txt.body,
+                    cursorColor: Colors.white,
+                    decoration: glassInputDecoration(
+                      'Current medications',
+                      helperText: null,
+                    ).copyWith(hintText: 'Enter medication names...'),
+                  ),
                   const SizedBox(height: 20),
 
                   // --- Initial evaluation ---
-                  _sectionTitle('Initial Evaluation', icon: Icons.fact_check_outlined, color: _Accent.doctor),
+                  _sectionTitle('Initial Evaluation', icon: Icons.fact_check_outlined, color: AppAccent.doctor),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _initialEvaluationController,
@@ -510,7 +468,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
 
                   // --- Total sessions planned (optional) ---
                   _sectionTitle('Total Sessions Planned (optional)',
-                      icon: Icons.format_list_numbered, color: _Accent.doctor),
+                      icon: Icons.format_list_numbered, color: AppAccent.doctor),
                   const SizedBox(height: 4),
                   const Text(
                     'Used to show the patient how many sessions remain — leave blank if not decided yet',
@@ -531,7 +489,7 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // --- Treatment plan ---
                   Row(
                     children: [
-                      _sectionTitle('Treatment Plan', icon: Icons.assignment_outlined, color: _Accent.doctor),
+                      _sectionTitle('Treatment Plan', icon: Icons.assignment_outlined, color: AppAccent.doctor),
                       const SizedBox(width: 6),
                       const Text(
                         '(visible to patient)',

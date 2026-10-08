@@ -215,11 +215,11 @@ class CaseProgressNoteSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         case = attrs.get("case")
         if request and case is not None:
-            if request.user.role == "doctor" and case.doctor_id != request.user.id:
+            if request.user.role == UserRole.DOCTOR and case.doctor_id != request.user.id:
                 raise serializers.ValidationError(
                     "لا يمكنك إضافة ملاحظة تطور لحالة لا تخصك."
                 )
-            if request.user.role == "patient":
+            if request.user.role == UserRole.PATIENT:
                 raise serializers.ValidationError(
                     "لا يمكن للمريض إضافة ملاحظات تطور."
                 )
@@ -253,7 +253,7 @@ class WeeklyEpisodeLogSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
 
         if request and case is not None:
-            if request.user.role != "patient":
+            if request.user.role != UserRole.PATIENT:
                 raise serializers.ValidationError(
                     "فقط المريض يستطيع تسجيل تقرير النوبات الأسبوعي."
                 )

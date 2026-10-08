@@ -22,7 +22,6 @@ class UserSerializer(serializers.ModelSerializer):
             "specialty",
             "date_joined",
         ]
-        # date_joined تُستخدم بواجهة المريض لحساب "عدد الأيام منذ التسجيل"
         read_only_fields = ["id", "role", "date_joined"]  # لا يمكن للمستخدم تغيير دوره بنفسه
 
 

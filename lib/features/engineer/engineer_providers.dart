@@ -40,11 +40,6 @@ final casesForDeviceProvider =
   return ref.read(engineerRepositoryProvider).fetchCasesForDevice(deviceId);
 });
 
-/// عدد الجلسات المسجّلة لحالة معيّنة (حسب id) — لعرض "حالة الالتزام" ببساطة
-final sessionsCountForCaseProvider =
-    FutureProvider.autoDispose.family<int, int>((ref, caseId) async {
-  return ref.read(engineerRepositoryProvider).fetchSessionsCountForCase(caseId);
-});
 
 final doctorsListProvider = FutureProvider.autoDispose<List<DoctorModel>>((ref) async {
   ref.watch(authStateProvider);

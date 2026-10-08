@@ -125,6 +125,13 @@ certbot يعدّل كتلة هذا الدومين فقط. التجديد الت�
     sudo /usr/local/bin/axon-restore.sh /var/backups/axon/axon-YYYYMMDD-HHMMSS.sql.gz
 انسخ /var/backups/axon دورياً إلى مكان خارج السيرفر، وجرّب الاسترجاع مرة على قاعدة تجريبية قبل الاعتماد عليه.
 
+### تنظيف التوكنات المنتهية يومياً
+كل تجديد للجلسة وكل تسجيل خروج يضيف سطراً إلى جداول token_blacklist. هذا المؤقّت يحذف المنتهي منها يومياً (03:30):
+    sudo cp /var/www/axon/app/deploy/axon-flush-tokens.service /var/www/axon/app/deploy/axon-flush-tokens.timer /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now axon-flush-tokens.timer
+    sudo systemctl start axon-flush-tokens.service && sudo journalctl -u axon-flush-tokens -n 5 --no-pager
+تحقّق من موعد التشغيل التالي: `systemctl list-timers axon-flush-tokens.timer`
+
 ## 11) التحقق
     curl -i https://axon.tera-software1.com/api/app-version/latest/?platform=android    # 404 مقبول
     curl -i http://axon.tera-software1.com/api/auth/me/                                  # يحوّل إلى https

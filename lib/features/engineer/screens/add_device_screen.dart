@@ -41,6 +41,9 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
 
   DeviceTypeModel? _selectedDeviceType;
   ClinicModel? _selectedClinic;
+  // تُحدَّد العيادة الحالية من القائمة مرة واحدة فقط (وضع التعديل)، حتى لا
+  // يعيدها كل build بعد أن يختار المهندس "None"
+  bool _clinicResolved = false;
   late DeviceStatus _selectedStatus = widget.device?.status ?? DeviceStatus.active;
   late DateTime? _installedAt = widget.device?.installedAt;
   bool _isSubmitting = false;
@@ -170,7 +173,8 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     error: (e, _) => Text('Failed to load clinics: $e',
                         style: const TextStyle(color: Colors.redAccent)),
                     data: (clinics) {
-                      if (widget.isEditing && _selectedClinic == null) {
+                      if (widget.isEditing && !_clinicResolved) {
+                        _clinicResolved = true;
                         for (final c in clinics) {
                           if (c.id == widget.device!.clinicId) {
                             _selectedClinic = c;
@@ -186,9 +190,14 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                         iconEnabledColor: Colors.white70,
                         hint: const Text('Select clinic', style: TextStyle(color: Colors.white54)),
                         isExpanded: true,
-                        items: clinics
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
-                            .toList(),
+                        items: [
+                          // اختيار "None" يفصل الجهاز عن العيادة (يُرسل clinic: null)
+                          const DropdownMenuItem<ClinicModel>(
+                            value: null,
+                            child: Text('— None —', style: TextStyle(color: Colors.white54)),
+                          ),
+                          ...clinics.map((c) => DropdownMenuItem(value: c, child: Text(c.name))),
+                        ],
                         onChanged: (value) => setState(() => _selectedClinic = value),
                       );
                     },
@@ -218,7 +227,17 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: _pickInstalledDate,
                     child: InputDecorator(
-                      decoration: glassInputDecoration('').copyWith(labelText: null),
+                      decoration: glassInputDecoration('').copyWith(
+                        labelText: null,
+                        // زر مسح التاريخ يظهر فقط عند وجود تاريخ
+                        suffixIcon: _installedAt == null
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                                tooltip: 'Clear date',
+                                onPressed: () => setState(() => _installedAt = null),
+                              ),
+                      ),
                       child: Text(
                         _installedAt == null
                             ? 'Select date'

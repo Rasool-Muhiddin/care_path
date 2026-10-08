@@ -15,14 +15,20 @@ from .serializers import ChatMessageSerializer
 from .permissions import IsCaseParticipant
 from .notifications import notify_in_background
 
+# أول فتح للمحادثة (أو ?before_id=) يرجع آخر 50 رسالة فقط
+CHAT_PAGE_SIZE = 50
+
 
 class CaseMessagesView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
     # IsAuthenticated صراحةً: تحديد permission_classes يستبدل الافتراضي، وبدونه
     # كان الطلب المجهول يجتاز IsCaseParticipant لحالة طبيبها null (None == None).
     permission_classes = [permissions.IsAuthenticated, IsCaseParticipant]
-    # بلا ترقيم صفحات: التطبيق يجلب الرسائل الجديدة فقط بـ ?after_id=<آخر id>
-    # في كل polling، فالترقيم من الأقدم كان سيعيد الصفحة الأولى القديمة.
+    # ترقيم خاص بالمحادثة (لا DEFAULT_PAGINATION_CLASS):
+    # - بلا معاملات: آخر CHAT_PAGE_SIZE رسالة (أول فتح للشاشة).
+    # - ?before_id=<id>: الـ CHAT_PAGE_SIZE رسالة الأقدم منها (التمرير للأعلى).
+    # - ?after_id=<id>: كل الرسائل الأحدث منها (polling).
+    # الرد دائماً قائمة مرتّبة من الأقدم للأحدث.
     pagination_class = None
 
     def get_case(self):
@@ -38,7 +44,7 @@ class CaseMessagesView(generics.ListCreateAPIView):
         user = self.request.user
 
         # لا يجوز للطبيب أن يطّلع على الاستفسارات التقنية أو ردودها.
-        if getattr(user, 'role', None) == 'doctor':
+        if getattr(user, 'role', None) == UserRole.DOCTOR:
             queryset = queryset.filter(inquiry_type=InquiryType.MEDICAL)
 
         # تعرض الواجهة قناة واحدة في كل مرة كي لا تختلط مراسلات الدعم
@@ -53,6 +59,10 @@ class CaseMessagesView(generics.ListCreateAPIView):
         after_id = int_query_param(self.request, 'after_id')
         if after_id is not None:
             queryset = queryset.filter(id__gt=after_id)
+        # تحميل رسائل أقدم عند التمرير للأعلى
+        before_id = int_query_param(self.request, 'before_id')
+        if before_id is not None:
+            queryset = queryset.filter(id__lt=before_id)
         return queryset
 
     def perform_create(self, serializer):
@@ -62,21 +72,28 @@ class CaseMessagesView(generics.ListCreateAPIView):
         transaction.on_commit(partial(notify_in_background, serializer.instance.pk))
 
     def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
+        queryset = self.get_queryset()
+        if int_query_param(request, 'after_id') is not None:
+            messages = list(queryset.order_by('id'))
+        else:
+            # آخر صفحة: نأخذ الأحدث ثم نعكسها لتبقى من الأقدم للأحدث
+            messages = list(queryset.order_by('-id')[:CHAT_PAGE_SIZE])[::-1]
+        data = self.get_serializer(messages, many=True).data
+
         # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة. المهندس يطّلع على
         # القناة الطبية فقط، فلا نعلّمها مقروءة كي لا يختفي عدّاد الطبيب/المريض.
-        unread = self.get_queryset().exclude(sender=request.user)
-        if getattr(request.user, 'role', None) == 'engineer':
+        unread = queryset.exclude(sender=request.user)
+        if getattr(request.user, 'role', None) == UserRole.ENGINEER:
             unread = unread.filter(inquiry_type=InquiryType.TECHNICAL)
         unread.update(is_read=True)
-        return response
+        return Response(data)
 
 
 class UnreadCountView(APIView):
     def get(self, request):
         """عدد الرسائل غير المقروءة لكل حالات المستخدم (للعداد داخل التطبيق)"""
         user = request.user
-        if getattr(user, 'role', None) == 'engineer':
+        if getattr(user, 'role', None) == UserRole.ENGINEER:
             # يتلقى المهندس الحالات المسندة إليه. نحافظ على ظهور الحالات
             # القديمة غير المسندة حتى لا تضيع رسائل الدعم إلى حين ربط العيادة.
             cases = Case.objects.filter(
@@ -94,9 +111,9 @@ class UnreadCountView(APIView):
             cases = Case.objects.none()
         # استعلام واحد مجمّع لكل الحالات بدل استعلام لكل حالة
         messages = ChatMessage.objects.filter(case__in=cases, is_read=False).exclude(sender=user)
-        if getattr(user, 'role', None) == 'doctor':
+        if getattr(user, 'role', None) == UserRole.DOCTOR:
             messages = messages.filter(inquiry_type=InquiryType.MEDICAL)
-        elif getattr(user, 'role', None) == 'engineer':
+        elif getattr(user, 'role', None) == UserRole.ENGINEER:
             # القناة الطبية للاطلاع فقط عند المهندس، فلا تُحتسب كغير مقروءة له.
             messages = messages.filter(inquiry_type=InquiryType.TECHNICAL)
         # order_by() يلغي ترتيب الموديل (created_at) حتى لا يدخل في GROUP BY

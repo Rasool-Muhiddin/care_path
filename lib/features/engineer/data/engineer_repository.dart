@@ -62,19 +62,6 @@ class EngineerRepository {
     }
   }
 
-  /// عدد الجلسات المسجّلة لحالة معيّنة — لعرض "حالة الالتزام" ببساطة
-  Future<int> fetchSessionsCountForCase(int caseId) async {
-    try {
-      // حقل count من الترقيم: لا داعي لتحميل الجلسات نفسها لعدّها
-      final response = await _client.raw.get(
-        ApiEndpoints.sessions,
-        queryParameters: {'case': caseId, 'page_size': 1},
-      );
-      return (response.data as Map<String, dynamic>)['count'] as int;
-    } on DioException catch (e) {
-      throw _client.mapError(e);
-    }
-  }
 
   /// كل جلسات حالة معيّنة (مع التواريخ) — لشاشة تفاصيل المريض عند المهندس
   Future<List<SessionModel>> fetchSessionsForCase(int caseId) async {

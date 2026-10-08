@@ -9,6 +9,7 @@ class CaseSummaryModel {
   final String? doctorName;
   final DiagnosisType diagnosisType;
   final CaseStatus status;
+  final int completedSessionsCount;
   final DateTime createdAt;
 
   const CaseSummaryModel({
@@ -17,6 +18,7 @@ class CaseSummaryModel {
     this.doctorName,
     required this.diagnosisType,
     required this.status,
+    this.completedSessionsCount = 0,
     required this.createdAt,
   });
 
@@ -27,6 +29,7 @@ class CaseSummaryModel {
       doctorName: json['doctor_name'] as String?,
       diagnosisType: DiagnosisType.fromApiValue(json['diagnosis_type'] as String),
       status: CaseStatus.fromApiValue(json['status'] as String),
+      completedSessionsCount: json['completed_sessions_count'] as int? ?? 0,
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }

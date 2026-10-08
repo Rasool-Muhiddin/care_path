@@ -1,9 +1,10 @@
 from rest_framework import serializers
 
+from accounts.models import UserRole
 from cases.scoping import scope_by_case
 from treatments.models import TreatmentSession
 
-from .models import Feedback
+from .models import Feedback, FeedbackSource
 
 
 class FeedbackSerializer(serializers.ModelSerializer):
@@ -53,6 +54,6 @@ class FeedbackSerializer(serializers.ModelSerializer):
         validated_data["submitted_by"] = request.user
         # يُحدَّد المصدر تلقائياً حسب دور المستخدم، وليس مُدخلاً من الطلب
         validated_data["source"] = (
-            "patient" if request.user.role == "patient" else "doctor"
+            FeedbackSource.PATIENT if request.user.role == UserRole.PATIENT else FeedbackSource.DOCTOR
         )
         return super().create(validated_data)

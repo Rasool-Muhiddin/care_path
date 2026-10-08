@@ -8,7 +8,6 @@ class UserModel {
   final UserRole role;
   final String? phoneNumber;
   final String? specialty; // يُستخدم فقط للطبيب عادة
-  final DateTime? dateJoined; // تاريخ تسجيل الحساب — يُستخدم لعداد المتابعة عند المريض
 
   const UserModel({
     required this.id,
@@ -17,7 +16,6 @@ class UserModel {
     required this.role,
     this.phoneNumber,
     this.specialty,
-    this.dateJoined,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -28,19 +26,6 @@ class UserModel {
       role: UserRole.fromApiValue(json['role'] as String),
       phoneNumber: json['phone_number'] as String?,
       specialty: json['specialty'] as String?,
-      dateJoined: json['date_joined'] != null
-          ? DateTime.parse(json['date_joined'] as String).toLocal()
-          : null,
     );
   }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'email': email,
-        'role': role.toApiValue(),
-        'phone_number': phoneNumber,
-        'specialty': specialty,
-        'date_joined': dateJoined?.toUtc().toIso8601String(),
-      };
 }

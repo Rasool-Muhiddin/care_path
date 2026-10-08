@@ -1,6 +1,7 @@
 from django.db.models import Exists, OuterRef
 from rest_framework import viewsets, permissions
 
+from accounts.models import STAFF_ROLES
 from accounts.permissions import IsEngineer
 from config.drf import int_query_param
 from .models import Clinic, Device, DeviceType
@@ -56,7 +57,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role not in ("engineer", "doctor"):
+        if user.role not in STAFF_ROLES:
             # أي دور آخر (بما فيه المريض) لا يرى شيئاً من هنا
             return Device.objects.none()
 

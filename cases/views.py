@@ -41,6 +41,9 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
             .select_related("patient", "doctor", "device__device_type")
             .annotate(sessions_count=Count("sessions", distinct=True))
             .prefetch_related("weekly_episode_logs")
+            # صريحاً: Django يتجاهل Meta.ordering في استعلامات GROUP BY (annotate
+            # Count)، فكانت القائمة المرقّمة بلا ترتيب ثابت
+            .order_by(*Case._meta.ordering)
         )
 
         device_id = uuid_query_param(self.request, "device")
@@ -78,7 +81,7 @@ class CaseProgressNoteViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         user = self.request.user
         if user.role == UserRole.PATIENT:
             return CaseProgressNote.objects.none()
-        queryset = scope_by_case(CaseProgressNote.objects.all(), user)
+        queryset = scope_by_case(CaseProgressNote.objects.select_related("author"), user)
 
         case_id = int_query_param(self.request, "case")
         if case_id is not None:

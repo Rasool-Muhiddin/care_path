@@ -2,106 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../engineer_providers.dart';
 import '../models/clinic_model.dart';
 import '../models/engineer_model.dart';
-
-/// Category accent colors — every screen picks its palette from here so
-/// data reads by color instead of a flat, uniform white.
-class _Accent {
-  static const Color doctor = Color(0xFF5AC8FA);
-  static const Color patient = Color(0xFF34D399);
-  static const Color caseC = Color(0xFFFBBF24);
-  static const Color device = Color(0xFFA78BFA);
-  static const Color unlinked = Color(0xFFF87171);
-  static const Color clinic = Color(0xFF22D3EE);
-}
-
-/// Fixed text styles so every screen stays visually consistent.
-class _Txt {
-  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
-  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
-  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
-  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
-  static const body = TextStyle(color: Colors.white60, fontSize: 13);
-  static const error = TextStyle(color: Color(0xFFF87171));
-}
-
-/// Small circular badge behind a data-category icon: tinted fill,
-/// tinted border, colored icon — replaces flat white avatars/icons.
-class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.icon, required this.color, this.size = 40});
-  final IconData icon;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.18),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Icon(icon, color: color, size: size * 0.5),
-    );
-  }
-}
-
-/// Unified section header: colored side bar + small icon + white title
-/// + a lighter subtitle line (which may contain a glowing highlight,
-/// e.g. a count).
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    required this.icon,
-    required this.color,
-    this.subtitleSpans,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<InlineSpan>? subtitleSpans;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 4,
-          height: subtitleSpans != null ? 34 : 20,
-          margin: const EdgeInsets.only(top: 2),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _Txt.sectionTitle),
-              if (subtitleSpans != null) ...[
-                const SizedBox(height: 2),
-                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 /// Dialog to add a new clinic: name, address, phone, contact person,
 /// and the responsible engineer (picked from the team list).
@@ -142,6 +48,8 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
       TextEditingController(text: widget.clinic?.contactPerson ?? '');
 
   EngineerModel? _selectedEngineer;
+  // يُحدَّد المهندس الحالي مرة واحدة فقط (وضع التعديل) حتى يبقى "None" مختاراً
+  bool _engineerResolved = false;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -202,10 +110,10 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                 if (_errorMessage != null) ...[
                   Row(
                     children: [
-                      _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 28),
+                      IconBadge(icon: Icons.error_outline, color: AppAccent.unlinked, size: 28),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(_errorMessage!, style: _Txt.error),
+                        child: Text(_errorMessage!, style: AppText.error),
                       ),
                     ],
                   ),
@@ -241,17 +149,18 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                   decoration: glassInputDecoration('Contact Person'),
                 ),
                 const SizedBox(height: 16),
-                _SectionHeader(
+                SectionHeader(
                   icon: Icons.engineering_outlined,
-                  color: _Accent.clinic,
+                  color: AppAccent.clinic,
                   title: 'Responsible Engineer',
                 ),
                 const SizedBox(height: 8),
                 engineersAsync.when(
                   loading: () => const LinearProgressIndicator(color: Colors.white),
-                  error: (e, _) => Text('Failed to load engineers: $e', style: _Txt.error),
+                  error: (e, _) => Text('Failed to load engineers: $e', style: AppText.error),
                   data: (engineers) {
-                    if (widget.isEditing && _selectedEngineer == null) {
+                    if (widget.isEditing && !_engineerResolved) {
+                      _engineerResolved = true;
                       for (final e in engineers) {
                         if (e.id == widget.clinic!.responsibleEngineerId) {
                           _selectedEngineer = e;
@@ -267,9 +176,14 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                       iconEnabledColor: Colors.white70,
                       hint: const Text('Select engineer', style: TextStyle(color: Colors.white54)),
                       isExpanded: true,
-                      items: engineers
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e.displayName)))
-                          .toList(),
+                      items: [
+                        // اختيار "None" يزيل المهندس المسؤول (يُرسل responsible_engineer: null)
+                        const DropdownMenuItem<EngineerModel>(
+                          value: null,
+                          child: Text('— None —', style: TextStyle(color: Colors.white54)),
+                        ),
+                        ...engineers.map((e) => DropdownMenuItem(value: e, child: Text(e.displayName))),
+                      ],
                       onChanged: (value) => setState(() => _selectedEngineer = value),
                     );
                   },

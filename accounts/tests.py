@@ -1,126 +1,100 @@
-from django.contrib.auth import get_user_model
-from rest_framework import serializers
+from rest_framework import status
+from rest_framework.test import APIClient, APITestCase
 
-from .models import UserRole
+from config.testing import PASSWORD, make_user, results
 
-User = get_user_model()
+from .models import User, UserRole
 
-
-class UserSerializer(serializers.ModelSerializer):
-    """يُستخدم لإرجاع بيانات المستخدم الحالي (مثلاً في /api/me/)."""
-
-    class Meta:
-        model = User
-        fields = [
-            "id",
-            "username",
-            "first_name",
-            "last_name",
-            "email",
-            "role",
-            "phone_number",
-            "specialty",
-            "date_joined",
-        ]
-        # date_joined تُستخدم بواجهة المريض لحساب "عدد الأيام منذ التسجيل"
-        read_only_fields = ["id", "role", "date_joined"]  # لا يمكن للمستخدم تغيير دوره بنفسه
+REGISTER = "/api/auth/register/"
 
 
-class RegisterSerializer(serializers.ModelSerializer):
-    """
-    إنشاء حساب جديد. لا يوجد تسجيل ذاتي عام: الطلب يجب أن يأتي من مستخدم
-    مسجَّل دخوله (انظر RegisterView)، وما يستطيع إنشاءه يعتمد على دوره:
-      - الطبيب: مرضى فقط (يستخدمها حوار "إضافة مريض" في التطبيق).
-      - المهندس: مرضى أو أطباء.
-      - حسابات المهندسين: من Django admin فقط، لا عبر هذا الـ API إطلاقاً.
-    """
-
-    password = serializers.CharField(write_only=True, min_length=8)
-
-    class Meta:
-        model = User
-        fields = [
-            "id",
-            "username",
-            "password",
-            "first_name",
-            "last_name",
-            "email",
-            "role",
-            "phone_number",
-            "specialty",
-        ]
-        read_only_fields = ["id"]
-
-    def validate_role(self, value):
-        if value == UserRole.ENGINEER:
-            raise serializers.ValidationError(
-                "لا يمكن إنشاء حساب مهندس عبر الـ API. استخدم لوحة Django admin."
-            )
-
-        request = self.context.get("request")
-        creator = getattr(request, "user", None)
-        creator_role = getattr(creator, "role", None)
-
-        if creator_role == UserRole.DOCTOR and value != UserRole.PATIENT:
-            raise serializers.ValidationError(
-                "يستطيع الطبيب تسجيل مرضى فقط."
-            )
-        if creator_role not in {UserRole.DOCTOR, UserRole.ENGINEER}:
-            raise serializers.ValidationError("غير مصرّح لك بإنشاء حسابات.")
-        return value
-
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        return user
+def new_user(role, username="new_user"):
+    return {"username": username, "password": "Str0ng!pass-123", "role": role, "first_name": "New"}
 
 
-class PatientListSerializer(serializers.ModelSerializer):
-    """
-    عرض مختصر للمريض — يُستخدم في قائمة اختيار المريض عند إنشاء حالة
-    جديدة (GET /api/patients/). لا نعرض حقول حساسة كالبريد الإلكتروني
-    هنا، فقط ما يحتاجه الطبيب/المهندس للتعرف على المريض واختياره.
-    """
+class RegisterTests(APITestCase):
+    """لا تسجيل ذاتي: الطبيب ينشئ مرضى فقط، والمهندس مرضى أو أطباء، والمهندسون من admin فقط."""
 
-    full_name = serializers.SerializerMethodField()
+    @classmethod
+    def setUpTestData(cls):
+        cls.doctor = make_user("doctor", UserRole.DOCTOR)
+        cls.engineer = make_user("engineer", UserRole.ENGINEER)
+        cls.patient = make_user("patient", UserRole.PATIENT)
 
-    class Meta:
-        model = User
-        fields = ["id", "username", "full_name", "phone_number"]
+    def post_as(self, user, payload):
+        client = APIClient()
+        if user is not None:
+            client.force_authenticate(user)
+        return client.post(REGISTER, payload, format="json")
 
-    def get_full_name(self, obj):
-        # لو first_name/last_name فاضيين (حساب أُنشئ بدون اسم كامل مثلاً
-        # عبر admin)، نرجع اليوزرنيم كبديل بدل ما نرجع نص فاضي
-        return obj.get_full_name() or obj.username
+    def test_doctor_creates_patient(self):
+        response = self.post_as(self.doctor, new_user(UserRole.PATIENT))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("password", response.data)
+        created = User.objects.get(username="new_user")
+        self.assertEqual(created.role, UserRole.PATIENT)
+        self.assertTrue(created.check_password("Str0ng!pass-123"))
+
+    def test_doctor_cannot_create_doctor(self):
+        response = self.post_as(self.doctor, new_user(UserRole.DOCTOR))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(username="new_user").exists())
+
+    def test_engineer_creates_doctor(self):
+        response = self.post_as(self.engineer, new_user(UserRole.DOCTOR))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_nobody_creates_engineers_through_api(self):
+        for creator in (self.doctor, self.engineer):
+            response = self.post_as(creator, new_user(UserRole.ENGINEER))
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(username="new_user").exists())
+
+    def test_patient_and_anonymous_cannot_register_users(self):
+        self.assertEqual(self.post_as(self.patient, new_user(UserRole.PATIENT)).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.post_as(None, new_user(UserRole.PATIENT)).status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class EngineerListSerializer(serializers.ModelSerializer):
-    """
-    عرض مختصر لمهندسي الفريق — يُستخدم لاختيار "المهندس المسؤول" عند
-    إنشاء/تعديل عيادة (GET /api/engineers/).
-    """
+class UserListTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.doctor = make_user("doctor", UserRole.DOCTOR)
+        cls.engineer = make_user("engineer", UserRole.ENGINEER)
+        cls.patient = make_user("patient", UserRole.PATIENT)
 
-    full_name = serializers.SerializerMethodField()
+    def get_as(self, user, url):
+        client = APIClient()
+        client.force_authenticate(user)
+        return client.get(url)
 
-    class Meta:
-        model = User
-        fields = ["id", "username", "full_name", "phone_number"]
+    def test_patient_cannot_list_users(self):
+        for url in ("/api/patients/", "/api/doctors/", "/api/engineers/"):
+            self.assertEqual(self.get_as(self.patient, url).status_code, status.HTTP_403_FORBIDDEN, url)
 
-    def get_full_name(self, obj):
-        return obj.get_full_name() or obj.username
+    def test_doctor_lists_patients_only(self):
+        self.assertEqual(self.get_as(self.doctor, "/api/patients/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.get_as(self.doctor, "/api/doctors/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.get_as(self.doctor, "/api/engineers/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_engineer_lists_everyone(self):
+        response = self.get_as(self.engineer, "/api/doctors/")
+        self.assertEqual([d["username"] for d in results(response)], ["doctor"])
+        self.assertEqual(self.get_as(self.engineer, "/api/engineers/").status_code, status.HTTP_200_OK)
+
+    def test_me_returns_role(self):
+        response = self.get_as(self.patient, "/api/auth/me/")
+        self.assertEqual(response.data["role"], UserRole.PATIENT)
+        self.assertEqual(response.data["username"], "patient")
 
 
-class DoctorListSerializer(serializers.ModelSerializer):
-    """عرض مختصر للأطباء للوحة المتابعة الإدارية الخاصة بالمهندس."""
+class InactiveAccountTests(APITestCase):
+    """تعطيل الحساب يتم بـ User.is_active (حذفنا is_active_account الذي لم يكن يُقرأ أصلاً)."""
 
-    full_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = ["id", "username", "full_name", "phone_number", "specialty"]
-
-    def get_full_name(self, obj):
-        return obj.get_full_name() or obj.username
+    def test_inactive_user_cannot_log_in(self):
+        user = make_user("inactive", UserRole.PATIENT)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        response = APIClient().post(
+            "/api/auth/login/", {"username": "inactive", "password": PASSWORD}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

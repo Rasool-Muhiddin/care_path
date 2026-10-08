@@ -22,7 +22,7 @@ class ChatMessage(models.Model):
     is_read = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ['created_at', 'id']
         indexes = [
             # الـ polling وعدّاد غير المقروء: رسائل حالة معيّنة بقناة معيّنة وحالة قراءة
             models.Index(fields=['case', 'inquiry_type', 'is_read'], name='chat_case_type_read_idx'),

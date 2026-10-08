@@ -153,7 +153,7 @@ class Case(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-id"]
         # قواعد العمل على مستوى قاعدة البيانات (خط الدفاع الأخير ضد
         # الطلبات المتزامنة التي تتجاوز فحص الـ serializer):
         # - حالة واحدة غير مغلقة لكل مريض.
@@ -216,7 +216,7 @@ class CaseProgressNote(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-id"]
 
     def __str__(self) -> str:
         return f"Progress note on Case #{self.case_id} @ {self.created_at:%Y-%m-%d}"
@@ -279,7 +279,7 @@ class WeeklyEpisodeLog(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["week_start_date"]
+        ordering = ["week_start_date", "id"]
         unique_together = ("case", "week_start_date")
 
     def __str__(self) -> str:

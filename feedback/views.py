@@ -1,18 +1,9 @@
 from rest_framework import viewsets, permissions
 
-from accounts.models import UserRole
+from accounts.permissions import IsPatientOrDoctor
 from cases.scoping import scope_by_case
 from .models import Feedback
 from .serializers import FeedbackSerializer
-
-
-class IsPatientOrDoctor(permissions.BasePermission):
-    """التقييم مصدره المريض أو الطبيب فقط (FeedbackSource)."""
-
-    message = "إضافة التقييمات مخصصة للمرضى والأطباء فقط."
-
-    def has_permission(self, request, view):
-        return getattr(request.user, "role", None) in {UserRole.PATIENT, UserRole.DOCTOR}
 
 
 class IsFeedbackAuthorOrReadOnly(permissions.BasePermission):
@@ -45,7 +36,9 @@ class FeedbackViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return scope_by_case(
-            Feedback.objects.all(), self.request.user, case_path="session__case"
+            Feedback.objects.select_related("submitted_by"),
+            self.request.user,
+            case_path="session__case",
         )
 
     def get_serializer_context(self):

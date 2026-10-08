@@ -53,7 +53,7 @@ class PatientListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsDoctorOrEngineer]
 
     def get_queryset(self):
-        return User.objects.filter(role=UserRole.PATIENT).order_by("first_name", "last_name")
+        return User.objects.filter(role=UserRole.PATIENT).order_by("first_name", "last_name", "id")
 
 
 class EngineerListView(generics.ListAPIView):
@@ -68,7 +68,7 @@ class EngineerListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsEngineer]
 
     def get_queryset(self):
-        return User.objects.filter(role=UserRole.ENGINEER).order_by("first_name", "last_name")
+        return User.objects.filter(role=UserRole.ENGINEER).order_by("first_name", "last_name", "id")
 
 
 class DoctorListView(generics.ListAPIView):
@@ -78,4 +78,4 @@ class DoctorListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsEngineer]
 
     def get_queryset(self):
-        return User.objects.filter(role=UserRole.DOCTOR).order_by("first_name", "last_name")
+        return User.objects.filter(role=UserRole.DOCTOR).order_by("first_name", "last_name", "id")

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
 import '../../doctor/models/weekly_episode_log_model.dart';
@@ -314,19 +316,19 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   },
                 ),
                 const SizedBox(height: 24),
-                _SectionHeader(
+                SectionHeader(
                   icon: Icons.event_note_outlined,
-                  color: _Accent.patient,
+                  color: AppAccent.patient,
                   title: 'جلساتي',
                   subtitleSpans: [
                     TextSpan(
                       text: '${sessionsAsync.value?.length ?? 0}',
                       style: TextStyle(
-                        color: _Accent.patient,
+                        color: AppAccent.patient,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         shadows: [
-                          Shadow(color: _Accent.patient.withValues(alpha: 0.55), blurRadius: 14),
+                          Shadow(color: AppAccent.patient.withValues(alpha: 0.55), blurRadius: 14),
                         ],
                       ),
                     ),
@@ -361,102 +363,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 }
 
-/// Category accent colors — every screen picks its palette from here so
-/// data reads by color instead of a flat, uniform white.
-class _Accent {
-  static const Color doctor = Color(0xFF5AC8FA);
-  static const Color patient = Color(0xFF34D399);
-  static const Color caseC = Color(0xFFFBBF24);
-  static const Color device = Color(0xFFA78BFA);
-  static const Color unlinked = Color(0xFFF87171);
-  static const Color clinic = Color(0xFF22D3EE);
-}
-
-/// Fixed text styles so every screen stays visually consistent.
-class _Txt {
-  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
-  static const sectionTitle = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700);
-  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
-  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
-  static const body = TextStyle(color: Colors.white60, fontSize: 13);
-  static const error = TextStyle(color: Color(0xFFF87171));
-}
-
-/// Small circular badge behind a data-category icon: tinted fill,
-/// tinted border, colored icon — replaces flat white avatars/icons.
-class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.icon, required this.color, this.size = 40});
-  final IconData icon;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.18),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Icon(icon, color: color, size: size * 0.5),
-    );
-  }
-}
-
-/// Unified section header: colored side bar + small icon + white title
-/// + a lighter subtitle line (which may contain a glowing highlight,
-/// e.g. a count).
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    required this.icon,
-    required this.color,
-    this.subtitleSpans,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<InlineSpan>? subtitleSpans;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 4,
-          height: subtitleSpans != null ? 34 : 20,
-          margin: const EdgeInsets.only(top: 2),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _Txt.sectionTitle),
-              if (subtitleSpans != null) ...[
-                const SizedBox(height: 2),
-                Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans)),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _CaseSummaryCard extends StatelessWidget {
   const _CaseSummaryCard({required this.myCase});
   final CaseModel myCase;
@@ -471,10 +377,10 @@ class _CaseSummaryCard extends StatelessWidget {
           if (myCase.deviceTypeName != null) ...[
             Row(
               children: [
-                _IconBadge(icon: Icons.medical_services_outlined, color: _Accent.device, size: 34),
+                IconBadge(icon: Icons.medical_services_outlined, color: AppAccent.device, size: 34),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('الجهاز: ${myCase.deviceTypeName}', style: _Txt.tileTitle),
+                  child: Text('الجهاز: ${myCase.deviceTypeName}', style: AppText.tileTitle),
                 ),
               ],
             ),
@@ -483,9 +389,9 @@ class _CaseSummaryCard extends StatelessWidget {
           if (myCase.treatmentPlan.isNotEmpty) ...[
             Row(
               children: [
-                Icon(Icons.assignment_outlined, size: 16, color: _Accent.patient),
+                Icon(Icons.assignment_outlined, size: 16, color: AppAccent.patient),
                 const SizedBox(width: 6),
-                const Text('خطة العلاج', style: _Txt.tileTitle),
+                const Text('خطة العلاج', style: AppText.tileTitle),
               ],
             ),
             const SizedBox(height: 6),
@@ -521,7 +427,7 @@ class _SessionCounters extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(label, style: _Txt.tileSubtitle),
+              Text(label, style: AppText.tileSubtitle),
             ],
           ),
         ),
@@ -532,14 +438,14 @@ class _SessionCounters extends StatelessWidget {
       // counter() يُرجع Expanded، ولا يجوز وضعه مباشرة داخل ListView — لازم
       // يكون داخل Row/Column، وإلا ينهار البناء ويظهر مربع رمادي بالـ release.
       return Row(
-        children: [counter('الجلسات المكتملة', completed, _Accent.patient)],
+        children: [counter('الجلسات المكتملة', completed, AppAccent.patient)],
       );
     }
     return Row(
       children: [
-        counter('الجلسات المكتملة', completed, _Accent.patient),
+        counter('الجلسات المكتملة', completed, AppAccent.patient),
         const SizedBox(width: 10),
-        counter('المتبقية', remaining!, _Accent.caseC),
+        counter('المتبقية', remaining!, AppAccent.caseC),
       ],
     );
   }
@@ -588,23 +494,23 @@ class _SessionTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
         children: [
-          _IconBadge(icon: Icons.event_note, color: _Accent.patient),
+          IconBadge(icon: Icons.event_note, color: AppAccent.patient),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('جلسة $dateLabel', style: _Txt.tileTitle),
+                Text('جلسة $dateLabel', style: AppText.tileTitle),
                 if (session.patientResponse.isNotEmpty)
-                  Text(session.patientResponse, style: _Txt.tileSubtitle)
+                  Text(session.patientResponse, style: AppText.tileSubtitle)
                 else if (session.durationMinutes != null)
-                  Text('المدة: ${session.durationMinutes} دقيقة', style: _Txt.tileSubtitle),
+                  Text('المدة: ${session.durationMinutes} دقيقة', style: AppText.tileSubtitle),
               ],
             ),
           ),
           Icon(
             completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: completed ? _Accent.patient : Colors.white38,
+            color: completed ? AppAccent.patient : Colors.white38,
           ),
         ],
       ),
@@ -622,7 +528,7 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _IconBadge(icon: Icons.event_busy_outlined, color: _Accent.patient, size: 44),
+          IconBadge(icon: Icons.event_busy_outlined, color: AppAccent.patient, size: 44),
           const SizedBox(height: 12),
           const Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white70)),
         ],
@@ -642,9 +548,9 @@ class _ErrorView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       child: Column(
         children: [
-          _IconBadge(icon: Icons.error_outline, color: _Accent.unlinked, size: 44),
+          IconBadge(icon: Icons.error_outline, color: AppAccent.unlinked, size: 44),
           const SizedBox(height: 12),
-          Text(message, textAlign: TextAlign.center, style: _Txt.error),
+          Text(message, textAlign: TextAlign.center, style: AppText.error),
           const SizedBox(height: 14),
           _RetryButton(onPressed: onRetry),
         ],

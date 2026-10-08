@@ -9,6 +9,7 @@ from config.testing import CareWorldMixin
 
 from .models import ChatMessage, InquiryType
 from .notifications import notify_message_by_id, notify_new_message
+from .views import CHAT_PAGE_SIZE
 
 
 def messages_url(case):
@@ -173,3 +174,37 @@ class BackgroundNotificationTests(CareWorldMixin, APITestCase):
         message = ChatMessage.objects.create(case=self.case_1, sender=self.patient_1, text="x")
         with mock.patch("chat.notifications.connection"):
             notify_message_by_id(message.pk)  # يُسجَّل الخطأ فقط
+
+
+
+@mock.patch("chat.views.notify_in_background")
+class ChatHistoryPagingTests(CareWorldMixin, APITestCase):
+    """Related 3: أول فتح يرجع آخر 50 رسالة، و?before_id= يرجع الأقدم."""
+
+    def setUp(self):
+        self.ids = [
+            ChatMessage.objects.create(case=self.case_1, sender=self.patient_1, text=str(i)).pk
+            for i in range(120)
+        ]
+
+    def get(self, **params):
+        return self.client_for(self.doctor_a).get(messages_url(self.case_1), params).data
+
+    def test_first_load_returns_latest_page_oldest_first(self, _notify):
+        data = self.get()
+        self.assertEqual([m["id"] for m in data], self.ids[-CHAT_PAGE_SIZE:])
+
+    def test_before_id_walks_back_through_history(self, _notify):
+        latest = self.get()
+        older = self.get(before_id=latest[0]["id"])
+        self.assertEqual([m["id"] for m in older], self.ids[-2 * CHAT_PAGE_SIZE:-CHAT_PAGE_SIZE])
+        oldest = self.get(before_id=older[0]["id"])
+        self.assertEqual([m["id"] for m in oldest], self.ids[:-2 * CHAT_PAGE_SIZE])  # آخر 20 فقط
+
+    def test_after_id_still_returns_everything_newer(self, _notify):
+        data = self.get(after_id=self.ids[10])
+        self.assertEqual([m["id"] for m in data], self.ids[11:])
+
+    def test_invalid_before_id_returns_400(self, _notify):
+        response = self.client_for(self.doctor_a).get(messages_url(self.case_1), {"before_id": "x"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

@@ -121,22 +121,20 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                               ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
                               : '${c.completedSessionsCount}',
                         ),
-                        if (c.diagnosisType.hasClinicalDetails) ...[
-                          _divider(),
-                          _InfoRow(
-                            icon: Icons.bolt_rounded,
-                            label: 'attack / month',
-                            value: c.monthlyEpisodeCount?.toString() ?? '—',
-                          ),
-                          _divider(),
-                          _InfoRow(
-                            icon: Icons.timer_outlined,
-                            label: 'attack duration',
-                            value: c.episodeDurationMinutes != null
-                                ? '${c.episodeDurationMinutes} min'
-                                : '—',
-                          ),
-                        ],
+                        _divider(),
+                        _InfoRow(
+                          icon: Icons.bolt_rounded,
+                          label: 'attack / month',
+                          value: c.monthlyEpisodeCount?.toString() ?? '—',
+                        ),
+                        _divider(),
+                        _InfoRow(
+                          icon: Icons.timer_outlined,
+                          label: 'attack duration',
+                          value: c.episodeDurationMinutes != null
+                              ? '${c.episodeDurationMinutes} min'
+                              : '—',
+                        ),
                       ],
                     ),
                   ),
@@ -204,10 +202,10 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
 /// A round icon badge tinted with [color] — mirrors OverviewTab's _IconBadge
 /// so stat boxes and info rows carry the same category-color language.
 class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.icon, required this.color, this.size = 34});
+  const _IconBadge({required this.icon, required this.color});
   final IconData icon;
   final Color color;
-  final double size;
+  static const double size = 34;
 
   @override
   Widget build(BuildContext context) {

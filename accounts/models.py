@@ -4,9 +4,16 @@ from django.db import models
 
 class UserRole(models.TextChoices):
     """
-    الأدوار الثلاثة المسموح بها في النظام.
-    أي دور جديد يُضاف مستقبلاً (مثلاً: Admin عام) يُضاف هنا فقط،
-    وسينعكس تلقائياً في كل مكان يعتمد على هذا الـ Enum (صلاحيات، فلاتر، إلخ).
+    الأدوار المسموح بها في النظام. لا تُكتب أسماء الأدوار كنصوص في أي مكان
+    آخر — استعمل هذا الـ Enum دائماً.
+
+    إضافة دور جديد (مثلاً "nurse"):
+      1. أضفه هنا.
+      2. cases/scoping.py → scope_by_case: ماذا يرى من الحالات وما يتفرع منها.
+         بدون فرع صريح لا يرى شيئاً (الرفض كافتراض).
+      3. accounts/permissions.py: صنف HasRole جديد إن احتاج صلاحيات خاصة.
+      4. Flutter: UserRole في lib/core/permissions/user_role.dart (+ homeRoute
+         ومسارات الراوتر). حراسة المسارات تُشتق من homeRoute تلقائياً.
     """
     PATIENT = "patient", "Patient"
     DOCTOR = "doctor", "Doctor"
@@ -25,10 +32,6 @@ class User(AbstractUser):
         help_text="يحدد نوع المستخدم ويتحكم بالشاشات والصلاحيات المتاحة له",
     )
     phone_number = models.CharField(max_length=20, blank=True)
-    is_active_account = models.BooleanField(
-        default=True,
-        help_text="لتعطيل حساب مستخدم (طبيب/مريض/مهندس) دون حذفه",
-    )
 
     # حقول اختيارية تُستخدم لاحقاً حسب الدور — يمكن نقلها لموديلات منفصلة
     # (DoctorProfile / EngineerProfile) عند تعقّد البيانات أكثر.
@@ -47,3 +50,7 @@ class User(AbstractUser):
 
     def __str__(self) -> str:
         return f"{self.get_full_name() or self.username} ({self.get_role_display()})"
+
+
+# الطاقم الطبي/الفني — يُستخدم في الصلاحيات والفلاتر بدل تكرار المجموعة
+STAFF_ROLES = frozenset({UserRole.DOCTOR, UserRole.ENGINEER})

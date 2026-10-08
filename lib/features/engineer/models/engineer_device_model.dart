@@ -81,13 +81,15 @@ class NewDevicePayload {
     this.installedAt,
   });
 
+  /// الحقول الاختيارية تُرسل دائماً، وnull يعني "إفراغ الحقل" عند التعديل
+  /// (حذفها من الطلب كان يُبقي القيمة القديمة في الخادم).
   Map<String, dynamic> toJson() => {
         'serial_number': serialNumber,
-        if (deviceTypeId != null) 'device_type': deviceTypeId,
-        if (clinicId != null) 'clinic': clinicId,
+        'device_type': deviceTypeId,
+        'clinic': clinicId,
         'status': status.apiValue,
-        if (installedAt != null)
-          'installed_at':
-              '${installedAt!.year.toString().padLeft(4, '0')}-${installedAt!.month.toString().padLeft(2, '0')}-${installedAt!.day.toString().padLeft(2, '0')}',
+        'installed_at': installedAt == null
+            ? null
+            : '${installedAt!.year.toString().padLeft(4, '0')}-${installedAt!.month.toString().padLeft(2, '0')}-${installedAt!.day.toString().padLeft(2, '0')}',
       };
 }

@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission
 
+from accounts.models import UserRole
+
 
 class IsCaseParticipant(BasePermission):
     """يسمح لمريض الحالة وطبيبها والمهندس المسؤول بالوصول للقنوات المصرح بها.
@@ -13,7 +15,7 @@ class IsCaseParticipant(BasePermission):
         if case.patient_id == user.id or case.doctor_id == user.id:
             return True
 
-        if getattr(user, 'role', None) != 'engineer':
+        if getattr(user, 'role', None) != UserRole.ENGINEER:
             return False
 
         # المهندس المسؤول محفوظ على عيادة الجهاز. للحالات القديمة التي لم

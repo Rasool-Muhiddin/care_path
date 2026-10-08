@@ -9,11 +9,6 @@ enum DiagnosisType {
 
   static DiagnosisType fromApiValue(String value) =>
       DiagnosisType.values.firstWhere((e) => e.apiValue == value, orElse: () => DiagnosisType.migraine);
-
-  /// Whether clinical detail fields (monthly episode count / duration /
-  /// medications) apply to this diagnosis type. Both remaining diagnosis
-  /// types (epilepsy, migraine) have clinical details.
-  bool get hasClinicalDetails => true;
 }
 
 /// Epilepsy sub-type — matches EpilepsyType in cases/models.py. Shown
@@ -102,10 +97,6 @@ class CaseModel {
   final int completedSessionsCount;
   final int? remainingSessionsCount;
   final DateTime? pendingWeeklyEpisodeWeek;
-  final String guarantorName;
-  final String guarantorAddress;
-  final String guarantorPhoneNumber;
-  final String guarantorEmail;
   final String initialEvaluation;
   final String treatmentPlan;
   final DateTime createdAt;
@@ -131,10 +122,6 @@ class CaseModel {
     this.completedSessionsCount = 0,
     this.remainingSessionsCount,
     this.pendingWeeklyEpisodeWeek,
-    this.guarantorName = '',
-    this.guarantorAddress = '',
-    this.guarantorPhoneNumber = '',
-    this.guarantorEmail = '',
     required this.initialEvaluation,
     required this.treatmentPlan,
     required this.createdAt,
@@ -167,10 +154,6 @@ class CaseModel {
       pendingWeeklyEpisodeWeek: (json['pending_weekly_episode_week'] as String?) != null
           ? DateTime.parse(json['pending_weekly_episode_week'] as String)
           : null,
-      guarantorName: json['guarantor_name'] as String? ?? '',
-      guarantorAddress: json['guarantor_address'] as String? ?? '',
-      guarantorPhoneNumber: json['guarantor_phone_number'] as String? ?? '',
-      guarantorEmail: json['guarantor_email'] as String? ?? '',
       initialEvaluation: json['initial_evaluation'] as String? ?? '',
       treatmentPlan: json['treatment_plan'] as String? ?? '',
       // الخادم يرسل الأوقات مع الإزاحة؛ نحوّلها لتوقيت الجهاز قبل العرض
@@ -193,10 +176,6 @@ class NewCasePayload {
   final String symptoms;
   final String currentMedications;
   final int? totalSessionsPlanned;
-  final String guarantorName;
-  final String guarantorAddress;
-  final String guarantorPhoneNumber;
-  final String guarantorEmail;
   final String initialEvaluation;
   final String treatmentPlan;
 
@@ -212,10 +191,6 @@ class NewCasePayload {
     this.symptoms = '',
     this.currentMedications = '',
     this.totalSessionsPlanned,
-    this.guarantorName = '',
-    this.guarantorAddress = '',
-    this.guarantorPhoneNumber = '',
-    this.guarantorEmail = '',
     this.initialEvaluation = '',
     this.treatmentPlan = '',
   });
@@ -232,10 +207,6 @@ class NewCasePayload {
         'symptoms': symptoms,
         'current_medications': currentMedications,
         if (totalSessionsPlanned != null) 'total_sessions_planned': totalSessionsPlanned,
-        'guarantor_name': guarantorName,
-        'guarantor_address': guarantorAddress,
-        'guarantor_phone_number': guarantorPhoneNumber,
-        'guarantor_email': guarantorEmail,
         'initial_evaluation': initialEvaluation,
         'treatment_plan': treatmentPlan,
       };

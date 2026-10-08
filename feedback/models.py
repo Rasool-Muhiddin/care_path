@@ -32,7 +32,7 @@ class Feedback(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-id"]
 
     def __str__(self) -> str:
         return f"Feedback ({self.source}) on session #{self.session_id}"

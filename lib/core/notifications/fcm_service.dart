@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_state.dart';
 import '../auth/token_storage.dart';
-import '../permissions/user_role.dart';
 import '../router/app_router.dart';
 import 'fcm_repository.dart';
 import 'global_keys.dart';
@@ -148,16 +147,16 @@ class FcmService {
     if (ref == null) return;
     if (message.data['type'] != 'chat_message') return;
 
-    final caseId = message.data['case_id'];
+    final caseId = int.tryParse('${message.data['case_id']}');
     if (caseId == null) return;
 
     final authState = ref.read(authStateProvider);
     if (authState is! AuthAuthenticated) return;
 
-    // شاشة المحادثة مُعرَّفة فقط ضمن فرعي المريض والطبيب بالراوتر الحالي.
-    final role = authState.user.role;
-    if (role != UserRole.patient && role != UserRole.doctor) return;
+    // بعض الأدوار ليس لها مسار محادثة في الراوتر (UserRole.chatRoute)
+    final route = authState.user.role.chatRoute(caseId);
+    if (route == null) return;
 
-    ref.read(appRouterProvider).push('/${role.name}/chat/$caseId');
+    ref.read(appRouterProvider).push(route);
   }
 }

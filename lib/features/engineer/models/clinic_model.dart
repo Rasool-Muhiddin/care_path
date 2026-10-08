@@ -49,6 +49,7 @@ class ClinicPayload {
         'address': address,
         'phone_number': phoneNumber,
         'contact_person': contactPerson,
-        if (responsibleEngineerId != null) 'responsible_engineer': responsibleEngineerId,
+        // دائماً يُرسل: null يعني إزالة المهندس المسؤول عند التعديل
+        'responsible_engineer': responsibleEngineerId,
       };
 }

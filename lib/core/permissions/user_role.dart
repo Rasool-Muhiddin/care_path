@@ -1,4 +1,8 @@
-
+/// الأدوار — تطابق UserRole في accounts/models.py.
+///
+/// إضافة دور جديد هنا: قيمة في الـ enum، فرع في [homeRoute] و[fromApiValue]
+/// و[displayNameAr]، ومسار GoRoute بنفس البادئة في app_router.dart. حراسة
+/// المسارات (route_guard.dart) تتبع [homeRoute] تلقائياً.
 enum UserRole {
   patient,
   doctor,
@@ -31,6 +35,18 @@ enum UserRole {
         return '/doctor';
       case UserRole.engineer:
         return '/engineer';
+    }
+  }
+
+  /// مسار شاشة محادثة حالة معيّنة لهذا الدور، أو null إن لم يكن لهذا الدور
+  /// مسار محادثة في الراوتر (المهندس يفتحها من تفاصيل الجهاز مباشرة).
+  String? chatRoute(int caseId) {
+    switch (this) {
+      case UserRole.patient:
+      case UserRole.doctor:
+        return '$homeRoute/chat/$caseId';
+      case UserRole.engineer:
+        return null;
     }
   }
 

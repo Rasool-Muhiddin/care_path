@@ -95,19 +95,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    final inquiryType = currentRole == UserRole.doctor
-        ? InquiryType.medical
-        : _selectedInquiryType ?? InquiryType.technical;
+    final inquiryType =
+        currentRole == UserRole.doctor ? InquiryType.medical : _selectedInquiryType ?? InquiryType.technical;
     // المهندس يرى القناة الطبية كمدير لكن للقراءة فقط.
-    final isEngineerReadOnly =
-        currentRole == UserRole.engineer && inquiryType == InquiryType.medical;
+    final isEngineerReadOnly = currentRole == UserRole.engineer && inquiryType == InquiryType.medical;
     final doctorLabel = (widget.doctorName != null && widget.doctorName!.trim().isNotEmpty)
         ? 'د. ${widget.doctorName!.trim()}'
         : 'الطبيب المعالج';
     final recipientLabel = currentRole == UserRole.patient
-        ? (inquiryType == InquiryType.technical
-            ? 'إلى: المهندس'
-            : 'إلى: $doctorLabel')
+        ? (inquiryType == InquiryType.technical ? 'إلى: المهندس' : 'إلى: $doctorLabel')
         : null;
     final conversation = ChatConversation(widget.caseId, inquiryType);
     final state = ref.watch(chatProvider(conversation));
@@ -156,37 +152,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Expanded(
                 child: state.isLoading && state.messages.isEmpty
                     ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: state.messages.length,
-                        itemBuilder: (context, i) {
-                          final msg = state.messages[i];
-                          return Align(
-                            alignment: msg.isMine ? Alignment.centerRight : Alignment.centerLeft,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                child: GlassContainer(
-                                  borderRadius: 14,
-                                  opacity: msg.isMine ? 0.22 : 0.10,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (!msg.isMine)
-                                        Text(msg.senderName, style: _Txt.senderName),
-                                      Text(
-                                        msg.text,
-                                        style: msg.isMine ? _Txt.bubbleTextMine : _Txt.bubbleTextTheirs,
-                                      ),
-                                    ],
+                    : NotificationListener<ScrollUpdateNotification>(
+                        // التمرير لأعلى حتى بداية القائمة يحمّل الرسائل الأقدم
+                        onNotification: (notification) {
+                          final delta = notification.scrollDelta ?? 0;
+                          if (delta < 0 && notification.metrics.pixels <= 80) {
+                            ref.read(chatProvider(conversation).notifier).loadOlder();
+                          }
+                          return false;
+                        },
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          // صف إضافي في الأعلى ما دام في الخادم رسائل أقدم
+                          itemCount: state.messages.length + (state.hasOlder ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (state.hasOlder && index == 0) {
+                              return _LoadOlderRow(
+                                isLoading: state.isLoadingOlder,
+                                label: isStaff ? 'Load earlier messages' : 'عرض الرسائل الأقدم',
+                                onPressed: () => ref.read(chatProvider(conversation).notifier).loadOlder(),
+                              );
+                            }
+                            final msg = state.messages[index - (state.hasOlder ? 1 : 0)];
+                            return Align(
+                              alignment: msg.isMine ? Alignment.centerRight : Alignment.centerLeft,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  child: GlassContainer(
+                                    borderRadius: 14,
+                                    opacity: msg.isMine ? 0.22 : 0.10,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (!msg.isMine) Text(msg.senderName, style: _Txt.senderName),
+                                        Text(
+                                          msg.text,
+                                          style: msg.isMine ? _Txt.bubbleTextMine : _Txt.bubbleTextTheirs,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
               ),
               if (isEngineerReadOnly)
@@ -238,17 +251,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (_isSending || text.trim().isEmpty) return;
     final authState = ref.read(authStateProvider);
     final currentRole = authState is AuthAuthenticated ? authState.user.role : null;
-    final inquiryType = currentRole == UserRole.doctor
-        ? InquiryType.medical
-        : _selectedInquiryType ?? InquiryType.technical;
+    final inquiryType =
+        currentRole == UserRole.doctor ? InquiryType.medical : _selectedInquiryType ?? InquiryType.technical;
     // حماية إضافية: المهندس لا يرسل في القناة الطبية (والـ backend يرفض أيضاً).
     if (currentRole == UserRole.engineer && inquiryType == InquiryType.medical) return;
 
     setState(() => _isSending = true);
     try {
-      await ref
-          .read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier)
-          .send(text);
+      await ref.read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier).send(text);
       // لا نمسح ما كتبه المستخدم أثناء الإرسال — فقط النص الذي أُرسل
       if (mounted && _controller.text == text) _controller.clear();
     } catch (e) {
@@ -266,6 +276,35 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+}
+
+/// أعلى المحادثة: زر لتحميل الرسائل الأقدم، أو مؤشر تحميل أثناء جلبها.
+class _LoadOlderRow extends StatelessWidget {
+  const _LoadOlderRow({required this.isLoading, required this.label, required this.onPressed});
+
+  final bool isLoading;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Center(
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+              )
+            : TextButton.icon(
+                onPressed: onPressed,
+                icon: const Icon(Icons.history, size: 16, color: Colors.white70),
+                label: Text(label, style: _Txt.readOnly),
+              ),
+      ),
+    );
   }
 }
 

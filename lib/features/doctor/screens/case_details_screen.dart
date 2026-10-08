@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../../../core/widgets/sessions_vs_attacks_chart.dart';
 import '../../chat/logic/chat_notifier.dart';
@@ -28,20 +30,8 @@ int _daysSinceRegistration(DateTime createdAt) {
   return currentDate.difference(startDate).inDays + 1;
 }
 
-/// Category accent colors — every screen picks its palette from here so
-/// data reads by color instead of a flat, uniform white.
-class _Accent {
-  static const Color doctor = Color(0xFF5AC8FA);
-  static const Color patient = Color(0xFF34D399);
-  static const Color caseC = Color(0xFFFBBF24);
-  static const Color device = Color(0xFFA78BFA);
-  static const Color unlinked = Color(0xFFF87171);
-  static const Color clinic = Color(0xFF22D3EE);
-}
-
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
-  static const headline = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
   static const sectionTitle = TextStyle(
     color: Colors.white,
     fontSize: 14,
@@ -52,101 +42,18 @@ class _Txt {
     fontSize: 16,
     fontWeight: FontWeight.w600,
   );
-  static const sectionSubtitle = TextStyle(color: Colors.white60, fontSize: 12.5);
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
   static const body = TextStyle(color: Colors.white, fontSize: 14);
   static const label = TextStyle(color: Colors.white54, fontSize: 13);
-  static const tileTitle = TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-  static const tileSubtitle = TextStyle(color: Colors.white60, fontSize: 12);
-  static const error = TextStyle(color: Color(0xFFF87171));
-}
-
-/// Small circular badge behind a data-category icon: tinted fill,
-/// tinted border, colored icon — replaces flat white avatars/icons.
-class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.icon, required this.color, this.size = 40});
-  final IconData icon;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.18),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Icon(icon, color: color, size: size * 0.5),
-    );
-  }
-}
-
-/// Unified section header: colored side bar + small icon + white title
-/// + a lighter subtitle line (which may contain a glowing highlight,
-/// e.g. a count).
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    required this.icon,
-    required this.color,
-    this.subtitleSpans,
-    this.subtitleText,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<InlineSpan>? subtitleSpans;
-  final String? subtitleText;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasSubtitle = subtitleSpans != null || subtitleText != null;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 4,
-          height: hasSubtitle ? 34 : 20,
-          margin: const EdgeInsets.only(top: 2),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _Txt.sectionTitleMedium),
-              if (hasSubtitle) ...[
-                const SizedBox(height: 2),
-                subtitleSpans != null
-                    ? Text.rich(TextSpan(style: _Txt.sectionSubtitle, children: subtitleSpans))
-                    : Text(subtitleText!, style: _Txt.sectionSubtitle),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 /// A field label with a small colored leading icon, used above every
 /// editable field on this screen instead of a plain white caption.
 class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text, {this.icon, this.color = _Accent.doctor});
+  const _FieldLabel(this.text, {this.icon});
   final String text;
   final IconData? icon;
-  final Color color;
+  static const Color color = AppAccent.doctor;
 
   @override
   Widget build(BuildContext context) {
@@ -190,39 +97,16 @@ class _InlineStatePanel extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _IconBadge(icon: icon, color: color, size: 32),
+              IconBadge(icon: icon, color: color, size: 32),
               const SizedBox(width: 12),
-              Expanded(child: Text(message, style: isError ? _Txt.error : _Txt.hint)),
+              Expanded(child: Text(message, style: isError ? AppText.error : _Txt.hint)),
             ],
           ),
           if (onRetry != null) ...[
             const SizedBox(height: 10),
-            Align(alignment: AlignmentDirectional.centerStart, child: _RetryButton(onPressed: onRetry!)),
+            Align(alignment: AlignmentDirectional.centerStart, child: RetryButton(onPressed: onRetry!)),
           ],
         ],
-      ),
-    );
-  }
-}
-
-/// Glass-styled retry button used by every empty/error state.
-class _RetryButton extends StatelessWidget {
-  const _RetryButton({required this.onPressed});
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
-      label: const Text('Retry', style: TextStyle(color: Colors.white)),
-      style: TextButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.18),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-        ),
       ),
     );
   }
@@ -401,7 +285,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                         icon: Icons.calendar_today_outlined,
                         label: 'Days since registration',
                         value: '${_daysSinceRegistration(c.createdAt)}',
-                        color: _Accent.caseC,
+                        color: AppAccent.caseC,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -410,7 +294,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                         icon: Icons.event_note_outlined,
                         label: 'Sessions recorded',
                         value: '${c.completedSessionsCount}',
-                        color: _Accent.patient,
+                        color: AppAccent.patient,
                       ),
                     ),
                   ],
@@ -418,9 +302,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 const SizedBox(height: 20),
 
                 // --- Read-only summary ---
-                _SectionHeader(
+                SectionHeader(
+                  titleStyle: _Txt.sectionTitleMedium,
                   icon: Icons.info_outline,
-                  color: _Accent.caseC,
+                  color: AppAccent.caseC,
                   title: 'Case Info',
                 ),
                 const SizedBox(height: 10),
@@ -445,22 +330,20 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                         label: 'Symptoms',
                         value: c.symptoms.isNotEmpty ? c.symptoms : '—',
                       ),
-                      if (c.diagnosisType.hasClinicalDetails) ...[
-                        _InfoRow(
-                          label: 'attack / month',
-                          value: c.monthlyEpisodeCount?.toString() ?? '—',
-                        ),
-                        _InfoRow(
-                          label: 'attack duration',
-                          value: c.episodeDurationMinutes != null
-                              ? '${c.episodeDurationMinutes} min'
-                              : '—',
-                        ),
-                        _InfoRow(
-                          label: 'Medications',
-                          value: c.currentMedications.isNotEmpty ? c.currentMedications : '—',
-                        ),
-                      ],
+                      _InfoRow(
+                        label: 'attack / month',
+                        value: c.monthlyEpisodeCount?.toString() ?? '—',
+                      ),
+                      _InfoRow(
+                        label: 'attack duration',
+                        value: c.episodeDurationMinutes != null
+                            ? '${c.episodeDurationMinutes} min'
+                            : '—',
+                      ),
+                      _InfoRow(
+                        label: 'Medications',
+                        value: c.currentMedications.isNotEmpty ? c.currentMedications : '—',
+                      ),
                       _InfoRow(
                         label: 'Created',
                         value:
@@ -472,9 +355,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 const SizedBox(height: 20),
 
                 // --- Editable section ---
-                _SectionHeader(
+                SectionHeader(
+                  titleStyle: _Txt.sectionTitleMedium,
                   icon: Icons.edit_outlined,
-                  color: _Accent.doctor,
+                  color: AppAccent.doctor,
                   title: 'Edit Case',
                 ),
                 const SizedBox(height: 14),
@@ -560,19 +444,20 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 sessionsAsync.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (sessions) => _SectionHeader(
+                  data: (sessions) => SectionHeader(
+                    titleStyle: _Txt.sectionTitleMedium,
                     icon: Icons.history_outlined,
-                    color: _Accent.patient,
+                    color: AppAccent.patient,
                     title: 'Session History',
                     subtitleSpans: [
                       TextSpan(
                         text: '${sessions.length}',
                         style: TextStyle(
-                          color: _Accent.patient,
+                          color: AppAccent.patient,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                           shadows: [
-                            Shadow(color: _Accent.patient.withValues(alpha: 0.55), blurRadius: 14),
+                            Shadow(color: AppAccent.patient.withValues(alpha: 0.55), blurRadius: 14),
                           ],
                         ),
                       ),
@@ -588,7 +473,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   ),
                   error: (e, _) => _InlineStatePanel(
                     icon: Icons.error_outline,
-                    color: _Accent.unlinked,
+                    color: AppAccent.unlinked,
                     message: 'Failed to load sessions: $e',
                     isError: true,
                     onRetry: () => ref.invalidate(caseSessionsProvider(c.id)),
@@ -597,7 +482,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                     if (sessions.isEmpty) {
                       return _InlineStatePanel(
                         icon: Icons.event_busy_outlined,
-                        color: _Accent.patient,
+                        color: AppAccent.patient,
                         message: 'No sessions logged yet for this case.',
                       );
                     }
@@ -608,9 +493,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 ),
 
                 const SizedBox(height: 28),
-                _SectionHeader(
+                SectionHeader(
+                  titleStyle: _Txt.sectionTitleMedium,
                   icon: Icons.show_chart_outlined,
-                  color: _Accent.caseC,
+                  color: AppAccent.caseC,
                   title: 'Sessions vs Attacks',
                   subtitleText:
                       'Compares how many sessions were done against how many attacks were '
@@ -624,7 +510,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   ),
                   error: (e, _) => _InlineStatePanel(
                     icon: Icons.error_outline,
-                    color: _Accent.unlinked,
+                    color: AppAccent.unlinked,
                     message: 'Failed to load sessions: $e',
                     isError: true,
                     onRetry: () => ref.invalidate(caseSessionsProvider(c.id)),
@@ -636,7 +522,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                     ),
                     error: (e, _) => _InlineStatePanel(
                       icon: Icons.error_outline,
-                      color: _Accent.unlinked,
+                      color: AppAccent.unlinked,
                       message: 'Failed to load weekly attack reports: $e',
                       isError: true,
                       onRetry: () => ref.invalidate(caseWeeklyEpisodeLogsProvider(c.id)),
@@ -645,7 +531,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                       if (episodeLogs.isEmpty) {
                         return _InlineStatePanel(
                           icon: Icons.bar_chart_outlined,
-                          color: _Accent.caseC,
+                          color: AppAccent.caseC,
                           message:
                               'No weekly attack reports from the patient yet — the chart '
                               'will appear once the patient starts answering the mandatory '
@@ -664,19 +550,20 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 progressNotesAsync.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (notes) => _SectionHeader(
+                  data: (notes) => SectionHeader(
+                    titleStyle: _Txt.sectionTitleMedium,
                     icon: Icons.notes_outlined,
-                    color: _Accent.device,
+                    color: AppAccent.device,
                     title: 'Progress Notes',
                     subtitleSpans: [
                       TextSpan(
                         text: '${notes.length}',
                         style: TextStyle(
-                          color: _Accent.device,
+                          color: AppAccent.device,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                           shadows: [
-                            Shadow(color: _Accent.device.withValues(alpha: 0.55), blurRadius: 14),
+                            Shadow(color: AppAccent.device.withValues(alpha: 0.55), blurRadius: 14),
                           ],
                         ),
                       ),
@@ -731,7 +618,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   ),
                   error: (e, _) => _InlineStatePanel(
                     icon: Icons.error_outline,
-                    color: _Accent.unlinked,
+                    color: AppAccent.unlinked,
                     message: 'Failed to load progress notes: $e',
                     isError: true,
                     onRetry: () => ref.invalidate(caseProgressNotesProvider(c.id)),
@@ -740,7 +627,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                     if (notes.isEmpty) {
                       return _InlineStatePanel(
                         icon: Icons.notes_outlined,
-                        color: _Accent.device,
+                        color: AppAccent.device,
                         message: 'No progress notes recorded yet.',
                       );
                     }
@@ -774,7 +661,7 @@ class _StatBox extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       child: Column(
         children: [
-          _IconBadge(icon: icon, color: color, size: 34),
+          IconBadge(icon: icon, color: color, size: 34),
           const SizedBox(height: 8),
           Text(
             value,
@@ -858,16 +745,16 @@ class _SessionTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _IconBadge(
+          IconBadge(
             icon: completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: completed ? _Accent.patient : Colors.white38,
+            color: completed ? AppAccent.patient : Colors.white38,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(dateLabel, style: _Txt.tileTitle),
+                Text(dateLabel, style: AppText.tileTitle),
                 const SizedBox(height: 2),
                 if (session.patientResponse.isNotEmpty)
                   Text(
@@ -934,7 +821,7 @@ class _ProgressNoteTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _IconBadge(icon: Icons.sticky_note_2_outlined, color: _Accent.device),
+          IconBadge(icon: Icons.sticky_note_2_outlined, color: AppAccent.device),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -943,7 +830,7 @@ class _ProgressNoteTile extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(dateLabel, style: _Txt.tileTitle),
+                    Text(dateLabel, style: AppText.tileTitle),
                     Text(sessionsLabel, style: _Txt.hint),
                   ],
                 ),

@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from config.testing import CareWorldMixin, results
+from config.testing import CareWorldMixin, make_user, results
 from treatments.models import TreatmentSession
 
 from .models import Feedback
@@ -96,3 +96,24 @@ class FeedbackOwnershipTests(CareWorldMixin, APITestCase):
 
     def test_unknown_role_sees_nothing(self):
         self.assertEqual(results(self.client_for(self.no_role).get(FEEDBACK)), [])
+
+
+
+class FeedbackQueryCountTests(CareWorldMixin, APITestCase):
+    """Related 1: اسم كاتب التقييم يُجلب بـ JOIN."""
+
+    def test_feedback_list_query_count_is_constant(self):
+        def add_rows(n):
+            for _ in range(n):
+                author = make_user(f"rater_{Feedback.objects.count()}", "patient")
+                Feedback.objects.create(session=self.session_1, submitted_by=author, source="patient", rating=3)
+
+        client = self.client_for(self.engineer)
+        # صف واحد قبل القياس الأول: مع قائمة فارغة يكتفي DRF باستعلام العدّ
+        add_rows(1)
+        with self.assertNumQueries(2):
+            client.get(FEEDBACK)
+        add_rows(5)
+        with self.assertNumQueries(2):
+            response = client.get(FEEDBACK)
+        self.assertEqual(response.data["count"], 6)

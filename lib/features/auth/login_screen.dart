@@ -561,7 +561,6 @@ class _AppPalette {
   static const Color navyDeep = Color(0xFF0A1628);
   static const Color navyMid = Color(0xFF122A44);
   static const Color cyan = Color(0xFF4FD8E8);
-  static const Color teal = Color(0xFF2EC4B6);
   static const Color iceBlue = Color(0xFFBFE3F0);
   static const Color textPrimary = Color(0xFFF3F7FB);
   static const Color textSecondary = Color(0xFF8FA6BF);

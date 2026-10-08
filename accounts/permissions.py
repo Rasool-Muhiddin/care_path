@@ -7,69 +7,52 @@
 
 الاستخدام في أي View:
     permission_classes = [IsAuthenticated, IsDoctor]
+
+صلاحية لمجموعة أدوار جديدة = صنف من سطرين يرث HasRole ويحدد roles.
+ما يراه كل دور من البيانات نفسها يُحدَّد في cases/scoping.py.
 """
 
 from rest_framework.permissions import BasePermission
 
-from .models import UserRole
+from .models import STAFF_ROLES, UserRole
 
 
-class IsPatient(BasePermission):
+class HasRole(BasePermission):
+    """يسمح فقط لمستخدم مسجّل دخوله دوره ضمن [roles]."""
+
+    roles = frozenset()
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and getattr(user, "role", None) in self.roles
+        )
+
+
+class IsPatient(HasRole):
+    roles = frozenset({UserRole.PATIENT})
     message = "هذا الإجراء مخصص للمرضى فقط."
 
-    def has_permission(self, request, view) -> bool:
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == UserRole.PATIENT
-        )
 
-
-class IsDoctor(BasePermission):
+class IsDoctor(HasRole):
+    roles = frozenset({UserRole.DOCTOR})
     message = "هذا الإجراء مخصص للأطباء فقط."
 
-    def has_permission(self, request, view) -> bool:
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == UserRole.DOCTOR
-        )
 
-
-class IsEngineer(BasePermission):
+class IsEngineer(HasRole):
+    roles = frozenset({UserRole.ENGINEER})
     message = "هذا الإجراء مخصص لفريق المهندسين فقط."
 
-    def has_permission(self, request, view) -> bool:
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == UserRole.ENGINEER
-        )
 
-
-class IsDoctorOrEngineer(BasePermission):
+class IsDoctorOrEngineer(HasRole):
     """مفيدة للـ Endpoints التي يشترك فيها الطبيب والمهندس (مثل مراجعة حالة)."""
 
+    roles = STAFF_ROLES
     message = "هذا الإجراء مخصص للأطباء أو فريق المهندسين."
 
-    def has_permission(self, request, view) -> bool:
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in {UserRole.DOCTOR, UserRole.ENGINEER}
-        )
 
-
-class IsOwnerOrStaff(BasePermission):
-    """
-    مثال object-level permission: المريض يرى بياناته الخاصة فقط،
-    بينما الطبيب والمهندس يريان كل الحالات المرتبطة بهم.
-    يُستخدم مع has_object_permission في الـ ViewSet.
-    """
-
-    def has_object_permission(self, request, view, obj) -> bool:
-        user = request.user
-        if user.role in {UserRole.DOCTOR, UserRole.ENGINEER}:
-            return True
-        # المريض: يجب أن يكون هو صاحب السجل (obj.patient == user)
-        return getattr(obj, "patient_id", None) == user.id
+class IsPatientOrDoctor(HasRole):
+    roles = frozenset({UserRole.PATIENT, UserRole.DOCTOR})
+    message = "إضافة التقييمات مخصصة للمرضى والأطباء فقط."

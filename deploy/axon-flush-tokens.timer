@@ -1,0 +1,11 @@
+# /etc/systemd/system/axon-flush-tokens.timer
+[Unit]
+Description=Run Axon expired-token cleanup daily
+
+[Timer]
+# بعد النسخة الاحتياطية اليومية (03:00) بنصف ساعة
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

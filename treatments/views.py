@@ -30,7 +30,9 @@ class TreatmentSessionViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = scope_by_case(TreatmentSession.objects.all(), self.request.user)
+        queryset = scope_by_case(
+            TreatmentSession.objects.select_related("performed_by"), self.request.user
+        )
 
         case_id = int_query_param(self.request, "case")
         if case_id is not None:

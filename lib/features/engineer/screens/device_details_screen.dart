@@ -159,7 +159,7 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _CaseCard extends ConsumerWidget {
+class _CaseCard extends StatelessWidget {
   const _CaseCard({required this.caseSummary});
   final CaseSummaryModel caseSummary;
 
@@ -180,8 +180,7 @@ class _CaseCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsCountAsync = ref.watch(sessionsCountForCaseProvider(caseSummary.id));
+  Widget build(BuildContext context) {
     final statusColor = _statusColor(caseSummary.status);
 
     return GlassContainer(
@@ -207,11 +206,8 @@ class _CaseCard extends ConsumerWidget {
               '${caseSummary.diagnosisType.label} • Dr. ${caseSummary.doctorName ?? '—'}',
               style: _Txt.hint,
             ),
-            sessionsCountAsync.when(
-              loading: () => const Text('Loading sessions...', style: _Txt.hint),
-              error: (_, __) => const Text('Sessions: —', style: _Txt.hint),
-              data: (count) => Text('Sessions logged: $count', style: _Txt.hint),
-            ),
+            // completed_sessions_count يأتي مع قائمة الحالات نفسها — لا طلب لكل حالة
+            Text('Sessions logged: ${caseSummary.completedSessionsCount}', style: _Txt.hint),
           ],
         ),
         isThreeLine: true,

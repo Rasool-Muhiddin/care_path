@@ -1,18 +1,21 @@
 from functools import partial
 
 from rest_framework import generics, permissions
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Q
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from accounts.models import UserRole
+from accounts.permissions import IsEngineer
 from cases.models import Case
 from config.drf import int_query_param
 from .models import ChatMessage
 from .models import InquiryType
-from .serializers import ChatMessageSerializer
-from .permissions import IsCaseParticipant
+from .serializers import ChatMessageSerializer, EngineerInboxRowSerializer
+from .permissions import IsCaseParticipant, engineer_can_reply, responsible_engineer_of
 from .notifications import notify_in_background
 
 # أول فتح للمحادثة (أو ?before_id=) يرجع آخر 50 رسالة فقط
@@ -33,7 +36,10 @@ class CaseMessagesView(generics.ListCreateAPIView):
 
     def get_case(self):
         if not hasattr(self, '_case'):
-            self._case = get_object_or_404(Case, pk=self.kwargs['case_id'])
+            # عيادة الجهاز ومهندسها تحدد حق المهندس في الرد (engineer_can_reply)
+            self._case = get_object_or_404(
+                Case.objects.select_related('device__clinic'), pk=self.kwargs['case_id']
+            )
         return self._case
 
     def get_serializer_context(self):
@@ -46,6 +52,11 @@ class CaseMessagesView(generics.ListCreateAPIView):
         # لا يجوز للطبيب أن يطّلع على الاستفسارات التقنية أو ردودها.
         if getattr(user, 'role', None) == UserRole.DOCTOR:
             queryset = queryset.filter(inquiry_type=InquiryType.MEDICAL)
+
+        # كل المهندسين يقرؤون القناة التقنية، أما الاطلاع على القناة الطبية
+        # فيبقى كما كان: للمهندس المسؤول عن عيادة الجهاز (أو أي مهندس إن لم يوجد).
+        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, self.get_case()):
+            queryset = queryset.filter(inquiry_type=InquiryType.TECHNICAL)
 
         # تعرض الواجهة قناة واحدة في كل مرة كي لا تختلط مراسلات الدعم
         # مع الاستفسارات الطبية لدى المريض أو المهندس.
@@ -66,6 +77,15 @@ class CaseMessagesView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        # حق الرد في القناة التقنية للمهندس المسؤول عن عيادة الجهاز فقط
+        # (القناة الطبية يرفضها الـ serializer للمهندس أصلاً).
+        user = self.request.user
+        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, self.get_case()):
+            responsible = responsible_engineer_of(self.get_case())
+            name = responsible.get_full_name() or responsible.username
+            raise PermissionDenied(
+                f'لا يمكنك الرد في هذه المحادثة. الرد مخصص للمهندس المسؤول عن عيادة الجهاز: {name}.'
+            )
         serializer.save(case=self.get_case(), sender=self.request.user)
         # الإشعار بعد نجاح الحفظ فعلياً، وفي thread منفصل حتى لا ينتظر
         # الطلب (وعامل gunicorn) اتصال FCM بخوادم Google.
@@ -82,8 +102,12 @@ class CaseMessagesView(generics.ListCreateAPIView):
 
         # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة. المهندس يطّلع على
         # القناة الطبية فقط، فلا نعلّمها مقروءة كي لا يختفي عدّاد الطبيب/المريض.
+        # والمهندس الذي لا يملك حق الرد يقرأ فقط: لا يعلّم شيئاً كي يبقى
+        # العدّاد ظاهراً لدى المهندس المسؤول.
         unread = queryset.exclude(sender=request.user)
         if getattr(request.user, 'role', None) == UserRole.ENGINEER:
+            if not engineer_can_reply(request.user, self.get_case()):
+                unread = unread.none()
             unread = unread.filter(inquiry_type=InquiryType.TECHNICAL)
         unread.update(is_read=True)
         return Response(data)
@@ -115,9 +139,80 @@ class UnreadCountView(APIView):
             messages = messages.filter(inquiry_type=InquiryType.MEDICAL)
         elif getattr(user, 'role', None) == UserRole.ENGINEER:
             # القناة الطبية للاطلاع فقط عند المهندس، فلا تُحتسب كغير مقروءة له.
-            messages = messages.filter(inquiry_type=InquiryType.TECHNICAL)
+            # ورسائل المريض فقط، بنفس تعريف unread_count في صندوق الوارد.
+            messages = messages.filter(inquiry_type=InquiryType.TECHNICAL, sender=F('case__patient'))
         # order_by() يلغي ترتيب الموديل (created_at) حتى لا يدخل في GROUP BY
         by_case = dict(
             messages.order_by().values('case').annotate(n=Count('id')).values_list('case', 'n')
         )
         return Response({'total_unread': sum(by_case.values()), 'by_case': by_case})
+
+
+def _technical_messages_of_case():
+    return ChatMessage.objects.filter(case=OuterRef('pk'), inquiry_type=InquiryType.TECHNICAL)
+
+
+class EngineerInboxView(generics.ListAPIView):
+    """صندوق رسائل المهندس: صف لكل محادثة تقنية (مريض ↔ مهندس) على حالة.
+
+    كل المهندسين يرون كل المحادثات؛ can_reply يحدد هل يرد الطالب.
+    ?mine=true: المحادثات التي يملك الطالب حق الرد فيها فقط (عيادته، أو
+    بلا مهندس مسؤول). الترتيب: الأحدث رسالةً أولاً. استعلامان ثابتان لكل
+    صفحة (العدّ + الصفحة) مهما زاد عدد المحادثات.
+    """
+
+    serializer_class = EngineerInboxRowSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEngineer]
+
+    def get_queryset(self):
+        technical = _technical_messages_of_case().order_by('-id')
+        unread = (
+            _technical_messages_of_case()
+            .filter(is_read=False, sender=OuterRef('patient'))
+            .order_by()
+            .values('case')
+            .annotate(n=Count('id'))
+            .values('n')
+        )
+        queryset = (
+            Case.objects.annotate(
+                last_message_id=Subquery(technical.values('id')[:1]),
+                last_message_text=Subquery(technical.values('text')[:1]),
+                last_message_at=Subquery(technical.values('created_at')[:1]),
+                unread_count=Coalesce(Subquery(unread, output_field=IntegerField()), Value(0)),
+            )
+            .filter(last_message_id__isnull=False)
+            .select_related('patient', 'device__clinic__responsible_engineer')
+            .order_by('-last_message_id')
+        )
+        if self.request.query_params.get('mine') in ('true', '1'):
+            # LEFT JOIN: يشمل الحالة بلا جهاز والجهاز بلا عيادة أيضاً
+            queryset = queryset.filter(
+                Q(device__clinic__responsible_engineer=self.request.user)
+                | Q(device__clinic__responsible_engineer__isnull=True)
+            )
+        return queryset
+
+
+class CaseReplyRightsView(APIView):
+    """هل يستطيع المهندس الطالب الرد في القناة التقنية لهذه الحالة؟
+
+    تستعملها شاشة المحادثة لإخفاء حقل الكتابة وعرض اسم المسؤول. الـ
+    endpoint الفعلي للإرسال يفحص القاعدة نفسها ويرجع 403.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsEngineer]
+
+    def get(self, request, case_id):
+        case = get_object_or_404(
+            Case.objects.select_related('device__clinic__responsible_engineer'), pk=case_id
+        )
+        responsible = responsible_engineer_of(case)
+        return Response({
+            'case': case.pk,
+            'can_reply': engineer_can_reply(request.user, case),
+            'responsible_engineer': responsible.pk if responsible else None,
+            'responsible_engineer_name': (
+                (responsible.get_full_name() or responsible.username) if responsible else None
+            ),
+        })

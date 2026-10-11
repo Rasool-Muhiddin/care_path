@@ -6,6 +6,7 @@ from django.db import connection
 from accounts.models import User, UserRole
 
 from .models import ChatMessage, InquiryType
+from .permissions import responsible_engineer_of
 
 logger = logging.getLogger(__name__)
 
@@ -13,14 +14,12 @@ logger = logging.getLogger(__name__)
 def _recipients_for(message: ChatMessage):
     case = message.case
     if message.inquiry_type == InquiryType.TECHNICAL:
-        clinic = case.device.clinic if case.device else None
-        engineer = clinic.responsible_engineer if clinic else None
+        # نفس قاعدة حق الرد (engineer_can_reply): المهندس المسؤول عن عيادة
+        # الجهاز فقط. بلا مسؤول يستطيع أي مهندس الرد، فيُشعَر الجميع.
+        engineer = responsible_engineer_of(case)
         if engineer:
             return [engineer]
-        # حالة غير مسندة لمهندس مسؤول بعد — نفس منطق عدّاد غير
-        # المقروء في UnreadCountView: تظهر لكل المهندسين إلى حين
-        # ربطها بعيادة/مهندس مسؤول.
-        return list(User.objects.filter(role=UserRole.ENGINEER))
+        return list(User.objects.filter(role=UserRole.ENGINEER, is_active=True))
     return [case.patient, case.doctor]
 
 

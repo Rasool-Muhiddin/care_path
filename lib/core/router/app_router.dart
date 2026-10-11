@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/splash_screen.dart';
+import '../../features/chat/data/engineer_conversation_model.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/doctor/screens/add_case_screen.dart';
 import '../../features/doctor/screens/doctor_home_screen.dart';
@@ -66,6 +67,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'new-device',
             builder: (context, state) => const AddDeviceScreen(),
+          ),
+          // من صندوق الرسائل (extra = حق الرد المعروف مسبقاً لتفادي وميض
+          // حقل الكتابة) أو من الضغط على إشعار (بلا extra، يُجلب من الخادم).
+          GoRoute(
+            path: 'chat/:caseId',
+            builder: (context, state) => ChatScreen(
+              caseId: int.parse(state.pathParameters['caseId']!),
+              initialReplyRights: state.extra is ReplyRights ? state.extra as ReplyRights : null,
+            ),
           ),
         ],
       ),

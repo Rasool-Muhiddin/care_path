@@ -4,6 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/auth/auth_state.dart'; // فيه تعريف apiClientProvider
 import 'chat_message_model.dart';
+import 'engineer_conversation_model.dart';
 
 class ChatRepository {
   final ApiClient _apiClient;
@@ -55,6 +56,40 @@ class ChatRepository {
       final response = await _apiClient.raw.get(ApiEndpoints.chatUnreadCount);
       final byCase = response.data['by_case'] as Map<String, dynamic>? ?? {};
       return byCase.map((key, value) => MapEntry(int.parse(key), value as int));
+    } on DioException catch (e) {
+      throw _apiClient.mapError(e);
+    }
+  }
+
+  /// حجم صفحة صندوق رسائل المهندس
+  static const inboxPageSize = 30;
+
+  /// صفحة من صندوق رسائل المهندس، الأحدث رسالةً أولاً.
+  /// [mine]: المحادثات التي يستطيع المهندس الرد فيها فقط (عياداته أو بلا مسؤول).
+  Future<InboxPage> getEngineerInbox({required int page, required bool mine}) async {
+    try {
+      final response = await _apiClient.raw.get(
+        ApiEndpoints.engineerInbox,
+        queryParameters: {
+          'page': page,
+          'page_size': inboxPageSize,
+          if (mine) 'mine': 'true',
+        },
+      );
+      final data = response.data as Map<String, dynamic>;
+      final items = (data['results'] as List)
+          .map((e) => EngineerConversationModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return InboxPage(items, data['next'] != null);
+    } on DioException catch (e) {
+      throw _apiClient.mapError(e);
+    }
+  }
+
+  Future<ReplyRights> getReplyRights(int caseId) async {
+    try {
+      final response = await _apiClient.raw.get(ApiEndpoints.caseReplyRights(caseId));
+      return ReplyRights.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }

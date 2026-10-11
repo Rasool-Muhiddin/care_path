@@ -6,7 +6,9 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/permissions/user_role.dart';
 import '../data/chat_message_model.dart';
+import '../data/engineer_conversation_model.dart';
 import '../logic/chat_notifier.dart';
+import '../logic/engineer_inbox_notifier.dart';
 
 /// Chat-only background: a deep teal-to-navy gradient with a soft glow
 /// near the top, distinct from [AppGradientBackground] so the messaging
@@ -70,7 +72,11 @@ class ChatScreen extends ConsumerStatefulWidget {
 
   /// اسم الطبيب المعالج (اختياري) — يُعرض للمريض في سطر "إلى: ..." بالقناة الطبية.
   final String? doctorName;
-  const ChatScreen({super.key, required this.caseId, this.doctorName});
+
+  /// للمهندس: حق الرد المعروف مسبقاً (من صندوق الرسائل) يُعرض فوراً إلى
+  /// أن يصل رد الخادم (replyRightsProvider).
+  final ReplyRights? initialReplyRights;
+  const ChatScreen({super.key, required this.caseId, this.doctorName, this.initialReplyRights});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -98,7 +104,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final inquiryType =
         currentRole == UserRole.doctor ? InquiryType.medical : _selectedInquiryType ?? InquiryType.technical;
     // المهندس يرى القناة الطبية كمدير لكن للقراءة فقط.
-    final isEngineerReadOnly = currentRole == UserRole.engineer && inquiryType == InquiryType.medical;
+    final isEngineerMedicalReadOnly = currentRole == UserRole.engineer && inquiryType == InquiryType.medical;
+    // وفي القناة التقنية يرد المهندس المسؤول عن عيادة الجهاز فقط (والخادم
+    // يرفض غيره بـ 403). أثناء التحميل/عند الفشل يبقى الحقل ظاهراً.
+    final replyRights = currentRole == UserRole.engineer && inquiryType == InquiryType.technical
+        ? ref.watch(replyRightsProvider(widget.caseId)).valueOrNull ?? widget.initialReplyRights
+        : null;
+    final isEngineerTechnicalReadOnly = replyRights != null && !replyRights.canReply;
     final doctorLabel = (widget.doctorName != null && widget.doctorName!.trim().isNotEmpty)
         ? 'د. ${widget.doctorName!.trim()}'
         : 'الطبيب المعالج';
@@ -202,8 +214,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                       ),
               ),
-              if (isEngineerReadOnly)
-                const _ReadOnlyBar()
+              if (isEngineerMedicalReadOnly)
+                const _ReadOnlyBar(
+                  text: 'View only — medical conversation between the patient and the doctor.',
+                )
+              else if (isEngineerTechnicalReadOnly)
+                _ReadOnlyBar(
+                  text: 'Read only — responsible: Eng. ${replyRights.responsibleEngineerName ?? '—'}',
+                )
               else
                 Padding(
                   padding: const EdgeInsets.all(8.0),
@@ -263,6 +281,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (mounted && _controller.text == text) _controller.clear();
     } catch (e) {
       if (!mounted) return;
+      // تغيّر مهندس العيادة أثناء فتح الشاشة: أعد جلب حق الرد ليظهر شريط القراءة فقط
+      if (e is ApiException && e.statusCode == 403 && currentRole == UserRole.engineer) {
+        ref.invalidate(replyRightsProvider(widget.caseId));
+      }
       final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تعذّر إرسال الرسالة: $reason')),
@@ -427,7 +449,8 @@ class _RecipientBanner extends StatelessWidget {
 }
 
 class _ReadOnlyBar extends StatelessWidget {
-  const _ReadOnlyBar();
+  const _ReadOnlyBar({required this.text});
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -436,8 +459,8 @@ class _ReadOnlyBar extends StatelessWidget {
       child: GlassContainer(
         borderRadius: 14,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: const Text(
-          'View only — medical conversation between the patient and the doctor.',
+        child: Text(
+          text,
           textAlign: TextAlign.center,
           style: _Txt.readOnly,
         ),

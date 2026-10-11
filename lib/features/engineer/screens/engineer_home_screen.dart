@@ -5,9 +5,11 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ltr_scope.dart';
+import '../../chat/logic/chat_notifier.dart';
 import 'clinics_tab.dart';
 import 'device_types_tab.dart';
 import 'devices_tab.dart';
+import 'messages_tab.dart';
 import 'overview_tab.dart';
 
 /// AppBar title: a small glass-style "BME" badge (Biomedical Engineer)
@@ -66,10 +68,13 @@ class _BmeTitle extends StatelessWidget {
 /// label, instead of an icon that just follows the selected/unselected
 /// label color like a plain [Tab] would.
 class _AccentTab extends StatelessWidget {
-  const _AccentTab({required this.icon, required this.color, required this.label});
+  const _AccentTab({required this.icon, required this.color, required this.label, this.badgeCount = 0});
   final IconData icon;
   final Color color;
   final String label;
+
+  /// عدد يظهر بدائرة حمراء بجانب العنوان (0 = بلا شارة)
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +86,22 @@ class _AccentTab extends StatelessWidget {
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
           Text(label),
+          if (badgeCount > 0) ...[
+            const SizedBox(width: 6),
+            Container(
+              constraints: const BoxConstraints(minWidth: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppAccent.unlinked,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                badgeCount > 99 ? '99+' : '$badgeCount',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -90,8 +111,8 @@ class _AccentTab extends StatelessWidget {
 /// Engineer's home screen — operational overview plus management tabs.
 ///
 /// This screen owns the single [AppGradientBackground] for the whole
-/// engineer section — [OverviewTab], [DevicesTab], [ClinicsTab] and
-/// [DeviceTypesTab] should NOT wrap themselves in another
+/// engineer section — [OverviewTab], [MessagesTab], [DevicesTab],
+/// [ClinicsTab] and [DeviceTypesTab] should NOT wrap themselves in another
 /// [AppGradientBackground] (that would stack two translucent gradients
 /// and look darker/muddier than intended). Give each tab a transparent
 /// `Scaffold`/background instead and let this screen's gradient show
@@ -110,7 +131,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -123,6 +144,10 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final username = authState is AuthAuthenticated ? authState.user.username : '';
+    // للمهندس: رسائل المرضى غير المقروءة في المحادثات التي يستطيع الرد فيها
+    // (نفس نطاق فلتر "My clinics")
+    final unreadMessages =
+        (ref.watch(unreadByCaseProvider).value ?? const <int, int>{}).values.fold(0, (a, b) => a + b);
 
     final appBar = AppBar(
       backgroundColor: Colors.transparent,
@@ -143,11 +168,17 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
         unselectedLabelColor: Colors.white54,
         indicatorColor: Colors.white,
         indicatorWeight: 2,
-        tabs: const [
-          _AccentTab(icon: Icons.dashboard_outlined, color: AppAccent.clinic, label: 'Overview'),
-          _AccentTab(icon: Icons.memory_outlined, color: AppAccent.device, label: 'Devices'),
-          _AccentTab(icon: Icons.local_hospital_outlined, color: AppAccent.clinic, label: 'Clinics'),
-          _AccentTab(icon: Icons.category_outlined, color: AppAccent.device, label: 'Device Types'),
+        tabs: [
+          const _AccentTab(icon: Icons.dashboard_outlined, color: AppAccent.clinic, label: 'Overview'),
+          _AccentTab(
+            icon: Icons.forum_outlined,
+            color: AppAccent.patient,
+            label: 'Messages',
+            badgeCount: unreadMessages,
+          ),
+          const _AccentTab(icon: Icons.memory_outlined, color: AppAccent.device, label: 'Devices'),
+          const _AccentTab(icon: Icons.local_hospital_outlined, color: AppAccent.clinic, label: 'Clinics'),
+          const _AccentTab(icon: Icons.category_outlined, color: AppAccent.device, label: 'Device Types'),
         ],
       ),
     );
@@ -171,6 +202,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
               controller: _tabController,
               children: [
                 OverviewTab(),
+                MessagesTab(),
                 DevicesTab(),
                 ClinicsTab(),
                 DeviceTypesTab(),

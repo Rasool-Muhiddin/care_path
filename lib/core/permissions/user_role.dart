@@ -38,15 +38,14 @@ enum UserRole {
     }
   }
 
-  /// مسار شاشة محادثة حالة معيّنة لهذا الدور، أو null إن لم يكن لهذا الدور
-  /// مسار محادثة في الراوتر (المهندس يفتحها من تفاصيل الجهاز مباشرة).
+  /// مسار شاشة محادثة حالة معيّنة لهذا الدور (يُستعمل عند الضغط على
+  /// إشعار رسالة)، أو null إن لم يكن لهذا الدور مسار محادثة في الراوتر.
   String? chatRoute(int caseId) {
     switch (this) {
       case UserRole.patient:
       case UserRole.doctor:
-        return '$homeRoute/chat/$caseId';
       case UserRole.engineer:
-        return null;
+        return '$homeRoute/chat/$caseId';
     }
   }
 

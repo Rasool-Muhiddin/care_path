@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from accounts.models import UserRole
+from cases.models import Case
 
 from .models import ChatMessage, InquiryType
+from .permissions import engineer_can_reply, responsible_engineer_of
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
@@ -53,3 +55,48 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         if role == UserRole.ENGINEER and inquiry_type == InquiryType.MEDICAL:
             raise PermissionDenied('المهندس يستطيع قراءة القناة الطبية فقط ولا يمكنه الرد فيها.')
         return attrs
+
+def _display_name(user):
+    return (user.get_full_name() or user.username) if user else None
+
+
+class EngineerInboxRowSerializer(serializers.ModelSerializer):
+    """صف في صندوق رسائل المهندس — الحقول المشتقة تأتي من annotations
+    و select_related في EngineerInboxView (لا استعلامات لكل صف)."""
+
+    # نص المعاينة فقط؛ المحادثة كاملة عبر case-messages
+    PREVIEW_LENGTH = 200
+
+    case = serializers.IntegerField(source='pk', read_only=True)
+    patient_name = serializers.SerializerMethodField()
+    device_serial = serializers.CharField(source='device.serial_number', default=None, read_only=True)
+    clinic_name = serializers.CharField(source='device.clinic.name', default=None, read_only=True)
+    responsible_engineer = serializers.IntegerField(
+        source='device.clinic.responsible_engineer_id', default=None, read_only=True
+    )
+    responsible_engineer_name = serializers.SerializerMethodField()
+    case_status = serializers.CharField(source='status', read_only=True)
+    last_message_text = serializers.SerializerMethodField()
+    last_message_at = serializers.DateTimeField(read_only=True)
+    unread_count = serializers.IntegerField(read_only=True)
+    can_reply = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Case
+        fields = [
+            'case', 'patient_name', 'device_serial', 'clinic_name', 'responsible_engineer',
+            'responsible_engineer_name', 'case_status', 'last_message_text', 'last_message_at',
+            'unread_count', 'can_reply',
+        ]
+
+    def get_patient_name(self, obj):
+        return _display_name(obj.patient)
+
+    def get_responsible_engineer_name(self, obj):
+        return _display_name(responsible_engineer_of(obj))
+
+    def get_last_message_text(self, obj):
+        return (obj.last_message_text or '')[: self.PREVIEW_LENGTH]
+
+    def get_can_reply(self, obj):
+        return engineer_can_reply(self.context['request'].user, obj)

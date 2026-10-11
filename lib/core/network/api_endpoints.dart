@@ -40,4 +40,6 @@ class ApiEndpoints {
     // chat
   static String caseMessages(int caseId) => '$api/chat/cases/$caseId/messages/';
   static const String chatUnreadCount = '$api/chat/unread-count/';
+  static String caseReplyRights(int caseId) => '$api/chat/cases/$caseId/reply-rights/';
+  static const String engineerInbox = '$api/chat/engineer/inbox/';
 }

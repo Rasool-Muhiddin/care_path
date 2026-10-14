@@ -7,10 +7,10 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/session_calendar.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
 import '../../doctor/models/weekly_episode_log_model.dart';
-import '../models/session_model.dart';
 import '../patient_providers.dart';
 import 'end_session_dialog.dart';
 
@@ -349,9 +349,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     if (sessions.isEmpty) {
                       return const _EmptyView();
                     }
-                    final sorted = [...sessions]
-                      ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
-                    return _SessionsGroup(sessions: sorted);
+                    return SessionCalendar(
+                      sessions: sessions,
+                      strings: SessionCalendarStrings.ar,
+                    );
                   },
                 ),
               ],
@@ -447,73 +448,6 @@ class _SessionCounters extends StatelessWidget {
         const SizedBox(width: 10),
         counter('المتبقية', remaining!, AppAccent.caseC),
       ],
-    );
-  }
-}
-
-/// كل جلسات المريض مجمّعة داخل حاوية زجاجية واحدة، مفصولة بخطوط رفيعة
-/// شفافة بدل بطاقة مستقلة لكل جلسة.
-class _SessionsGroup extends StatelessWidget {
-  const _SessionsGroup({required this.sessions});
-  final List<SessionModel> sessions;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        children: [
-          for (var i = 0; i < sessions.length; i++) ...[
-            _SessionTile(session: sessions[i]),
-            if (i != sessions.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 14,
-                endIndent: 14,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionTile extends StatelessWidget {
-  const _SessionTile({required this.session});
-  final SessionModel session;
-
-  @override
-  Widget build(BuildContext context) {
-    final date = session.sessionDate;
-    final dateLabel = '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
-    final completed = session.patientResponse.isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(
-        children: [
-          IconBadge(icon: Icons.event_note, color: AppAccent.patient),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('جلسة $dateLabel', style: AppText.tileTitle),
-                if (session.patientResponse.isNotEmpty)
-                  Text(session.patientResponse, style: AppText.tileSubtitle)
-                else if (session.durationMinutes != null)
-                  Text('المدة: ${session.durationMinutes} دقيقة', style: AppText.tileSubtitle),
-              ],
-            ),
-          ),
-          Icon(
-            completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: completed ? AppAccent.patient : Colors.white38,
-          ),
-        ],
-      ),
     );
   }
 }

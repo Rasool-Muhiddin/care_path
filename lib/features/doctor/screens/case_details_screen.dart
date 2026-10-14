@@ -6,9 +6,9 @@ import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
+import '../../../core/widgets/session_calendar.dart';
 import '../../../core/widgets/sessions_vs_attacks_chart.dart';
 import '../../chat/logic/chat_notifier.dart';
-import '../../patient/models/session_model.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
 import '../models/case_progress_note_model.dart';
@@ -143,7 +143,7 @@ InputDecoration _fieldDecoration({String? hint}) {
 
 /// Case details screen — opened by tapping a case in the doctor's home
 /// screen. Shows full case info, lets the doctor edit status / treatment
-/// plan / initial evaluation, and lists the case's logged sessions.
+/// plan / initial evaluation, and shows the case's sessions on a calendar.
 class CaseDetailsScreen extends ConsumerStatefulWidget {
   const CaseDetailsScreen({super.key, required this.caseModel});
 
@@ -486,9 +486,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                         message: 'No sessions logged yet for this case.',
                       );
                     }
-                    final sorted = [...sessions]
-                      ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
-                    return _SessionsGroup(sessions: sorted);
+                    return SessionCalendar(
+                      sessions: sessions,
+                      strings: SessionCalendarStrings.en,
+                    );
                   },
                 ),
 
@@ -694,80 +695,6 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(width: 130, child: Text(label, style: _Txt.label)),
           Expanded(child: Text(value, style: _Txt.body)),
-        ],
-      ),
-    );
-  }
-}
-
-/// All logged sessions grouped inside a single glass panel, separated by
-/// thin translucent dividers instead of one card per session.
-class _SessionsGroup extends StatelessWidget {
-  const _SessionsGroup({required this.sessions});
-  final List<SessionModel> sessions;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        children: [
-          for (var i = 0; i < sessions.length; i++) ...[
-            _SessionTile(session: sessions[i]),
-            if (i != sessions.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 14,
-                endIndent: 14,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionTile extends StatelessWidget {
-  const _SessionTile({required this.session});
-  final SessionModel session;
-
-  @override
-  Widget build(BuildContext context) {
-    final date = session.sessionDate;
-    final dateLabel =
-        '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
-    final completed = session.patientResponse.isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconBadge(
-            icon: completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: completed ? AppAccent.patient : Colors.white38,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(dateLabel, style: AppText.tileTitle),
-                const SizedBox(height: 2),
-                if (session.patientResponse.isNotEmpty)
-                  Text(
-                    'Patient feedback: ${session.patientResponse}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                  )
-                else
-                  const Text('No feedback submitted', style: _Txt.hint),
-                if (session.durationMinutes != null)
-                  Text('Duration: ${session.durationMinutes} min', style: _Txt.hint),
-              ],
-            ),
-          ),
         ],
       ),
     );

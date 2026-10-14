@@ -10,7 +10,7 @@ from config.testing import CareWorldMixin, make_user, results
 from treatments.models import TreatmentSession
 from feedback.models import Feedback
 
-from .models import AttackEvent, Case, CaseProgressNote, CaseStatus
+from .models import AttackEvent, Case, CaseStatus
 from .serializers import CaseSerializer
 
 CASES = "/api/cases/"
@@ -275,9 +275,6 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
     """H1: أي دور غير patient/doctor/engineer لا يرى شيئاً."""
 
     def setUp(self):
-        CaseProgressNote.objects.create(
-            case=self.case_1, author=self.doctor_a, note="n", sessions_completed_snapshot=1
-        )
         AttackEvent.objects.create(
             case=self.case_1, occurred_at=timezone.now(), duration_seconds=60,
             severity=3, took_medication=False,
@@ -285,8 +282,7 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
 
     def test_unknown_role_sees_nothing(self):
         client = self.client_for(self.no_role)
-        for url in (CASES, "/api/case-progress-notes/", "/api/attack-events/",
-                    "/api/attack-log-confirmations/"):
+        for url in (CASES, "/api/attack-events/", "/api/attack-log-confirmations/"):
             response = client.get(url)
             self.assertEqual(response.status_code, status.HTTP_200_OK, url)
             self.assertEqual(results(response), [], url)
@@ -296,10 +292,6 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
             CASES, {"patient": self.patient_4.pk, "diagnosis_type": "migraine"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_patient_sees_no_progress_notes(self):
-        response = self.client_for(self.patient_1).get("/api/case-progress-notes/")
-        self.assertEqual(results(response), [])
 
     def test_engineer_still_sees_everything(self):
         response = self.client_for(self.engineer).get(CASES)
@@ -359,7 +351,6 @@ class InvalidQueryParamTests(CareWorldMixin, APITestCase):
         client = self.client_for(self.engineer)
         for url, params in (
             (CASES, {"device": "abc"}),
-            ("/api/case-progress-notes/", {"case": "abc"}),
             ("/api/attack-events/", {"case": "abc"}),
             ("/api/attack-log-confirmations/", {"case": "abc"}),
             ("/api/sessions/", {"case": "abc"}),
@@ -395,15 +386,6 @@ class RelatedNameQueryCountTests(CareWorldMixin, APITestCase):
         with self.assertNumQueries(self.EXPECTED_QUERIES):
             response = client.get(url)
         self.assertGreaterEqual(response.data["count"], 5)
-
-    def test_progress_notes(self):
-        def add_rows(n):
-            for _ in range(n):
-                author = make_user(f"note_author_{CaseProgressNote.objects.count()}", "doctor")
-                CaseProgressNote.objects.create(
-                    case=self.case_1, author=author, note="n", sessions_completed_snapshot=0
-                )
-        self.assert_constant("/api/case-progress-notes/", add_rows)
 
     def test_sessions(self):
         def add_rows(n):

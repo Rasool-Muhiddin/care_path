@@ -14,7 +14,6 @@ from .models import (
     AttackEvent,
     AttackLogConfirmation,
     Case,
-    CaseProgressNote,
     CaseStatus,
     DiagnosisType,
     DISEASE_TYPE_CHOICES_BY_DIAGNOSIS,
@@ -176,63 +175,6 @@ class CaseSerializer(serializers.ModelSerializer):
                     }
                 )
         return attrs
-
-
-class CaseProgressNoteSerializer(serializers.ModelSerializer):
-    author_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = CaseProgressNote
-        fields = [
-            "id",
-            "case",
-            "author",
-            "author_name",
-            "note",
-            "sessions_completed_snapshot",
-            "total_sessions_planned_snapshot",
-            "created_at",
-        ]
-        read_only_fields = [
-            "id",
-            "author",
-            "sessions_completed_snapshot",
-            "total_sessions_planned_snapshot",
-            "created_at",
-        ]
-
-    def get_author_name(self, obj):
-        if not obj.author:
-            return None
-        return obj.author.get_full_name() or obj.author.username
-
-    def validate(self, attrs):
-        """
-        الطبيب يقدر يضيف ملاحظة فقط لحالة هو المسؤول عنها (case.doctor).
-        المريض ممنوع بالكامل من هذا الـ endpoint (يُمنع أصلاً على مستوى
-        الصلاحيات بالـ view، وهذا فحص إضافي احترازي).
-        """
-        request = self.context.get("request")
-        case = attrs.get("case")
-        if request and case is not None:
-            if request.user.role == UserRole.DOCTOR and case.doctor_id != request.user.id:
-                raise serializers.ValidationError(
-                    "لا يمكنك إضافة ملاحظة تطور لحالة لا تخصك."
-                )
-            if request.user.role == UserRole.PATIENT:
-                raise serializers.ValidationError(
-                    "لا يمكن للمريض إضافة ملاحظات تطور."
-                )
-        return attrs
-
-    def create(self, validated_data):
-        request = self.context["request"]
-        case = validated_data["case"]
-        validated_data["author"] = request.user
-        # لقطة تلقائية لعدد الجلسات وقت الكتابة — الطبيب لا يدخلها يدوياً
-        validated_data["sessions_completed_snapshot"] = case.sessions.count()
-        validated_data["total_sessions_planned_snapshot"] = case.total_sessions_planned
-        return super().create(validated_data)
 
 
 class AttackEventSerializer(serializers.ModelSerializer):

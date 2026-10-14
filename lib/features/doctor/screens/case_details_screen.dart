@@ -11,7 +11,6 @@ import '../../attack_stats/attack_statistics_screen.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
-import '../models/case_progress_note_model.dart';
 
 /// Number of calendar days since [createdAt], counting the registration
 /// day itself as day 1.
@@ -158,10 +157,8 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
   late final TextEditingController _treatmentPlanController;
   late final TextEditingController _initialEvaluationController;
   late final TextEditingController _totalSessionsController;
-  final _newProgressNoteController = TextEditingController();
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
-  bool _isAddingProgressNote = false;
 
   @override
   void initState() {
@@ -185,7 +182,6 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     _treatmentPlanController.dispose();
     _initialEvaluationController.dispose();
     _totalSessionsController.dispose();
-    _newProgressNoteController.dispose();
     super.dispose();
   }
 
@@ -217,31 +213,10 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     }
   }
 
-  Future<void> _addProgressNote() async {
-    final text = _newProgressNoteController.text.trim();
-    if (text.isEmpty) return;
-
-    setState(() => _isAddingProgressNote = true);
-    try {
-      await ref.read(doctorRepositoryProvider).createProgressNote(
-            NewCaseProgressNotePayload(caseId: widget.caseModel.id, note: text),
-          );
-      ref.invalidate(caseProgressNotesProvider(widget.caseModel.id));
-      _newProgressNoteController.clear();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _isAddingProgressNote = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = widget.caseModel;
     final sessionsAsync = ref.watch(caseSessionsProvider(c.id));
-    final progressNotesAsync = ref.watch(caseProgressNotesProvider(c.id));
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForThisCase = unreadByCase[c.id] ?? 0;
 
@@ -503,95 +478,6 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 ),
                 const SizedBox(height: 10),
                 AttackSummaryCard(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),
-
-                const SizedBox(height: 28),
-                progressNotesAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (notes) => SectionHeader(
-                    titleStyle: _Txt.sectionTitleMedium,
-                    icon: Icons.notes_outlined,
-                    color: AppAccent.device,
-                    title: 'Progress Notes',
-                    subtitleSpans: [
-                      TextSpan(
-                        text: '${notes.length}',
-                        style: TextStyle(
-                          color: AppAccent.device,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          shadows: [
-                            Shadow(color: AppAccent.device.withValues(alpha: 0.55), blurRadius: 14),
-                          ],
-                        ),
-                      ),
-                      const TextSpan(text: ' notes recorded'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Record what you observe at each follow-up exam (e.g. "after 5 of 15 sessions...")',
-                  style: _Txt.hint,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _newProgressNoteController,
-                  maxLines: 3,
-                  style: _Txt.body,
-                  cursorColor: Colors.white,
-                  decoration: _fieldDecoration(hint: 'Describe the progress observed at this exam...'),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.14),
-                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white38,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
-                      ),
-                    ),
-                    onPressed: _isAddingProgressNote ? null : _addProgressNote,
-                    icon: _isAddingProgressNote
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.add_circle_outline),
-                    label: const Text('Add Progress Note'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                progressNotesAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator(color: Colors.white)),
-                  ),
-                  error: (e, _) => _InlineStatePanel(
-                    icon: Icons.error_outline,
-                    color: AppAccent.unlinked,
-                    message: 'Failed to load progress notes: $e',
-                    isError: true,
-                    onRetry: () => ref.invalidate(caseProgressNotesProvider(c.id)),
-                  ),
-                  data: (notes) {
-                    if (notes.isEmpty) {
-                      return _InlineStatePanel(
-                        icon: Icons.notes_outlined,
-                        color: AppAccent.device,
-                        message: 'No progress notes recorded yet.',
-                      );
-                    }
-                    return _ProgressNotesGroup(notes: notes);
-                  },
-                ),
               ],
             ),
           ),
@@ -652,81 +538,6 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(width: 130, child: Text(label, style: _Txt.label)),
           Expanded(child: Text(value, style: _Txt.body)),
-        ],
-      ),
-    );
-  }
-}
-
-/// All progress notes grouped inside a single glass panel, separated by
-/// thin translucent dividers instead of one card per note.
-class _ProgressNotesGroup extends StatelessWidget {
-  const _ProgressNotesGroup({required this.notes});
-  final List<CaseProgressNoteModel> notes;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        children: [
-          for (var i = 0; i < notes.length; i++) ...[
-            _ProgressNoteTile(note: notes[i]),
-            if (i != notes.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 14,
-                endIndent: 14,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ProgressNoteTile extends StatelessWidget {
-  const _ProgressNoteTile({required this.note});
-  final CaseProgressNoteModel note;
-
-  @override
-  Widget build(BuildContext context) {
-    final date = note.createdAt;
-    final dateLabel =
-        '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
-    final sessionsLabel = note.totalSessionsPlannedSnapshot != null
-        ? '${note.sessionsCompletedSnapshot} / ${note.totalSessionsPlannedSnapshot} sessions'
-        : '${note.sessionsCompletedSnapshot} sessions';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconBadge(icon: Icons.sticky_note_2_outlined, color: AppAccent.device),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(dateLabel, style: AppText.tileTitle),
-                    Text(sessionsLabel, style: _Txt.hint),
-                  ],
-                ),
-                if (note.authorName.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text('Dr. ${note.authorName}', style: _Txt.hint),
-                ],
-                const SizedBox(height: 6),
-                Text(note.note, style: _Txt.body),
-              ],
-            ),
-          ),
         ],
       ),
     );

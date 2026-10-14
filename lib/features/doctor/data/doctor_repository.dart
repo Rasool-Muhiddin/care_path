@@ -4,7 +4,6 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../patient/models/session_model.dart';
 import '../models/case_model.dart';
-import '../models/case_progress_note_model.dart';
 import '../models/device_model.dart';
 import '../models/patient_model.dart';
 
@@ -86,31 +85,6 @@ class DoctorRepository {
         queryParameters: {'case': caseId},
       );
       return items.map(SessionModel.fromJson).toList();
-    } on DioException catch (e) {
-      throw _client.mapError(e);
-    }
-  }
-
-  /// ملاحظات تطور حالة معيّنة (الأحدث أولاً — ordering من الـ backend)
-  Future<List<CaseProgressNoteModel>> fetchProgressNotes(int caseId) async {
-    try {
-      final items = await _client.getAllPages(
-        ApiEndpoints.caseProgressNotes,
-        queryParameters: {'case': caseId},
-      );
-      return items.map(CaseProgressNoteModel.fromJson).toList();
-    } on DioException catch (e) {
-      throw _client.mapError(e);
-    }
-  }
-
-  /// إضافة ملاحظة تطور جديدة لحالة — اللقطات (عدد الجلسات وقتها) تُحسب
-  /// تلقائياً بالـ backend، لا نرسلها من هنا
-  Future<CaseProgressNoteModel> createProgressNote(NewCaseProgressNotePayload payload) async {
-    try {
-      final response =
-          await _client.raw.post(ApiEndpoints.caseProgressNotes, data: payload.toJson());
-      return CaseProgressNoteModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

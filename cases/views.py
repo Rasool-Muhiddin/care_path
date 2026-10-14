@@ -6,7 +6,6 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.models import UserRole
 from accounts.permissions import (
-    IsDoctor,
     IsDoctorOrEngineer,
     IsEngineer,
     IsPatient,
@@ -18,13 +17,11 @@ from .models import (
     AttackEvent,
     AttackLogConfirmation,
     Case,
-    CaseProgressNote,
 )
 from .scoping import scope_by_case, scoped_cases
 from .serializers import (
     AttackEventSerializer,
     AttackLogConfirmationSerializer,
-    CaseProgressNoteSerializer,
     CaseSerializer,
 )
 
@@ -67,43 +64,6 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         device_id = uuid_query_param(self.request, "device")
         if device_id:
             queryset = queryset.filter(device_id=device_id)
-
-        return queryset
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context["request"] = self.request
-        return context
-
-
-class CaseProgressNoteViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
-    """
-    ملاحظات تطور الحالة عبر الزمن (سجل متعدد، وليس حقل واحد يُستبدل).
-    - الطبيب: يرى ويكتب فقط لحالاته الخاصة.
-    - المهندس: يرى الكل (قراءة فقط).
-    - المريض وأي دور آخر: ممنوع بالكامل — لا رؤية ولا كتابة.
-
-    فلترة اختيارية: ?case=<id> — لعرض ملاحظات حالة معيّنة فقط (هذا هو
-    الاستخدام الطبيعي الوحيد تقريباً من شاشة تفاصيل الحالة عند الطبيب).
-    """
-
-    serializer_class = CaseProgressNoteSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [permissions.IsAuthenticated(), IsDoctor()]
-        return [permissions.IsAuthenticated()]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.role == UserRole.PATIENT:
-            return CaseProgressNote.objects.none()
-        queryset = scope_by_case(CaseProgressNote.objects.select_related("author"), user)
-
-        case_id = int_query_param(self.request, "case")
-        if case_id is not None:
-            queryset = queryset.filter(case_id=case_id)
 
         return queryset
 

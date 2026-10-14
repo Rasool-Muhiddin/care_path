@@ -26,6 +26,11 @@ class CaseSerializer(serializers.ModelSerializer):
     device_type_name = serializers.CharField(
         source="device.device_type.name", read_only=True
     )
+    # للعرض في ملخص الحالة (الطبيب/المهندس): رقم الجهاز وعيادته
+    device_serial_number = serializers.CharField(
+        source="device.serial_number", read_only=True, default=None
+    )
+    clinic_name = serializers.CharField(source="device.clinic.name", read_only=True, default=None)
     # الجلسات المكتملة فعلياً (تُحسب من TreatmentSession المرتبطة بالحالة)،
     # والجلسات المتبقية إذا كان total_sessions_planned محدداً.
     completed_sessions_count = serializers.SerializerMethodField()
@@ -40,6 +45,8 @@ class CaseSerializer(serializers.ModelSerializer):
             "doctor_name",
             "device",
             "device_type_name",
+            "device_serial_number",
+            "clinic_name",
             "device_setup_parameters",
             "diagnosis_type",
             "disease_type",

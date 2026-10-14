@@ -59,7 +59,7 @@ class SessionsVsAttacksChart extends StatelessWidget {
           children: [
             const _LegendDot(color: _sessionsColor, label: 'Sessions'),
             _LegendDot(color: attackColor, label: 'Attacks'),
-            if (baseline != null) const _LegendDot(color: _baselineColor, label: 'Baseline (before treatment)'),
+            if (baseline != null) const _LegendDot(color: _baselineColor, label: 'Baseline average (before treatment)'),
           ],
         ),
         const SizedBox(height: 12),

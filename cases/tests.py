@@ -424,3 +424,19 @@ class OrderingTiebreakerTests(CareWorldMixin, APITestCase):
         ids = self.walk_pages("/api/sessions/")
         self.assertEqual(ids, sorted(ids, reverse=True))
         self.assertEqual(set(ids), set(TreatmentSession.objects.values_list("id", flat=True)))
+
+
+class CaseDeviceDetailsTests(CareWorldMixin, APITestCase):
+    """ملخص الحالة يعرض رقم الجهاز وعيادته — بدون استعلام إضافي لكل حالة."""
+
+    def test_serial_number_and_clinic_name(self):
+        from devices.models import Clinic
+
+        clinic = Clinic.objects.create(name="Baghdad Clinic")
+        self.device_1.clinic = clinic
+        self.device_1.save()
+        data = {c["id"]: c for c in results(self.client_for(self.engineer).get(CASES))}
+        self.assertEqual(data[self.case_1.pk]["device_serial_number"], "SN-1")
+        self.assertEqual(data[self.case_1.pk]["clinic_name"], "Baghdad Clinic")
+        self.assertIsNone(data[self.case_2.pk]["clinic_name"])
+        self.assertIsNone(data[self.orphan_case.pk]["device_serial_number"])

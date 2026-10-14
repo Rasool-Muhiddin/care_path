@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/attacks/attack_repository.dart';
+import '../../../core/time/baghdad_time.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../../attack_stats/attack_statistics_screen.dart';
+import '../../case_summary/case_summary_section.dart';
 import '../../doctor/models/case_model.dart';
 import '../engineer_providers.dart';
 
@@ -21,8 +23,6 @@ class _Accent {
 class _Txt {
   static const sectionTitle = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700);
   static const sectionSubtitle = TextStyle(color: Colors.white54, fontSize: 12);
-  static const label = TextStyle(color: Colors.white60, fontSize: 12.5, fontWeight: FontWeight.w500);
-  static const value = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
   static const statValue = TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800);
   static const statLabel = TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w500);
 
@@ -80,7 +80,7 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                           icon: Icons.calendar_today_rounded,
                           accent: _Accent.days,
                           label: 'Days since registration',
-                          value: '${DateTime.now().difference(c.createdAt).inDays}',
+                          value: '${baghdadToday().difference(baghdadDayOf(c.createdAt)).inDays + 1}',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -98,42 +98,12 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                   const _SectionHeader(
                     icon: Icons.badge_outlined,
                     accent: _Accent.status,
-                    title: 'Case summary',
+                    title: 'Case Summary',
                   ),
                   const SizedBox(height: 10),
-                  GlassContainer(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Column(
-                      children: [
-                        _InfoRow(icon: Icons.flag_rounded, label: 'Status', value: c.status.label),
-                        _divider(),
-                        _InfoRow(icon: Icons.psychology_alt_outlined, label: 'Diagnosis', value: c.diagnosisType.label),
-                        _divider(),
-                        _InfoRow(icon: Icons.memory_rounded, label: 'Device', value: c.deviceTypeName ?? '—'),
-                        _divider(),
-                        _InfoRow(
-                          icon: Icons.fact_check_outlined,
-                          label: 'Sessions completed',
-                          value: c.remainingSessionsCount != null
-                              ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
-                              : '${c.completedSessionsCount}',
-                        ),
-                        _divider(),
-                        _InfoRow(
-                          icon: Icons.bolt_rounded,
-                          label: 'Baseline attacks / month',
-                          value: c.monthlyEpisodeCount?.toString() ?? '—',
-                        ),
-                        _divider(),
-                        _InfoRow(
-                          icon: Icons.timer_outlined,
-                          label: 'Baseline attack duration',
-                          value: c.episodeDurationMinutes != null
-                              ? '${c.episodeDurationMinutes} min'
-                              : '—',
-                        ),
-                      ],
-                    ),
+                  CaseSummarySection(
+                    caseModel: c,
+                    sessionsProvider: engineerCaseSessionsProvider(c.id),
                   ),
                   const SizedBox(height: 28),
                   const _SectionHeader(
@@ -157,14 +127,6 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
       ),
     );
   }
-
-  static Widget _divider() => Divider(
-        height: 1,
-        thickness: 1,
-        color: Colors.white.withValues(alpha: 0.08),
-        indent: 16,
-        endIndent: 16,
-      );
 }
 
 /// A round icon badge tinted with [color] — mirrors OverviewTab's _IconBadge
@@ -251,29 +213,6 @@ class _StatBox extends StatelessWidget {
           Text(value, style: _Txt.statValue.copyWith(shadows: _Txt.glow(accent))),
           const SizedBox(height: 2),
           Text(label, textAlign: TextAlign.center, style: _Txt.statLabel),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.label, required this.value});
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 17, color: Colors.white54),
-          const SizedBox(width: 10),
-          SizedBox(width: 118, child: Text(label, style: _Txt.label)),
-          Expanded(child: Text(value, style: _Txt.value, textAlign: TextAlign.end)),
         ],
       ),
     );

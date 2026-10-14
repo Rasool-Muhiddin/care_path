@@ -8,6 +8,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../../../core/widgets/session_calendar.dart';
 import '../../attack_stats/attack_statistics_screen.dart';
+import '../../case_summary/case_summary_section.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
@@ -43,7 +44,6 @@ class _Txt {
   );
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
   static const body = TextStyle(color: Colors.white, fontSize: 14);
-  static const label = TextStyle(color: Colors.white54, fontSize: 13);
 }
 
 /// A field label with a small colored leading icon, used above every
@@ -276,56 +276,14 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 const SizedBox(height: 20),
 
                 // --- Read-only summary ---
-                SectionHeader(
+                const SectionHeader(
                   titleStyle: _Txt.sectionTitleMedium,
                   icon: Icons.info_outline,
                   color: AppAccent.caseC,
-                  title: 'Case Info',
+                  title: 'Case Summary',
                 ),
                 const SizedBox(height: 10),
-                GlassContainer(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InfoRow(label: 'Diagnosis', value: c.diagnosisType.label),
-                      _InfoRow(
-                        label: '${c.diagnosisType.label} Type',
-                        value: diseaseTypeLabel(c.diagnosisType, c.diseaseType),
-                      ),
-                      _InfoRow(label: 'Device', value: c.deviceTypeName ?? '—'),
-                      _InfoRow(
-                        label: 'Sessions completed',
-                        value: c.remainingSessionsCount != null
-                            ? '${c.completedSessionsCount} / ${c.totalSessionsPlanned} (${c.remainingSessionsCount} left)'
-                            : '${c.completedSessionsCount}',
-                      ),
-                      _InfoRow(
-                        label: 'Symptoms',
-                        value: c.symptoms.isNotEmpty ? c.symptoms : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Baseline attacks / month',
-                        value: c.monthlyEpisodeCount?.toString() ?? '—',
-                      ),
-                      _InfoRow(
-                        label: 'Baseline attack duration',
-                        value: c.episodeDurationMinutes != null
-                            ? '${c.episodeDurationMinutes} min'
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Medications',
-                        value: c.currentMedications.isNotEmpty ? c.currentMedications : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Created',
-                        value:
-                            '${c.createdAt.year}/${c.createdAt.month.toString().padLeft(2, '0')}/${c.createdAt.day.toString().padLeft(2, '0')}',
-                      ),
-                    ],
-                  ),
-                ),
+                CaseSummarySection(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),
                 const SizedBox(height: 20),
 
                 // --- Editable section ---
@@ -518,26 +476,6 @@ class _StatBox extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(label, textAlign: TextAlign.center, style: _Txt.hint),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 130, child: Text(label, style: _Txt.label)),
-          Expanded(child: Text(value, style: _Txt.body)),
         ],
       ),
     );

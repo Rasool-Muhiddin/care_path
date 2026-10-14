@@ -54,7 +54,7 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         # الحالات: الأسماء ونوع الجهاز بـ JOIN، وعدد الجلسات بـ annotate.
         queryset = (
             scoped_cases(self.request.user)
-            .select_related("patient", "doctor", "device__device_type")
+            .select_related("patient", "doctor", "device__device_type", "device__clinic")
             .annotate(sessions_count=Count("sessions", distinct=True))
             # صريحاً: Django يتجاهل Meta.ordering في استعلامات GROUP BY (annotate
             # Count)، فكانت القائمة المرقّمة بلا ترتيب ثابت

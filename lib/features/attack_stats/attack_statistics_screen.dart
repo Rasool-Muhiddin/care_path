@@ -230,12 +230,12 @@ class _Row extends StatelessWidget {
 List<Widget> _attackDetailRows(PeriodStats p, bool isMigraine) {
   if (p.attackCount == 0) return const [];
   return [
+    _Row('Average attack duration', formatAttackDuration(p.avgDurationSeconds!)),
     _Row(
-      'Duration',
-      '${formatAttackDuration(p.minDurationSeconds!)} – ${formatAttackDuration(p.maxDurationSeconds!)}'
-          ' (avg ${formatAttackDuration(p.avgDurationSeconds!)})',
+      'Shortest – longest',
+      '${formatAttackDuration(p.minDurationSeconds!)} – ${formatAttackDuration(p.maxDurationSeconds!)}',
     ),
-    if (isMigraine && p.avgSeverity != null) _Row('Avg severity', '${p.avgSeverity!.toStringAsFixed(1)} / 10'),
+    if (isMigraine && p.avgSeverity != null) _Row('Average severity', '${p.avgSeverity!.toStringAsFixed(1)} / 10'),
     _Row(
       'With medication',
       '${p.medicatedCount} of ${p.attackCount} (${(p.medicatedShare! * 100).round()}%)',
@@ -261,9 +261,9 @@ class _BaselineCard extends StatelessWidget {
         children: [
           const Text('Entered by the doctor', style: _Txt.title),
           const SizedBox(height: 6),
-          _Row('Attacks / month', c.monthlyEpisodeCount?.toString() ?? '—'),
+          _Row('Average attacks / month', c.monthlyEpisodeCount?.toString() ?? '—'),
           _Row(
-            'Attack duration',
+            'Average attack duration',
             c.episodeDurationMinutes != null ? formatAttackDuration(c.episodeDurationMinutes! * 60) : '—',
           ),
           const SizedBox(height: 12),
@@ -348,8 +348,6 @@ class AttackSummaryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = caseModel;
     final attacksAsync = ref.watch(caseAttacksProvider(c.id));
-    final isMigraine = c.diagnosisType == DiagnosisType.migraine;
-
     Widget stats = attacksAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
@@ -366,36 +364,17 @@ class AttackSummaryCard extends ConsumerWidget {
         final thisMonth = analysis.calendarMonth(0);
         final lastMonth = analysis.calendarMonth(1);
         final diff = thisMonth.attackCount - lastMonth.attackCount;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Row(
           children: [
-            Row(
-              children: [
-                Expanded(child: _Figure('This month', '${thisMonth.attackCount}')),
-                Expanded(child: _Figure('Last month', '${lastMonth.attackCount}')),
-                Expanded(
-                  child: _Figure(
-                    'Change',
-                    diff == 0 ? '±0' : (diff > 0 ? '+$diff' : '$diff'),
-                    color: diff > 0 ? AppAccent.unlinked : (diff < 0 ? AppAccent.patient : null),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _Row(
-              'Avg duration',
-              thisMonth.avgDurationSeconds != null
-                  ? '${formatAttackDuration(thisMonth.avgDurationSeconds!)} (this month)'
-                  : '—',
-            ),
-            if (isMigraine)
-              _Row(
-                'Avg severity',
-                thisMonth.avgSeverity != null
-                    ? '${thisMonth.avgSeverity!.toStringAsFixed(1)} / 10 (this month)'
-                    : '—',
+            Expanded(child: _Figure('This month', '${thisMonth.attackCount}')),
+            Expanded(child: _Figure('Last month', '${lastMonth.attackCount}')),
+            Expanded(
+              child: _Figure(
+                'Change',
+                diff == 0 ? '±0' : (diff > 0 ? '+$diff' : '$diff'),
+                color: diff > 0 ? AppAccent.unlinked : (diff < 0 ? AppAccent.patient : null),
               ),
+            ),
           ],
         );
       },

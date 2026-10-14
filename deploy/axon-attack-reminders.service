@@ -1,0 +1,20 @@
+# /etc/systemd/system/axon-attack-reminders.service
+# يرسل تذكير push عاماً (بلا تفاصيل طبية) للمرضى الذين لم يفتحوا التطبيق ولم
+# يسجّلوا نوبة منذ 3 أيام. يشغّله axon-attack-reminders.timer.
+[Unit]
+Description=Axon - send attack-logging reminders to inactive patients
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=axon
+Group=www-data
+WorkingDirectory=/var/www/axon/app
+EnvironmentFile=/etc/axon/axon.env
+ExecStart=/var/www/axon/venv/bin/python manage.py send_attack_reminders
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true

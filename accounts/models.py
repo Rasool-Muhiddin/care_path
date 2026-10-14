@@ -39,6 +39,14 @@ class User(AbstractUser):
         max_length=100, blank=True, help_text="تخصص الطبيب (يُستخدم فقط عند role=doctor)"
     )
 
+    # آخر طلب مصادَق من التطبيق (يُحدَّث مرة بالساعة كحد أقصى — راجع
+    # accounts/authentication.py). last_login لا يكفي: لا يتغير عند تجديد
+    # التوكن، والتطبيق نادراً ما يسجّل دخولاً جديداً.
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    # آخر تذكير push بتسجيل النوبات (send_attack_reminders) — تذكير واحد
+    # كل 3 أيام على الأكثر.
+    attack_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+
     def is_patient(self) -> bool:
         return self.role == UserRole.PATIENT
 

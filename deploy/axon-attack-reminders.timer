@@ -1,0 +1,11 @@
+# /etc/systemd/system/axon-attack-reminders.timer
+[Unit]
+Description=Run Axon attack-logging reminders daily
+
+[Timer]
+# 18:00 بتوقيت بغداد مهما كانت منطقة السيرفر الزمنية — وقت مناسب للمريض
+OnCalendar=*-*-* 18:00:00 Asia/Baghdad
+Persistent=true
+
+[Install]
+WantedBy=timers.target

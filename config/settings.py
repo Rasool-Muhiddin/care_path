@@ -117,7 +117,8 @@ ROOT_URLCONF = 'config.urls'
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # JWT + تحديث last_seen_at (لتذكير تسجيل النوبات)
+        "accounts.authentication.TrackingJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",

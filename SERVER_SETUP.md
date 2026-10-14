@@ -132,6 +132,13 @@ certbot يعدّل كتلة هذا الدومين فقط. التجديد الت�
     sudo systemctl start axon-flush-tokens.service && sudo journalctl -u axon-flush-tokens -n 5 --no-pager
 تحقّق من موعد التشغيل التالي: `systemctl list-timers axon-flush-tokens.timer`
 
+### تذكير المرضى بتسجيل النوبات يومياً
+يرسل يومياً (18:00 بتوقيت بغداد) إشعاراً عاماً بلا تفاصيل طبية للمرضى الذين لهم حالة مفتوحة ولم يفتحوا التطبيق أو يسجّلوا نوبة منذ 3 أيام — تذكير واحد كل 3 أيام على الأكثر. يحتاج Firebase مضبوطاً (FIREBASE_SETUP.md):
+    cd /var/www/axon/app && sudo -u axon bash -c 'set -a; source /etc/axon/axon.env; set +a; /var/www/axon/venv/bin/python manage.py send_attack_reminders --dry-run'
+    sudo cp /var/www/axon/app/deploy/axon-attack-reminders.service /var/www/axon/app/deploy/axon-attack-reminders.timer /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now axon-attack-reminders.timer
+تحقّق من موعد التشغيل التالي: `systemctl list-timers axon-attack-reminders.timer`، والسجل: `sudo journalctl -u axon-attack-reminders -n 5 --no-pager`
+
 ## 11) التحقق
     curl -i https://axon.tera-software1.com/api/app-version/latest/?platform=android    # 404 مقبول
     curl -i http://axon.tera-software1.com/api/auth/me/                                  # يحوّل إلى https

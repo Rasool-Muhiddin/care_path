@@ -96,7 +96,15 @@ class GlassContainer extends StatelessWidget {
                 ),
               ],
             ),
-            child: child,
+            // Transparent Material: ListTile/InkWell inside draw their ink on
+            // the nearest Material — without this the glass background hides
+            // ripples (and debug builds report it). textStyle keeps the
+            // inherited text style instead of Material's default.
+            child: Material(
+              type: MaterialType.transparency,
+              textStyle: DefaultTextStyle.of(context).style,
+              child: child,
+            ),
           ),
         ),
       ),

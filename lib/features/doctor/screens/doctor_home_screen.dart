@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/time/baghdad_time.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../doctor_providers.dart';
@@ -267,10 +268,6 @@ class _CaseTile extends ConsumerWidget {
     }
   }
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -302,7 +299,10 @@ class _CaseTile extends ConsumerWidget {
                       style: AppText.tileTitle,
                     ),
                     const SizedBox(height: 2),
-                    Row(
+                    // Wrap (not Row): diagnosis • sessions • Today moves to a new
+                    // line on narrow phones / large fonts instead of overflowing.
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(caseModel.diagnosisType.label, style: AppText.tileSubtitle),
                         const Text(' • ', style: TextStyle(color: Colors.white38)),
@@ -310,7 +310,7 @@ class _CaseTile extends ConsumerWidget {
                           loading: () => Text('...', style: AppText.tileSubtitle),
                           error: (_, __) => Text('Sessions: —', style: AppText.tileSubtitle),
                           data: (sessions) {
-                            final completedToday = sessions.any((s) => _isToday(s.sessionDate));
+                            final completedToday = sessions.any((s) => isBaghdadToday(s.sessionDate));
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

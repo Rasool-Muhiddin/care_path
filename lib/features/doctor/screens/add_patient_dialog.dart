@@ -146,26 +146,20 @@ class _AddPatientDialogState extends ConsumerState<_AddPatientDialog> {
                   title: 'Patient Details',
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _firstNameController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: glassInputDecoration('First Name'),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _lastNameController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: glassInputDecoration('Last Name'),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                    ),
-                  ],
+                // Stacked, not side by side: field labels are one line only and
+                // were cut off on narrow phones / with large system fonts.
+                TextFormField(
+                  controller: _firstNameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: glassInputDecoration('First Name'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _lastNameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: glassInputDecoration('Last Name'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

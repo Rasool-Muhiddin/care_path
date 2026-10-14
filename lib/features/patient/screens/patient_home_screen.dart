@@ -179,7 +179,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
-        title: Text('مرحباً $username', style: const TextStyle(color: Colors.white)),
         actions: [
           if (myCaseId != null)
             IconButton(
@@ -211,6 +210,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
+                // التحية هنا (تلتف) بدل شريط العنوان ذي السطر الواحد
+                Text('مرحباً $username', style: AppText.headline),
+                const SizedBox(height: 12),
                 caseAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
                   error: (error, _) => _ErrorView(

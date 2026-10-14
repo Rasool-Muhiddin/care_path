@@ -235,12 +235,7 @@ class _ConversationTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            c.patientName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.tileTitle,
-                          ),
+                          child: Text(c.patientName, style: AppText.tileTitle),
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -253,7 +248,7 @@ class _ConversationTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(details, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.tileSubtitle),
+                    Text(details, style: AppText.tileSubtitle),
                     const SizedBox(height: 6),
                     Row(
                       children: [

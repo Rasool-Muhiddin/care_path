@@ -227,10 +227,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           foregroundColor: Colors.white,
-          title: Text(
-            c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}',
-            style: const TextStyle(color: Colors.white),
-          ),
+          title: const Text('Case Details', style: TextStyle(color: Colors.white)),
           actions: [
             IconButton(
               icon: Badge(
@@ -248,6 +245,12 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
+                // Full patient name here (wraps) — the AppBar title is one line only.
+                Text(
+                  c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}',
+                  style: AppText.headline,
+                ),
+                const SizedBox(height: 12),
                 // --- Quick stats: days since registration & sessions
                 // recorded, shown prominently at the top so the doctor sees
                 // this at a glance for every case (same key numbers the
@@ -297,6 +300,8 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 const _FieldLabel('Status', icon: Icons.flag_outlined),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<CaseStatus>(
+                  // isExpanded: يأخذ عرض الحقل، والنص الطويل يلتف بدل أن يتجاوز الشاشة
+                  isExpanded: true,
                   initialValue: _status,
                   decoration: _fieldDecoration(),
                   dropdownColor: AppGlassColors.baseDark,

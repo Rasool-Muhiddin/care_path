@@ -206,7 +206,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 _GlassTextField(
                   controller: _usernameController,
                   focusNode: _usernameFocus,
-                  hintText: 'Enter your username',
+                  hintText: 'Your username',
                   icon: Icons.person_outline_rounded,
                   textInputAction: TextInputAction.next,
                   onSubmitted: (_) =>
@@ -219,7 +219,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 _GlassTextField(
                   controller: _passwordController,
                   focusNode: _passwordFocus,
-                  hintText: 'Enter your password',
+                  hintText: 'Your password',
                   icon: Icons.lock_outline_rounded,
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,

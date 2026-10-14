@@ -95,10 +95,7 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
           backgroundColor: Colors.transparent,
           elevation: 0,
           foregroundColor: Colors.white,
-          title: Text(
-            'Attack statistics — ${c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}'}',
-            style: const TextStyle(color: Colors.white, fontSize: 17),
-          ),
+          title: const Text('Attack Statistics', style: TextStyle(color: Colors.white)),
         ),
         body: AppGradientBackground(child: SafeArea(child: body)),
       ),
@@ -114,6 +111,9 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
+        // Full patient name here (wraps) — the AppBar title is one line only.
+        Text(c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}', style: AppText.headline),
+        const SizedBox(height: 16),
         // --- Baseline (before treatment) ---
         SectionHeader(
           icon: Icons.history_toggle_off,

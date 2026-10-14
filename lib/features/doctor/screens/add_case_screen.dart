@@ -341,6 +341,8 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   _sectionTitle('Diagnosis Type', icon: Icons.category_outlined, color: AppAccent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<DiagnosisType>(
+                    // isExpanded: يأخذ عرض الحقل، والنص الطويل يلتف بدل أن يتجاوز الشاشة
+                    isExpanded: true,
                     initialValue: _selectedDiagnosis,
                     decoration: _dropdownDecoration(),
                     dropdownColor: AppGlassColors.baseDark,
@@ -368,6 +370,8 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   _sectionTitle('${_selectedDiagnosis.label} Type', icon: Icons.category_outlined, color: AppAccent.caseC),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
+                    // isExpanded: يأخذ عرض الحقل، والنص الطويل يلتف بدل أن يتجاوز الشاشة
+                    isExpanded: true,
                     initialValue: _selectedDiseaseType,
                     decoration: _dropdownDecoration(),
                     dropdownColor: AppGlassColors.baseDark,
@@ -402,28 +406,31 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                     style: _Txt.hint,
                   ),
                   const SizedBox(height: 8),
+                  // Captions above the fields (they wrap); the in-field label is
+                  // one line only and was cut to "attack..." on narrow phones.
+                  const Text('Average attacks / month', style: _Txt.body),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _monthlyEpisodeCountController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: _Txt.body,
+                    cursorColor: Colors.white,
+                    decoration: glassInputDecoration('').copyWith(hintText: 'e.g. 8', labelText: null),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Average attack duration', style: _Txt.body),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
-                        child: TextFormField(
-                          controller: _monthlyEpisodeCountController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          style: _Txt.body,
-                          cursorColor: Colors.white,
-                          decoration: glassInputDecoration('Average attacks / month'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
                         child: TextFormField(
                           controller: _episodeDurationController,
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           style: _Txt.body,
                           cursorColor: Colors.white,
-                          decoration: glassInputDecoration('Average attack duration'),
+                          decoration: glassInputDecoration('').copyWith(hintText: 'e.g. 4', labelText: null),
                         ),
                       ),
                       const SizedBox(width: 8),

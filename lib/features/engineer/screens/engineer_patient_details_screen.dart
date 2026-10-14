@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/attacks/attack_repository.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/time/baghdad_time.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
@@ -58,10 +59,7 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           foregroundColor: Colors.white,
-          title: Text(
-            c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}',
-            style: const TextStyle(color: Colors.white),
-          ),
+          title: const Text('Patient Details', style: TextStyle(color: Colors.white)),
         ),
         body: AppGradientBackground(
           child: SafeArea(
@@ -73,6 +71,12 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
+                  // Full patient name here (wraps) — the AppBar title is one line only.
+                  Text(
+                    c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}',
+                    style: AppText.headline,
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(

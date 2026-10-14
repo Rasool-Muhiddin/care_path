@@ -307,7 +307,7 @@ class _MetricCard extends StatelessWidget {
                       shadows: [Shadow(color: color.withValues(alpha: 0.55), blurRadius: 14)],
                     ),
                   ),
-                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _Txt.metricLabel),
+                  Text(label, style: _Txt.metricLabel),
                 ],
               ),
             ),

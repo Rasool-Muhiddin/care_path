@@ -208,6 +208,8 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                   const Text('Status', style: _Txt.sectionTitle),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<DeviceStatus>(
+                    // isExpanded: يأخذ عرض الحقل، والنص الطويل يلتف بدل أن يتجاوز الشاشة
+                    isExpanded: true,
                     initialValue: _selectedStatus,
                     decoration: glassInputDecoration('').copyWith(labelText: null),
                     dropdownColor: AppGlassColors.baseDark,

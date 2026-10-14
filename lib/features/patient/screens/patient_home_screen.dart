@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/attacks/attack_models.dart';
+import '../../../core/attacks/attack_repository.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/attack_list.dart';
 import '../../../core/time/baghdad_time.dart';
 import '../../../core/widgets/session_calendar.dart';
 import '../../chat/logic/chat_notifier.dart';
-import '../../doctor/models/case_model.dart' show CaseModel;
-import '../../doctor/models/weekly_episode_log_model.dart';
+import '../../doctor/models/case_model.dart' show CaseModel, CaseStatus;
 import '../models/session_model.dart';
 import '../patient_providers.dart';
+import 'attack_confirmation_prompt.dart';
+import 'log_attack_dialog.dart';
 
 /// الشاشة الرئيسية للمريض: ملخص حالته (خطة العلاج ونوع الجهاز)، زر إنهاء
 /// الجلسة اليومية، زر فتح المحادثة مع الطبيب، وقائمة بجلساته السابقة.
@@ -25,7 +28,7 @@ class PatientHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
-  bool _isWeeklyDialogShowing = false;
+  bool _confirmationChecked = false;
   bool _isEndingSession = false;
 
   /// "إنهاء الجلسة": تأكيد بسيط (نعم/لا) ثم حفظ الجلسة مباشرة — بدون
@@ -79,144 +82,74 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     }
   }
 
-  String _formatDate(DateTime d) =>
-      '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+  /// عدد النوبات هذا الشهر (بتوقيت بغداد)
+  int _attacksThisMonth(List<AttackEventModel> attacks) {
+    final today = baghdadToday();
+    return attacks.where((a) {
+      final day = baghdadDayOf(a.occurredAt);
+      return day.year == today.year && day.month == today.month;
+    }).length;
+  }
 
-  /// يعرض رسالة التقرير الأسبوعي الإلزامية (كم نوبة هذا الأسبوع) لو فيه
-  /// أسبوع مستحق لم يُجب عنه المريض بعد. لا يمكن تجاهلها أو إغلاقها إلا
-  /// بالإجابة (لا زر إغلاق، لا سحب للخارج، لا زر رجوع). لو كان المريض
-  /// غايباً أكثر من أسبوع، تُعرض الأسابيع المتراكمة واحداً تلو الآخر
-  /// تلقائياً لحد ما يكمّلها كلها.
-  Future<void> _maybeShowWeeklyEpisodePrompt(CaseModel myCase) async {
-    if (_isWeeklyDialogShowing) return;
-    // يبقى العلم true طوال فترة عرض الحوار وإعادة جلب الحالة، حتى لا تفتح
-    // إعادة بناء الشاشة حواراً ثانياً بالبيانات القديمة (نفس الأسبوع).
-    _isWeeklyDialogShowing = true;
+  /// السؤال الأسبوعي الخفيف (غير إلزامي) — يُفحص مرة واحدة لكل فتح للشاشة.
+  Future<void> _maybeAskAttackConfirmation(CaseModel myCase) async {
+    if (_confirmationChecked) return;
+    _confirmationChecked = true;
     try {
-      CaseModel? current = myCase;
-      while (mounted &&
-          current != null &&
-          current.pendingWeeklyEpisodeWeek != null) {
-        await _showWeeklyEpisodeDialog(
-          caseId: current.id,
-          weekStart: current.pendingWeeklyEpisodeWeek!,
-        );
-        if (!mounted) return;
-        final latest = await ref.refresh(myCaseProvider.future);
-        current = latest;
-      }
+      final confirmations = await ref.read(caseAttackConfirmationsProvider(myCase.id).future);
+      final dismissedDay = await AttackPromptDismissals.read(myCase.id);
+      if (!mounted) return;
+      final ask = shouldAskAttackConfirmation(
+        myCase: myCase,
+        confirmations: confirmations,
+        dismissedDay: dismissedDay,
+      );
+      if (ask) await showAttackConfirmationPrompt(context, ref, myCase);
     } catch (_) {
-      // تجاهل أخطاء الشبكة هنا — الشاشة ستحاول مجدداً عند إعادة البناء التالية
-    } finally {
-      _isWeeklyDialogShowing = false;
+      // خطأ شبكة: لا نزعج المريض الآن، نسأل عند الفتح التالي
     }
   }
 
-  Future<void> _showWeeklyEpisodeDialog({required int caseId, required DateTime weekStart}) {
-    final weekEnd = weekStart.add(const Duration(days: 6));
-    final controller = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool isSubmitting = false;
-    String? errorText;
+  Future<void> _logAttack(CaseModel myCase) async {
+    final logged = await showLogAttackDialog(context, myCase);
+    if (logged > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(logged == 1 ? 'تم تسجيل النوبة' : 'تم تسجيل $logged نوبات')),
+      );
+    }
+  }
 
-    return showDialog<void>(
+  /// حذف نوبة سُجّلت بالخطأ (خلال 24 ساعة من تسجيلها فقط).
+  Future<void> _deleteAttack(AttackEventModel attack) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return PopScope(
-          canPop: false,
-          child: StatefulBuilder(
-            builder: (context, setStateDialog) {
-              return GlassDialog(
-                title: 'تقرير أسبوعي إلزامي',
-                content: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'كم نوبة كانت لديك خلال الأسبوع من '
-                        '${_formatDate(weekStart)} إلى ${_formatDate(weekEnd)}؟',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: controller,
-                        autofocus: true,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: const TextStyle(color: Colors.white),
-                        cursorColor: Colors.white,
-                        decoration: glassInputDecoration(
-                          'عدد النوبات',
-                        ).copyWith(errorText: errorText),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.18),
-                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                    ),
-                    onPressed: isSubmitting
-                        ? null
-                        : () async {
-                            final text = controller.text.trim();
-                            if (text.isEmpty || int.tryParse(text) == null) {
-                              setStateDialog(() => errorText = 'أدخل رقماً صحيحاً');
-                              return;
-                            }
-                            setStateDialog(() {
-                              errorText = null;
-                              isSubmitting = true;
-                            });
-                            try {
-                              await ref.read(patientRepositoryProvider).submitWeeklyEpisodeLog(
-                                    NewWeeklyEpisodeLogPayload(
-                                      caseId: caseId,
-                                      episodeCount: int.parse(text),
-                                    ),
-                                  );
-                              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                            } catch (e) {
-                              // ربما سُجّل هذا الأسبوع مسبقاً (حوار قديم): تحقق من الباكند
-                              try {
-                                final latest = await ref.refresh(myCaseProvider.future);
-                                final stillPending = latest?.pendingWeeklyEpisodeWeek;
-                                if (stillPending == null || stillPending != weekStart) {
-                                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                                  return;
-                                }
-                              } catch (_) {}
-                              setStateDialog(() {
-                                isSubmitting = false;
-                                errorText = 'حدث خطأ، حاول مرة أخرى';
-                              });
-                            }
-                          },
-                    child: isSubmitting
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('إرسال'),
-                  ),
-                ],
-              );
-            },
+      builder: (dialogContext) => GlassDialog(
+        title: 'حذف النوبة',
+        content: const Text('هل تريد حذف هذه النوبة؟', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            child: const Text('لا'),
           ),
-        );
-      },
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppAccent.unlinked),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    try {
+      await ref.read(attackRepositoryProvider).deleteAttack(attack.id);
+      ref.invalidate(caseAttacksProvider(attack.caseId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 
   @override
@@ -230,15 +163,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     final myCaseId = caseAsync.value?.id;
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForMyCase = myCaseId != null ? (unreadByCase[myCaseId] ?? 0) : 0;
+    final attacksAsync =
+        myCaseId != null ? ref.watch(caseAttacksProvider(myCaseId)) : const AsyncValue<List<AttackEventModel>>.data([]);
 
-    // رسالة التقرير الأسبوعي الإلزامية — تُفحص بكل مرة تُبنى فيها
-    // الشاشة (أي فتح للتطبيق أو رجوع لهذي الشاشة)، وتعتمد بالكامل على
-    // حالة الـ backend (pendingWeeklyEpisodeWeek)، فتبقى تظهر تلقائياً
-    // لحد ما المريض يجاوب حتى لو أغلق التطبيق ورجع.
-    final pendingCase = caseAsync.value;
-    if (pendingCase != null && pendingCase.pendingWeeklyEpisodeWeek != null) {
+    final loadedCase = caseAsync.value;
+    if (loadedCase != null && !_confirmationChecked) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _maybeShowWeeklyEpisodePrompt(pendingCase);
+        if (mounted) _maybeAskAttackConfirmation(loadedCase);
       });
     }
 
@@ -274,6 +205,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             onRefresh: () async {
               ref.invalidate(mySessionsProvider);
               ref.invalidate(myCaseProvider);
+              if (myCaseId != null) ref.invalidate(caseAttacksProvider(myCaseId));
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -345,6 +277,27 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     );
                   },
                 ),
+                if (loadedCase != null && loadedCase.status != CaseStatus.closed) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton.icon(
+                      onPressed: () => _logAttack(loadedCase),
+                      icon: const Icon(Icons.bolt_outlined),
+                      label: const Text('تسجيل نوبة'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppAccent.unlinked.withValues(alpha: 0.22),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(color: AppAccent.unlinked.withValues(alpha: 0.5)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 caseAsync.when(
                   loading: () => const SizedBox.shrink(),
@@ -362,6 +315,46 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     );
                   },
                 ),
+                if (loadedCase != null) ...[
+                  const SizedBox(height: 24),
+                  SectionHeader(
+                    icon: Icons.bolt_outlined,
+                    color: AppAccent.unlinked,
+                    title: 'نوباتي',
+                    subtitleText: 'هذا الشهر: ${_attacksThisMonth(attacksAsync.value ?? const [])}',
+                  ),
+                  const SizedBox(height: 10),
+                  attacksAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                    ),
+                    error: (error, _) => _ErrorView(
+                      message: error.toString(),
+                      onRetry: () => ref.invalidate(caseAttacksProvider(loadedCase.id)),
+                    ),
+                    data: (attacks) {
+                      if (attacks.isEmpty) {
+                        return const GlassContainer(
+                          padding: EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+                          child: Text(
+                            'لا توجد نوبات مسجّلة. اضغط "تسجيل نوبة" عند حدوث أي نوبة.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        );
+                      }
+                      final sorted = [...attacks]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+                      return AttackList(
+                        attacks: sorted,
+                        strings: AttackListStrings.ar,
+                        initialLimit: 5,
+                        canDelete: (a) =>
+                            DateTime.now().difference(a.createdAt) < const Duration(hours: 24),
+                        onDelete: _deleteAttack,
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SectionHeader(
                   icon: Icons.event_note_outlined,

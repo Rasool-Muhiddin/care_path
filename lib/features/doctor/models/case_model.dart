@@ -96,7 +96,6 @@ class CaseModel {
   final int? totalSessionsPlanned;
   final int completedSessionsCount;
   final int? remainingSessionsCount;
-  final DateTime? pendingWeeklyEpisodeWeek;
   final String initialEvaluation;
   final String treatmentPlan;
   final DateTime createdAt;
@@ -121,7 +120,6 @@ class CaseModel {
     this.totalSessionsPlanned,
     this.completedSessionsCount = 0,
     this.remainingSessionsCount,
-    this.pendingWeeklyEpisodeWeek,
     required this.initialEvaluation,
     required this.treatmentPlan,
     required this.createdAt,
@@ -151,9 +149,6 @@ class CaseModel {
       totalSessionsPlanned: json['total_sessions_planned'] as int?,
       completedSessionsCount: json['completed_sessions_count'] as int? ?? 0,
       remainingSessionsCount: json['remaining_sessions_count'] as int?,
-      pendingWeeklyEpisodeWeek: (json['pending_weekly_episode_week'] as String?) != null
-          ? DateTime.parse(json['pending_weekly_episode_week'] as String)
-          : null,
       initialEvaluation: json['initial_evaluation'] as String? ?? '',
       treatmentPlan: json['treatment_plan'] as String? ?? '',
       // الخادم يرسل الأوقات مع الإزاحة؛ نحوّلها لتوقيت الجهاز قبل العرض

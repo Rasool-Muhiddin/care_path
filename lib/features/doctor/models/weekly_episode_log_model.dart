@@ -28,20 +28,3 @@ class WeeklyEpisodeLogModel {
     );
   }
 }
-
-/// بيانات إرسال تقرير أسبوعي جديد — case + episode_count فقط؛
-/// week_start_date يُحسب تلقائياً بالـ backend (أقدم أسبوع مستحق).
-class NewWeeklyEpisodeLogPayload {
-  final int caseId;
-  final int episodeCount;
-
-  const NewWeeklyEpisodeLogPayload({
-    required this.caseId,
-    required this.episodeCount,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'case': caseId,
-        'episode_count': episodeCount,
-      };
-}

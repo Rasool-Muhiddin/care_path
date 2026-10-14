@@ -172,7 +172,9 @@ class GlassDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              content,
+              // Flexible: محتوى طويل (داخل SingleChildScrollView) يُمرَّر بدل أن
+              // يتجاوز ارتفاع الشاشة؛ المحتوى القصير يبقى بحجمه الطبيعي.
+              Flexible(child: content),
               const SizedBox(height: 20),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
             ],

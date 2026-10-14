@@ -11,8 +11,8 @@ import '../../../core/widgets/session_calendar.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../../doctor/models/case_model.dart' show CaseModel;
 import '../../doctor/models/weekly_episode_log_model.dart';
+import '../models/session_model.dart';
 import '../patient_providers.dart';
-import 'end_session_dialog.dart';
 
 /// الشاشة الرئيسية للمريض: ملخص حالته (خطة العلاج ونوع الجهاز)، زر إنهاء
 /// الجلسة اليومية، زر فتح المحادثة مع الطبيب، وقائمة بجلساته السابقة.
@@ -25,11 +25,56 @@ class PatientHomeScreen extends ConsumerStatefulWidget {
 
 class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   bool _isWeeklyDialogShowing = false;
+  bool _isEndingSession = false;
 
+  /// "إنهاء الجلسة": تأكيد بسيط (نعم/لا) ثم حفظ الجلسة مباشرة — بدون
+  /// تقييم أو ملاحظة. التأكيد يمنع ضغطة بالخطأ لأن الجلسة مرة واحدة يومياً.
   Future<void> _endSession(int caseId) async {
-    final wasSaved = await showEndSessionDialog(context, caseId);
-    if (wasSaved == true) {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: 'إنهاء الجلسة',
+        content: const Text('هل تريد إنهاء الجلسة؟', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            child: const Text('لا'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('نعم'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isEndingSession = true);
+    try {
+      await ref.read(patientRepositoryProvider).createSession(NewSessionPayload(caseId: caseId));
+      ref.invalidate(mySessionsProvider);
       ref.invalidate(myCaseProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حفظ الجلسة بنجاح')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isEndingSession = false);
     }
   }
 
@@ -268,14 +313,20 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                           width: double.infinity,
                           height: 52,
                           child: FilledButton.icon(
-                            onPressed: hasCompletedToday
+                            onPressed: (hasCompletedToday || _isEndingSession)
                                 ? null
                                 : () => _endSession(myCase.id),
-                            icon: Icon(
-                              hasCompletedToday
-                                  ? Icons.check_circle
-                                  : Icons.check_circle_outline,
-                            ),
+                            icon: _isEndingSession
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : Icon(
+                                    hasCompletedToday
+                                        ? Icons.check_circle
+                                        : Icons.check_circle_outline,
+                                  ),
                             label: Text(
                               hasCompletedToday
                                   ? 'تم إنهاء الجلسة اليومية'

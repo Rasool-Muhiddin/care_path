@@ -52,40 +52,20 @@ class SessionModel {
   }
 }
 
-/// تقييم سريع لرد فعل المريض بعد الجلسة — خيارات جاهزة + ملاحظة اختيارية
-enum PatientFeeling {
-  excellent('ممتاز'),
-  normal('عادي'),
-  difficult('سيء');
-
-  const PatientFeeling(this.label);
-  final String label;
-}
-
 /// بيانات إنشاء جلسة جديدة من طرف المريض — يرسلها المريض نفسه عند
-/// الضغط على "إنهاء الجلسة". لا تحتوي doctor_notes إطلاقاً (لا كمفتاح
+/// الضغط على "إنهاء الجلسة"، بدون تقييم أو ملاحظة (patient_response
+/// اختياري بالـ backend). لا تحتوي doctor_notes إطلاقاً (لا كمفتاح
 /// حتى لو فاضي)، لأن الـ backend يرفض أي طلب من مريض يحتوي هذا المفتاح
 /// ضمن بيانات الطلب، بغض النظر عن قيمته.
 class NewSessionPayload {
   final int caseId;
-  final PatientFeeling feeling;
-  final String? note;
-  final int? durationMinutes;
 
-  const NewSessionPayload({
-    required this.caseId,
-    required this.feeling,
-    this.note,
-    this.durationMinutes,
-  });
+  const NewSessionPayload({required this.caseId});
 
   Map<String, dynamic> toJson() => {
         'case': caseId,
         // UTC صريحاً: بدون إزاحة كان الخادم يفسّر الوقت المحلي على أنه UTC.
         // (للمريض يستبدله الخادم بوقته هو على أي حال)
         'session_date': DateTime.now().toUtc().toIso8601String(),
-        if (durationMinutes != null) 'duration_minutes': durationMinutes,
-        'patient_response':
-            (note != null && note!.trim().isNotEmpty) ? '${feeling.label}: ${note!.trim()}' : feeling.label,
       };
 }

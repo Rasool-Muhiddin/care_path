@@ -83,3 +83,20 @@ class AttackReminderTests(CareWorldMixin, TestCase):
             call_command("send_attack_reminders", "--dry-run", stdout=out)
         send.assert_not_called()
         self.assertIn("3 patient(s)", out.getvalue())
+
+
+class LastSeenBackfillMigrationTests(CareWorldMixin, TestCase):
+    def test_backfill_marks_existing_users_as_seen_now(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        User.objects.update(last_seen_at=None, date_joined=timezone.now() - timedelta(days=30))
+        DeviceToken.objects.create(user=self.patient_1, token="tok-backfill", platform="android")
+        self.assertIn(self.patient_1, patients_due_for_reminder())  # بدون backfill: تذكير فوري
+
+        migration = import_module("accounts.migrations.0004_backfill_last_seen_at")
+        migration.backfill_last_seen(apps, None)
+
+        self.assertFalse(User.objects.filter(last_seen_at__isnull=True).exists())
+        self.assertEqual(set(patients_due_for_reminder()), set())

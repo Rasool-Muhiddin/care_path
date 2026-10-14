@@ -2,24 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../features/patient/models/session_model.dart';
 import '../theme/app_theme.dart';
+import '../time/baghdad_time.dart';
 import 'glass_container.dart';
 
-/// Baghdad is UTC+3 all year (no DST since 2008). Session days are grouped
-/// by this fixed offset — not the device timezone — so the calendar agrees
-/// with the backend's "one session per Baghdad calendar day" rule even when
-/// the phone is set to another zone.
-const Duration _baghdadOffset = Duration(hours: 3);
+// Session days are grouped by Baghdad day (core/time/baghdad_time.dart),
+// not the device timezone, so the calendar agrees with the backend's
+// "one session per Baghdad calendar day" rule.
 
-/// Wall-clock time in Baghdad for [t], as a UTC-flagged [DateTime] whose
-/// fields (year/month/day/hour/minute) are the Baghdad values.
-DateTime toBaghdad(DateTime t) => t.toUtc().add(_baghdadOffset);
-
-/// Integer key (yyyymmdd) for the Baghdad calendar day of [t].
+/// Integer key (yyyymmdd) for a Baghdad wall-clock [DateTime].
 int _dayKey(DateTime baghdad) => baghdad.year * 10000 + baghdad.month * 100 + baghdad.day;
-
-/// Whether [t] falls on today's Baghdad calendar day — the same day
-/// boundary the backend uses for its one-session-per-day rule.
-bool isBaghdadToday(DateTime t) => _dayKey(toBaghdad(t)) == _dayKey(toBaghdad(DateTime.now()));
 
 String _two(int n) => n.toString().padLeft(2, '0');
 

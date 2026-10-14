@@ -24,6 +24,8 @@ class ApiEndpoints {
   static const String cases = '$api/cases/';
   static const String caseProgressNotes = '$api/case-progress-notes/';
   static const String weeklyEpisodeLogs = '$api/weekly-episode-logs/';
+  static const String attackEvents = '$api/attack-events/';
+  static const String attackLogConfirmations = '$api/attack-log-confirmations/';
 
   // treatments
   static const String sessions = '$api/sessions/';

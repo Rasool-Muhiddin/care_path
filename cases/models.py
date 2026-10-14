@@ -284,3 +284,81 @@ class WeeklyEpisodeLog(models.Model):
 
     def __str__(self) -> str:
         return f"Case #{self.case_id} — week of {self.week_start_date}: {self.episode_count}"
+
+# ---------------------------------------------------------------------------
+# تسجيل النوبات عند حدوثها (بديل التقرير الأسبوعي الإلزامي)
+# ---------------------------------------------------------------------------
+
+# حدود المدة لكل تشخيص (بالثواني): الشقيقة بالساعات (فوق 72 ساعة حالة
+# سريرية مختلفة)، والصرع بالثواني/الدقائق.
+MAX_ATTACK_DURATION_SECONDS = {
+    DiagnosisType.MIGRAINE: 72 * 3600,
+    DiagnosisType.EPILEPSY: 60 * 60,
+}
+# أقدم يوم يُقبل تسجيل نوبة فيه: اليوم ناقص 7 أيام (بأيام بغداد الكاملة)
+ATTACK_MAX_DAYS_BACK = 7
+# سماحية فرق الساعة بين جهاز المريض والسيرفر
+ATTACK_FUTURE_TOLERANCE = timedelta(minutes=5)
+# المريض يقدر يحذف نوبة سجّلها بالخطأ خلال هذه المدة من التسجيل
+ATTACK_DELETE_WINDOW = timedelta(hours=24)
+# طلب مطابق تماماً لنوبة حُفظت قبل أقل من هذه المدة = ضغطة مكررة
+ATTACK_DUPLICATE_WINDOW = timedelta(seconds=60)
+
+
+class AttackEvent(models.Model):
+    """
+    نوبة واحدة يسجّلها المريض بنفسه (زر "تسجيل نوبة"). عدد النوبات لأي
+    فترة = عدد السجلات فيها.
+
+    - occurred_at: وقت بداية النوبة. إن اختار المريض جزءاً تقريبياً من
+      اليوم (صباحاً/ظهراً/...) يُخزَّن وقت ممثِّل لذلك الجزء مع
+      time_is_approximate=True.
+    - severity: 1–10 للشقيقة فقط (إلزامي)، وفارغ دائماً للصرع.
+    - التسجيل المتأخر يُحسب من الفرق بين created_at و occurred_at.
+    """
+
+    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="attack_events")
+    occurred_at = models.DateTimeField(help_text="وقت بداية النوبة")
+    time_is_approximate = models.BooleanField(
+        default=False, help_text="الوقت تقريبي (جزء من اليوم) وليس دقيقاً"
+    )
+    duration_seconds = models.PositiveIntegerField(help_text="مدة النوبة بالثواني")
+    severity = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="شدة النوبة 1–10 (الشقيقة فقط)"
+    )
+    took_medication = models.BooleanField(help_text="هل أخذ المريض دواءً للنوبة")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["case", "occurred_at"], name="attack_case_occurred_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Attack on Case #{self.case_id} @ {self.occurred_at:%Y-%m-%d %H:%M}"
+
+
+class AttackLogConfirmation(models.Model):
+    """
+    تأكيد أسبوعي خفيف (غير إلزامي) من المريض: "هل كانت لديك نوبات لم
+    تسجّلها؟". التأكيد يغطي الأيام السبعة الكاملة التي تسبق يوم التأكيد
+    (بتوقيت بغداد) — وهي بالضبط الأيام التي ما زال يُسمح بتسجيل نوبات
+    فيها. had_unlogged=False: أكد عدم وجود نوبات غير مسجّلة.
+    had_unlogged=True: أجاب "نعم" وسجّلها ثم أنهى.
+
+    بهذا تستطيع شاشة الإحصائيات التفريق بين أسبوع بلا نوبات مؤكَّد
+    وأسبوع بلا نوبات غير مؤكَّد.
+    """
+
+    case = models.ForeignKey(
+        Case, on_delete=models.CASCADE, related_name="attack_log_confirmations"
+    )
+    had_unlogged = models.BooleanField()
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-confirmed_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Attack-log confirmation for Case #{self.case_id} @ {self.confirmed_at:%Y-%m-%d}"

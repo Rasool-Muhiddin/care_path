@@ -1,11 +1,22 @@
+from datetime import timedelta
+
+from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from accounts.models import UserRole
 
 from .models import (
+    ATTACK_DUPLICATE_WINDOW,
+    ATTACK_FUTURE_TOLERANCE,
+    ATTACK_MAX_DAYS_BACK,
+    MAX_ATTACK_DURATION_SECONDS,
+    AttackEvent,
+    AttackLogConfirmation,
     Case,
     CaseProgressNote,
     CaseStatus,
+    DiagnosisType,
     DISEASE_TYPE_CHOICES_BY_DIAGNOSIS,
     WeeklyEpisodeLog,
     pending_weekly_episode_week,
@@ -268,4 +279,110 @@ class WeeklyEpisodeLogSerializer(serializers.ModelSerializer):
                 "لا يوجد تقرير أسبوعي مستحق حالياً لهذه الحالة."
             )
         attrs["week_start_date"] = pending_week
+        return attrs
+
+class AttackEventSerializer(serializers.ModelSerializer):
+    """
+    نوبة واحدة — ينشئها المريض لحالته فقط. القواعد (كلها بالسيرفر):
+    - الحالة تخص المريض وغير مغلقة.
+    - occurred_at: ليس بالمستقبل (سماحية 5 دقائق)، ولا قبل (اليوم - 7
+      أيام) بتوقيت بغداد، ولا قبل يوم إنشاء الحالة.
+    - duration_seconds: 1 .. الحد الأقصى حسب التشخيص.
+    - severity: إلزامي 1–10 للشقيقة، ومرفوض للصرع.
+    - took_medication: إلزامي.
+    - ضغطة مكررة (طلب مطابق خلال 60 ثانية) تُرفض — يُعاد الفحص داخل قفل
+      صف الحالة في create() حتى لا يمر طلبان متزامنان.
+    """
+
+    class Meta:
+        model = AttackEvent
+        fields = [
+            "id",
+            "case",
+            "occurred_at",
+            "time_is_approximate",
+            "duration_seconds",
+            "severity",
+            "took_medication",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+        extra_kwargs = {"took_medication": {"required": True}}
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        case = attrs["case"]
+
+        if case.patient_id != request.user.id:
+            raise serializers.ValidationError({"case": "لا يمكنك تسجيل نوبة لحالة لا تخصك."})
+        if case.status == CaseStatus.CLOSED:
+            raise serializers.ValidationError({"case": "لا يمكن تسجيل نوبة على حالة مغلقة."})
+
+        occurred_at = attrs["occurred_at"]
+        now = timezone.now()
+        if occurred_at > now + ATTACK_FUTURE_TOLERANCE:
+            raise serializers.ValidationError({"occurred_at": "لا يمكن تسجيل نوبة بوقت في المستقبل."})
+        occurred_day = timezone.localdate(occurred_at)
+        if occurred_day < timezone.localdate(now) - timedelta(days=ATTACK_MAX_DAYS_BACK):
+            raise serializers.ValidationError(
+                {"occurred_at": f"يمكن تسجيل النوبات خلال آخر {ATTACK_MAX_DAYS_BACK} أيام فقط."}
+            )
+        if occurred_day < timezone.localdate(case.created_at):
+            raise serializers.ValidationError({"occurred_at": "وقت النوبة قبل تاريخ تسجيل الحالة."})
+
+        duration = attrs["duration_seconds"]
+        max_duration = MAX_ATTACK_DURATION_SECONDS[case.diagnosis_type]
+        if duration < 1 or duration > max_duration:
+            raise serializers.ValidationError(
+                {"duration_seconds": f"مدة النوبة يجب أن تكون بين 1 و {max_duration} ثانية."}
+            )
+
+        severity = attrs.get("severity")
+        if case.diagnosis_type == DiagnosisType.MIGRAINE:
+            if severity is None or not 1 <= severity <= 10:
+                raise serializers.ValidationError({"severity": "شدة النوبة مطلوبة (من 1 إلى 10)."})
+        elif severity is not None:
+            raise serializers.ValidationError({"severity": "الشدة تُسجَّل لنوبات الشقيقة فقط."})
+        return attrs
+
+    def create(self, validated_data):
+        case = validated_data["case"]
+        with transaction.atomic():
+            Case.objects.select_for_update().get(pk=case.pk)
+            duplicate = AttackEvent.objects.filter(
+                case=case,
+                occurred_at=validated_data["occurred_at"],
+                duration_seconds=validated_data["duration_seconds"],
+                severity=validated_data.get("severity"),
+                took_medication=validated_data["took_medication"],
+                created_at__gte=timezone.now() - ATTACK_DUPLICATE_WINDOW,
+            ).exists()
+            if duplicate:
+                raise serializers.ValidationError("تم تسجيل هذه النوبة للتو.")
+            return super().create(validated_data)
+
+
+class AttackLogConfirmationSerializer(serializers.ModelSerializer):
+    """
+    تأكيد "هل لديك نوبات لم تسجّلها؟" — المريض لحالته فقط، وتأكيد واحد
+    لكل يوم (بتوقيت بغداد) لكل حالة.
+    """
+
+    class Meta:
+        model = AttackLogConfirmation
+        fields = ["id", "case", "had_unlogged", "confirmed_at"]
+        read_only_fields = ["id", "confirmed_at"]
+        extra_kwargs = {"had_unlogged": {"required": True}}
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        case = attrs["case"]
+        if case.patient_id != request.user.id:
+            raise serializers.ValidationError({"case": "لا يمكنك التأكيد لحالة لا تخصك."})
+        if case.status == CaseStatus.CLOSED:
+            raise serializers.ValidationError({"case": "الحالة مغلقة."})
+        if AttackLogConfirmation.objects.filter(
+            case=case, confirmed_at__date=timezone.localdate()
+        ).exists():
+            raise serializers.ValidationError("تم التأكيد اليوم بالفعل.")
         return attrs

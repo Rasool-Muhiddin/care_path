@@ -56,3 +56,8 @@ class IsDoctorOrEngineer(HasRole):
 class IsPatientOrDoctor(HasRole):
     roles = frozenset({UserRole.PATIENT, UserRole.DOCTOR})
     message = "إضافة التقييمات مخصصة للمرضى والأطباء فقط."
+
+
+class IsPatientOrEngineer(HasRole):
+    roles = frozenset({UserRole.PATIENT, UserRole.ENGINEER})
+    message = "هذا الإجراء مخصص للمريض صاحب السجل أو فريق المهندسين."

@@ -136,6 +136,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": os.environ.get('THROTTLE_ANON', '60/min'),
         "user": os.environ.get('THROTTLE_USER', '1200/min'),
+        # تسجيل النوبات (AttackEventViewSet.create) — يسمح بتسجيل عدة نوبات
+        # فائتة متتالية، ويمنع الإغراق.
+        "attack_create": os.environ.get('THROTTLE_ATTACK_CREATE', '30/hour'),
     },
     # عدد الـ proxies أمام Django (nginx = 1) ليُقرأ IP العميل الحقيقي
     # من X-Forwarded-For بدل IP الـ proxy نفسه. Cloudflare لا يُحتسب هنا:

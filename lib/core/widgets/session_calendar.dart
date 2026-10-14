@@ -17,6 +17,10 @@ DateTime toBaghdad(DateTime t) => t.toUtc().add(_baghdadOffset);
 /// Integer key (yyyymmdd) for the Baghdad calendar day of [t].
 int _dayKey(DateTime baghdad) => baghdad.year * 10000 + baghdad.month * 100 + baghdad.day;
 
+/// Whether [t] falls on today's Baghdad calendar day — the same day
+/// boundary the backend uses for its one-session-per-day rule.
+bool isBaghdadToday(DateTime t) => _dayKey(toBaghdad(t)) == _dayKey(toBaghdad(DateTime.now()));
+
 String _two(int n) => n.toString().padLeft(2, '0');
 
 /// UI strings for [SessionCalendar]. Weekday names start on Saturday

@@ -66,6 +66,17 @@ void main() {
     expect(find.text('1 session this month'), findsOneWidget);
   });
 
+  test('isBaghdadToday uses the Baghdad day, not the device day', () {
+    final nowBaghdad = toBaghdad(DateTime.now());
+    // Baghdad midnight starting today, expressed in UTC (21:00 UTC the day before).
+    final startOfToday = DateTime.utc(nowBaghdad.year, nowBaghdad.month, nowBaghdad.day)
+        .subtract(const Duration(hours: 3));
+    expect(isBaghdadToday(startOfToday), isTrue);
+    expect(isBaghdadToday(startOfToday.subtract(const Duration(minutes: 1))), isFalse);
+    expect(isBaghdadToday(startOfToday.add(const Duration(hours: 23, minutes: 59))), isTrue);
+    expect(isBaghdadToday(startOfToday.add(const Duration(hours: 24))), isFalse);
+  });
+
   testWidgets('month/year picker jumps to another year', (tester) async {
     await tester.pumpWidget(_host(const [], SessionCalendarStrings.ar, TextDirection.rtl));
     expect(find.text('عدد الجلسات هذا الشهر: 0'), findsOneWidget);

@@ -81,11 +81,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   String _formatDate(DateTime d) =>
       '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
-  }
-
   /// يعرض رسالة التقرير الأسبوعي الإلزامية (كم نوبة هذا الأسبوع) لو فيه
   /// أسبوع مستحق لم يُجب عنه المريض بعد. لا يمكن تجاهلها أو إغلاقها إلا
   /// بالإجابة (لا زر إغلاق، لا سحب للخارج، لا زر رجوع). لو كان المريض
@@ -307,7 +302,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       error: (_, __) => const SizedBox.shrink(),
                       data: (sessions) {
                         final hasCompletedToday = sessions.any(
-                          (session) => _isToday(session.sessionDate),
+                          (session) => isBaghdadToday(session.sessionDate),
                         );
                         return SizedBox(
                           width: double.infinity,

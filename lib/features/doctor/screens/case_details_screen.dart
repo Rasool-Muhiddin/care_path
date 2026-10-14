@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/ltr_scope.dart';
 import '../../../core/widgets/session_calendar.dart';
-import '../../../core/widgets/sessions_vs_attacks_chart.dart';
+import '../../attack_stats/attack_statistics_screen.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
@@ -242,7 +242,6 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
     final c = widget.caseModel;
     final sessionsAsync = ref.watch(caseSessionsProvider(c.id));
     final progressNotesAsync = ref.watch(caseProgressNotesProvider(c.id));
-    final weeklyEpisodeLogsAsync = ref.watch(caseWeeklyEpisodeLogsProvider(c.id));
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForThisCase = unreadByCase[c.id] ?? 0;
 
@@ -331,11 +330,11 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                         value: c.symptoms.isNotEmpty ? c.symptoms : '—',
                       ),
                       _InfoRow(
-                        label: 'attack / month',
+                        label: 'Baseline attacks / month',
                         value: c.monthlyEpisodeCount?.toString() ?? '—',
                       ),
                       _InfoRow(
-                        label: 'attack duration',
+                        label: 'Baseline attack duration',
                         value: c.episodeDurationMinutes != null
                             ? '${c.episodeDurationMinutes} min'
                             : '—',
@@ -494,58 +493,16 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 ),
 
                 const SizedBox(height: 28),
-                SectionHeader(
+                const SectionHeader(
                   titleStyle: _Txt.sectionTitleMedium,
-                  icon: Icons.show_chart_outlined,
+                  icon: Icons.bolt_outlined,
                   color: AppAccent.caseC,
-                  title: 'Sessions vs Attacks',
-                  subtitleText:
-                      'Compares how many sessions were done against how many attacks were '
-                      'reported over time, to visually see whether attacks are trending down.',
+                  title: 'Attacks',
+                  subtitleText: 'Attacks logged by the patient. The detailed statistics compare them '
+                      'with sessions and with the before-treatment baseline.',
                 ),
                 const SizedBox(height: 10),
-                sessionsAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator(color: Colors.white)),
-                  ),
-                  error: (e, _) => _InlineStatePanel(
-                    icon: Icons.error_outline,
-                    color: AppAccent.unlinked,
-                    message: 'Failed to load sessions: $e',
-                    isError: true,
-                    onRetry: () => ref.invalidate(caseSessionsProvider(c.id)),
-                  ),
-                  data: (sessions) => weeklyEpisodeLogsAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator(color: Colors.white)),
-                    ),
-                    error: (e, _) => _InlineStatePanel(
-                      icon: Icons.error_outline,
-                      color: AppAccent.unlinked,
-                      message: 'Failed to load weekly attack reports: $e',
-                      isError: true,
-                      onRetry: () => ref.invalidate(caseWeeklyEpisodeLogsProvider(c.id)),
-                    ),
-                    data: (episodeLogs) {
-                      if (episodeLogs.isEmpty) {
-                        return _InlineStatePanel(
-                          icon: Icons.bar_chart_outlined,
-                          color: AppAccent.caseC,
-                          message:
-                              'No weekly attack reports from the patient yet — the chart '
-                              'will appear once the patient starts answering the mandatory '
-                              'weekly report.',
-                        );
-                      }
-                      return GlassContainer(
-                        padding: const EdgeInsets.all(12),
-                        child: SessionsVsAttacksChart(sessions: sessions, episodeLogs: episodeLogs),
-                      );
-                    },
-                  ),
-                ),
+                AttackSummaryCard(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),
 
                 const SizedBox(height: 28),
                 progressNotesAsync.when(

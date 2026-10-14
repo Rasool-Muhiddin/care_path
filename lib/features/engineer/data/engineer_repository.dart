@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../doctor/models/case_model.dart';
-import '../../doctor/models/weekly_episode_log_model.dart';
 import '../../patient/models/session_model.dart';
 import '../../doctor/models/patient_model.dart';
 import '../models/case_summary_model.dart';
@@ -71,19 +70,6 @@ class EngineerRepository {
         queryParameters: {'case': caseId},
       );
       return items.map(SessionModel.fromJson).toList();
-    } on DioException catch (e) {
-      throw _client.mapError(e);
-    }
-  }
-
-  /// تقارير النوبات الأسبوعية لحالة معيّنة — لبناء شارت (جلسات مقابل نوبات)
-  Future<List<WeeklyEpisodeLogModel>> fetchWeeklyEpisodeLogs(int caseId) async {
-    try {
-      final items = await _client.getAllPages(
-        ApiEndpoints.weeklyEpisodeLogs,
-        queryParameters: {'case': caseId},
-      );
-      return items.map(WeeklyEpisodeLogModel.fromJson).toList();
     } on DioException catch (e) {
       throw _client.mapError(e);
     }

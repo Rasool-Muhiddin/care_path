@@ -395,6 +395,12 @@ class _AddCaseScreenState extends ConsumerState<AddCaseScreen> {
                   // --- Clinical details (epilepsy/migraine only) ---
                   const SizedBox(height: 20),
                   _sectionTitle('Diagnosis Details', icon: Icons.analytics_outlined, color: AppAccent.caseC),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Attacks per month and duration before treatment — the baseline the '
+                    "patient's logged attacks are compared against.",
+                    style: _Txt.hint,
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [

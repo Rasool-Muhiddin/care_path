@@ -176,7 +176,13 @@ class GlassDialog extends StatelessWidget {
               // يتجاوز ارتفاع الشاشة؛ المحتوى القصير يبقى بحجمه الطبيعي.
               Flexible(child: content),
               const SizedBox(height: 20),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
+              // OverflowBar (كما في AlertDialog): الأزرار تنزل لسطر جديد بدل أن
+              // تتجاوز عرض الشاشات الصغيرة.
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                children: actions,
+              ),
             ],
           ),
         ),

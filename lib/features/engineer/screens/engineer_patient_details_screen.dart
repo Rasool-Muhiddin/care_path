@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/attacks/attack_repository.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
-import '../../../core/widgets/sessions_vs_attacks_chart.dart';
+import '../../attack_stats/attack_statistics_screen.dart';
 import '../../doctor/models/case_model.dart';
 import '../engineer_providers.dart';
 
@@ -24,8 +25,6 @@ class _Txt {
   static const value = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
   static const statValue = TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800);
   static const statLabel = TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w500);
-  static const error = TextStyle(color: Colors.redAccent, fontSize: 13);
-  static const empty = TextStyle(color: Colors.white54, fontSize: 13);
 
   static List<Shadow> glow(Color color, {double blur = 14}) => [
         Shadow(color: color.withValues(alpha: 0.55), blurRadius: blur),
@@ -41,18 +40,16 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
 
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(engineerCaseSessionsProvider(caseModel.id));
-    ref.invalidate(engineerCaseWeeklyEpisodeLogsProvider(caseModel.id));
+    ref.invalidate(caseAttacksProvider(caseModel.id));
     await Future.wait([
       ref.read(engineerCaseSessionsProvider(caseModel.id).future),
-      ref.read(engineerCaseWeeklyEpisodeLogsProvider(caseModel.id).future),
+      ref.read(caseAttacksProvider(caseModel.id).future),
     ]);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = caseModel;
-    final sessionsAsync = ref.watch(engineerCaseSessionsProvider(c.id));
-    final logsAsync = ref.watch(engineerCaseWeeklyEpisodeLogsProvider(c.id));
 
     return LtrScope(
       child: Scaffold(
@@ -124,13 +121,13 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                         _divider(),
                         _InfoRow(
                           icon: Icons.bolt_rounded,
-                          label: 'attack / month',
+                          label: 'Baseline attacks / month',
                           value: c.monthlyEpisodeCount?.toString() ?? '—',
                         ),
                         _divider(),
                         _InfoRow(
                           icon: Icons.timer_outlined,
-                          label: 'attack duration',
+                          label: 'Baseline attack duration',
                           value: c.episodeDurationMinutes != null
                               ? '${c.episodeDurationMinutes} min'
                               : '—',
@@ -140,35 +137,16 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 28),
                   const _SectionHeader(
-                    icon: Icons.bar_chart_rounded,
+                    icon: Icons.bolt_rounded,
                     accent: _Accent.chart,
-                    title: 'Sessions vs Attacks',
-                    subtitle: 'Compares how many sessions were done against how many attacks '
-                        'were reported over time.',
+                    title: 'Attacks',
+                    subtitle: 'Attacks logged by the patient. The detailed statistics compare them '
+                        'with sessions and with the before-treatment baseline.',
                   ),
                   const SizedBox(height: 10),
-                  GlassContainer(
-                    padding: const EdgeInsets.all(12),
-                    child: sessionsAsync.when(
-                      loading: _loading,
-                      error: (e, _) => _error('Failed to load sessions: $e'),
-                      data: (sessions) => logsAsync.when(
-                        loading: _loading,
-                        error: (e, _) => _error('Failed to load weekly attack reports: $e'),
-                        data: (logs) {
-                          if (logs.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Text(
-                                'No weekly attack reports from the patient yet.',
-                                style: _Txt.empty,
-                              ),
-                            );
-                          }
-                          return SessionsVsAttacksChart(sessions: sessions, episodeLogs: logs);
-                        },
-                      ),
-                    ),
+                  AttackSummaryCard(
+                    caseModel: c,
+                    sessionsProvider: engineerCaseSessionsProvider(c.id),
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -186,16 +164,6 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
         color: Colors.white.withValues(alpha: 0.08),
         indent: 16,
         endIndent: 16,
-      );
-
-  static Widget _loading() => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator(color: Colors.white)),
-      );
-
-  static Widget _error(String message) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(message, style: _Txt.error),
       );
 }
 

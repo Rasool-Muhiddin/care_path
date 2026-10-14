@@ -50,6 +50,9 @@ AttackLogConfirmationModel _confirmed(DateTime at) =>
     AttackLogConfirmationModel(id: 1, caseId: 7, hadUnlogged: false, confirmedAt: at);
 
 Future<_FakeAttackRepository> _openDialog(WidgetTester tester, CaseModel myCase) async {
+  tester.view.physicalSize = const Size(360, 740);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final repo = _FakeAttackRepository();
   await tester.pumpWidget(ProviderScope(
     overrides: [attackRepositoryProvider.overrideWithValue(repo)],
@@ -116,17 +119,15 @@ void main() {
     final repo = await _openDialog(tester, _case(DiagnosisType.migraine));
     expect(find.text('ما شدة النوبة؟ (1 خفيفة – 10 شديدة جداً)'), findsOneWidget);
 
-    await tester.tap(find.text('أمس'));
-    await tester.tap(find.text('وقت تقريبي'));
+    await _tapText(tester, 'أمس');
+    await _tapText(tester, 'وقت تقريبي');
     await tester.pump();
-    await tester.tap(find.text('مساءً'));
+    await _tapText(tester, 'مساءً');
     await tester.enterText(find.widgetWithText(TextField, 'ساعات'), '3');
     await tester.enterText(find.widgetWithText(TextField, 'دقائق'), '30');
-    await tester.ensureVisible(find.text('7'));
-    await tester.tap(find.text('7'));
-    await tester.ensureVisible(find.text('نعم'));
-    await tester.tap(find.text('نعم'));
-    await tester.tap(find.text('حفظ'));
+    await _tapText(tester, '7');
+    await _tapText(tester, 'نعم');
+    await _tapText(tester, 'حفظ');
     await tester.pumpAndSettle();
 
     expect(repo.logged, hasLength(1));
@@ -141,7 +142,7 @@ void main() {
 
     // "log another" resets the form for the next missed attack
     expect(find.text('تسجيل نوبة أخرى'), findsOneWidget);
-    await tester.tap(find.text('تسجيل نوبة أخرى'));
+    await _tapText(tester, 'تسجيل نوبة أخرى');
     await tester.pumpAndSettle();
     expect(find.text('حفظ'), findsOneWidget);
   });
@@ -150,17 +151,16 @@ void main() {
     final repo = await _openDialog(tester, _case(DiagnosisType.epilepsy));
     expect(find.textContaining('ما شدة النوبة'), findsNothing);
 
-    await tester.tap(find.text('أمس'));
-    await tester.tap(find.text('وقت تقريبي'));
+    await _tapText(tester, 'أمس');
+    await _tapText(tester, 'وقت تقريبي');
     await tester.pump();
-    await tester.tap(find.text('صباحاً'));
+    await _tapText(tester, 'صباحاً');
     await tester.pump();
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'صباحاً')).selected, isTrue);
     await tester.enterText(find.widgetWithText(TextField, 'دقائق'), '1');
     await tester.enterText(find.widgetWithText(TextField, 'ثوانٍ'), '45');
-    await tester.ensureVisible(find.text('لا'));
-    await tester.tap(find.text('لا'));
-    await tester.tap(find.text('حفظ'));
+    await _tapText(tester, 'لا');
+    await _tapText(tester, 'حفظ');
     await tester.pumpAndSettle();
 
     final p = repo.logged.single;
@@ -172,14 +172,22 @@ void main() {
 
   testWidgets('medication answer is required before saving', (tester) async {
     final repo = await _openDialog(tester, _case(DiagnosisType.epilepsy));
-    await tester.tap(find.text('أمس'));
-    await tester.tap(find.text('وقت تقريبي'));
+    await _tapText(tester, 'أمس');
+    await _tapText(tester, 'وقت تقريبي');
     await tester.pump();
-    await tester.tap(find.text('ظهراً'));
+    await _tapText(tester, 'ظهراً');
     await tester.enterText(find.widgetWithText(TextField, 'ثوانٍ'), '50');
-    await tester.tap(find.text('حفظ'));
+    await _tapText(tester, 'حفظ');
     await tester.pump();
     expect(repo.logged, isEmpty);
     expect(find.text('أجب: هل أخذت دواء للنوبة؟'), findsOneWidget);
   });
+}
+
+/// Scrolls the dialog to the widget first — chips can sit below the fold
+/// on a phone-size screen.
+Future<void> _tapText(WidgetTester tester, String text) async {
+  await tester.ensureVisible(find.text(text));
+  await tester.pump();
+  await tester.tap(find.text(text));
 }

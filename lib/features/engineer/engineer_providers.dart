@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_state.dart';
 import '../doctor/models/case_model.dart';
 import '../doctor/models/patient_model.dart';
-import '../doctor/models/weekly_episode_log_model.dart';
 import '../patient/models/session_model.dart';
 import 'data/engineer_repository.dart';
 import 'models/case_summary_model.dart';
@@ -60,10 +59,4 @@ final allCasesProvider = FutureProvider.autoDispose<List<CaseModel>>((ref) async
 final engineerCaseSessionsProvider =
     FutureProvider.autoDispose.family<List<SessionModel>, int>((ref, caseId) async {
   return ref.read(engineerRepositoryProvider).fetchSessionsForCase(caseId);
-});
-
-/// تقارير النوبات الأسبوعية لحالة معيّنة — لشارت شاشة تفاصيل المريض
-final engineerCaseWeeklyEpisodeLogsProvider =
-    FutureProvider.autoDispose.family<List<WeeklyEpisodeLogModel>, int>((ref, caseId) async {
-  return ref.read(engineerRepositoryProvider).fetchWeeklyEpisodeLogs(caseId);
 });

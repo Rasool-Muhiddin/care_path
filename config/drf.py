@@ -33,10 +33,6 @@ _CONSTRAINT_MESSAGES = (
         ("one_case_per_device", "cases_case.device_id"),
         "هذا الجهاز مرتبط بحالة أخرى بالفعل (جهاز واحد لكل مريض).",
     ),
-    (
-        ("week_start_date",),
-        "تم تسجيل تقرير هذا الأسبوع بالفعل.",
-    ),
 )
 
 

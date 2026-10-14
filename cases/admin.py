@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AttackEvent, AttackLogConfirmation, Case, WeeklyEpisodeLog
+from .models import AttackEvent, AttackLogConfirmation, Case
 
 
 @admin.register(Case)
@@ -9,12 +9,6 @@ class CaseAdmin(admin.ModelAdmin):
     list_filter = ("status", "diagnosis_type")
     search_fields = ("patient__username", "doctor__username")
 
-
-@admin.register(WeeklyEpisodeLog)
-class WeeklyEpisodeLogAdmin(admin.ModelAdmin):
-    list_display = ("id", "case", "week_start_date", "episode_count", "submitted_at")
-    list_filter = ("week_start_date",)
-    search_fields = ("case__patient__username",)
 
 @admin.register(AttackEvent)
 class AttackEventAdmin(admin.ModelAdmin):

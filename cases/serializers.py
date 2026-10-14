@@ -18,8 +18,6 @@ from .models import (
     CaseStatus,
     DiagnosisType,
     DISEASE_TYPE_CHOICES_BY_DIAGNOSIS,
-    WeeklyEpisodeLog,
-    pending_weekly_episode_week,
 )
 
 
@@ -33,10 +31,6 @@ class CaseSerializer(serializers.ModelSerializer):
     # والجلسات المتبقية إذا كان total_sessions_planned محدداً.
     completed_sessions_count = serializers.SerializerMethodField()
     remaining_sessions_count = serializers.SerializerMethodField()
-    # أقدم أسبوع لسا ما سجّل له المريض تقرير نوبات (يوم اثنين، أو null
-    # لو مسجّل كل شي) — تعتمد عليها شاشة المريض لعرض الرسالة الإلزامية.
-    pending_weekly_episode_week = serializers.SerializerMethodField()
-
     class Meta:
         model = Case
         fields = [
@@ -58,7 +52,6 @@ class CaseSerializer(serializers.ModelSerializer):
             "total_sessions_planned",
             "completed_sessions_count",
             "remaining_sessions_count",
-            "pending_weekly_episode_week",
             "guarantor_name",
             "guarantor_address",
             "guarantor_phone_number",
@@ -93,10 +86,6 @@ class CaseSerializer(serializers.ModelSerializer):
             return None
         remaining = obj.total_sessions_planned - self._sessions_count(obj)
         return max(remaining, 0)
-
-    def get_pending_weekly_episode_week(self, obj):
-        week = pending_weekly_episode_week(obj)
-        return week.isoformat() if week else None
 
     def validate(self, attrs):
         """
@@ -245,41 +234,6 @@ class CaseProgressNoteSerializer(serializers.ModelSerializer):
         validated_data["total_sessions_planned_snapshot"] = case.total_sessions_planned
         return super().create(validated_data)
 
-
-class WeeklyEpisodeLogSerializer(serializers.ModelSerializer):
-    """
-    تقرير النوبات الأسبوعي — المريض يرسل فقط case و episode_count؛
-    week_start_date تُحسب تلقائياً بالباكند (أقدم أسبوع مستحق حالياً)
-    ولا تُقبل من الطلب أبداً، حتى لا يقدر يتلاعب بها أو يسجّل نفس
-    الأسبوع مرتين أو أسبوعاً غير مستحق.
-    """
-
-    class Meta:
-        model = WeeklyEpisodeLog
-        fields = ["id", "case", "week_start_date", "episode_count", "submitted_at"]
-        read_only_fields = ["id", "week_start_date", "submitted_at"]
-
-    def validate(self, attrs):
-        case = attrs.get("case")
-        request = self.context.get("request")
-
-        if request and case is not None:
-            if request.user.role != UserRole.PATIENT:
-                raise serializers.ValidationError(
-                    "فقط المريض يستطيع تسجيل تقرير النوبات الأسبوعي."
-                )
-            if case.patient_id != request.user.id:
-                raise serializers.ValidationError(
-                    "لا يمكنك تسجيل نوبات لحالة لا تخصك."
-                )
-
-        pending_week = pending_weekly_episode_week(case) if case is not None else None
-        if pending_week is None:
-            raise serializers.ValidationError(
-                "لا يوجد تقرير أسبوعي مستحق حالياً لهذه الحالة."
-            )
-        attrs["week_start_date"] = pending_week
-        return attrs
 
 class AttackEventSerializer(serializers.ModelSerializer):
     """

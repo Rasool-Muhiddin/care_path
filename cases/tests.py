@@ -1,5 +1,4 @@
-from datetime import date, datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import timedelta
 from unittest import mock
 
 from django.db import IntegrityError, transaction
@@ -11,8 +10,8 @@ from config.testing import CareWorldMixin, make_user, results
 from treatments.models import TreatmentSession
 from feedback.models import Feedback
 
-from .models import Case, CaseProgressNote, CaseStatus, WeeklyEpisodeLog, pending_weekly_episode_week
-from .serializers import CaseSerializer, WeeklyEpisodeLogSerializer
+from .models import AttackEvent, Case, CaseProgressNote, CaseStatus
+from .serializers import CaseSerializer
 
 CASES = "/api/cases/"
 
@@ -169,8 +168,8 @@ class DeviceReuseTests(CareWorldMixin, APITestCase):
     def test_freed_device_can_be_linked_to_new_patient(self):
         feedback = Feedback.objects.create(session=self.session_1, submitted_by=self.patient_1,
                                            source="patient", rating=4)
-        log = WeeklyEpisodeLog.objects.create(case=self.case_1, week_start_date=timezone.localdate(),
-                                              episode_count=2)
+        attack = AttackEvent.objects.create(case=self.case_1, occurred_at=timezone.now(),
+                                            duration_seconds=600, severity=5, took_medication=False)
         self.close_case_1()
 
         response = self.client_for(self.doctor_a).post(
@@ -188,7 +187,7 @@ class DeviceReuseTests(CareWorldMixin, APITestCase):
         self.assertEqual(self.session_1.case, self.case_1)
         self.assertEqual(self.session_1.device, self.device_1)
         self.assertTrue(Feedback.objects.filter(pk=feedback.pk, session=self.session_1).exists())
-        self.assertTrue(WeeklyEpisodeLog.objects.filter(pk=log.pk, case=self.case_1).exists())
+        self.assertTrue(AttackEvent.objects.filter(pk=attack.pk, case=self.case_1).exists())
         self.assertEqual(Case.objects.filter(device=self.device_1).count(), 2)
 
     def test_device_in_active_case_rejected_for_another_patient(self):
@@ -272,43 +271,6 @@ class CaseConstraintTests(CareWorldMixin, APITestCase):
         self.assertIn("الجهاز", response.data["detail"])
 
 
-class WeeklyEpisodeLogTests(CareWorldMixin, APITestCase):
-    URL = "/api/weekly-episode-logs/"
-
-    def setUp(self):
-        # حالة عمرها أسبوعان: عندها أسابيع مستحقة
-        Case.objects.filter(pk=self.case_1.pk).update(created_at=timezone.now() - timedelta(days=15))
-
-    def test_patient_cannot_log_for_another_patients_case(self):
-        response = self.client_for(self.patient_2).post(
-            self.URL, {"case": self.case_1.pk, "episode_count": 3}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_patient_logs_pending_week(self):
-        response = self.client_for(self.patient_1).post(
-            self.URL, {"case": self.case_1.pk, "episode_count": 3}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-    def test_duplicate_week_from_concurrent_request_returns_400(self):
-        first = self.client_for(self.patient_1).post(
-            self.URL, {"case": self.case_1.pk, "episode_count": 3}, format="json"
-        )
-        week = WeeklyEpisodeLog.objects.get(pk=first.data["id"]).week_start_date
-
-        def stale_validate(serializer, attrs):
-            attrs["week_start_date"] = week  # طلب ثانٍ حسب نفس الأسبوع قبل حفظ الأول
-            return attrs
-
-        with mock.patch.object(WeeklyEpisodeLogSerializer, "validate", stale_validate):
-            response = self.client_for(self.patient_1).post(
-                self.URL, {"case": self.case_1.pk, "episode_count": 5}, format="json"
-            )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(WeeklyEpisodeLog.objects.filter(case=self.case_1, week_start_date=week).count(), 1)
-
-
 class DefaultDenyTests(CareWorldMixin, APITestCase):
     """H1: أي دور غير patient/doctor/engineer لا يرى شيئاً."""
 
@@ -316,13 +278,15 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
         CaseProgressNote.objects.create(
             case=self.case_1, author=self.doctor_a, note="n", sessions_completed_snapshot=1
         )
-        WeeklyEpisodeLog.objects.create(
-            case=self.case_1, week_start_date=timezone.localdate(), episode_count=1
+        AttackEvent.objects.create(
+            case=self.case_1, occurred_at=timezone.now(), duration_seconds=60,
+            severity=3, took_medication=False,
         )
 
     def test_unknown_role_sees_nothing(self):
         client = self.client_for(self.no_role)
-        for url in (CASES, "/api/case-progress-notes/", "/api/weekly-episode-logs/"):
+        for url in (CASES, "/api/case-progress-notes/", "/api/attack-events/",
+                    "/api/attack-log-confirmations/"):
             response = client.get(url)
             self.assertEqual(response.status_code, status.HTTP_200_OK, url)
             self.assertEqual(results(response), [], url)
@@ -342,45 +306,17 @@ class DefaultDenyTests(CareWorldMixin, APITestCase):
         self.assertEqual(len(results(response)), 3)
 
 
-class WeeklyWeekTimezoneTests(CareWorldMixin, APITestCase):
-    """H7: أسبوع التقرير يُحسب من تاريخ إنشاء الحالة بتوقيت بغداد."""
-
-    def setUp(self):
-        # 00:30 بغداد يوم الاثنين 2026-10-05 = 21:30 UTC يوم الأحد 2026-10-04
-        Case.objects.filter(pk=self.case_1.pk).update(
-            created_at=datetime(2026, 10, 4, 21, 30, tzinfo=dt_timezone.utc)
-        )
-        self.case_1.refresh_from_db()
-
-    def pending_at(self, now_utc):
-        with mock.patch("django.utils.timezone.now", return_value=now_utc):
-            return pending_weekly_episode_week(self.case_1)
-
-    def test_first_week_starts_on_baghdad_monday(self):
-        # الخميس 8 أكتوبر: أسبوع 5 أكتوبر لم يكتمل بعد. لو حُسب بـ UTC لصار
-        # تاريخ الإنشاء الأحد 4 أكتوبر، وأسبوعه (28 سبتمبر) مستحقاً بالخطأ.
-        self.assertIsNone(self.pending_at(datetime(2026, 10, 8, 7, 0, tzinfo=dt_timezone.utc)))
-
-    def test_week_becomes_due_on_next_baghdad_monday(self):
-        self.assertEqual(
-            self.pending_at(datetime(2026, 10, 12, 7, 0, tzinfo=dt_timezone.utc)),
-            date(2026, 10, 5),
-        )
-
-
-
 class CaseListQueryCountTests(CareWorldMixin, APITestCase):
     """P1: عدد استعلامات قائمة الحالات ثابت مهما زادت الحالات (لا N+1)."""
 
-    # count (الترقيم) + الحالات مع JOIN وعدد الجلسات + prefetch التقارير الأسبوعية
-    EXPECTED_QUERIES = 3
+    # count (الترقيم) + الحالات مع JOIN وعدد الجلسات
+    EXPECTED_QUERIES = 2
 
     def add_cases(self, n):
         for i in range(n):
             patient = make_user(f"extra_patient_{i}", "patient")
             case = Case.objects.create(patient=patient, doctor=self.doctor_a, diagnosis_type="migraine")
             TreatmentSession.objects.create(case=case, session_date=timezone.now())
-            WeeklyEpisodeLog.objects.create(case=case, week_start_date=timezone.localdate(), episode_count=1)
 
     def test_case_list_query_count_is_constant(self):
         client = self.client_for(self.engineer)
@@ -424,7 +360,8 @@ class InvalidQueryParamTests(CareWorldMixin, APITestCase):
         for url, params in (
             (CASES, {"device": "abc"}),
             ("/api/case-progress-notes/", {"case": "abc"}),
-            ("/api/weekly-episode-logs/", {"case": "abc"}),
+            ("/api/attack-events/", {"case": "abc"}),
+            ("/api/attack-log-confirmations/", {"case": "abc"}),
             ("/api/sessions/", {"case": "abc"}),
             ("/api/sessions/", {"case": "-1"}),
             ("/api/devices/", {"exclude_case": "abc"}),

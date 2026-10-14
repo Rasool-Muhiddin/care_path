@@ -222,69 +222,6 @@ class CaseProgressNote(models.Model):
         return f"Progress note on Case #{self.case_id} @ {self.created_at:%Y-%m-%d}"
 
 
-def _week_start(d):
-    """يوم الاثنين من الأسبوع الذي يقع فيه التاريخ d."""
-    return d - timedelta(days=d.weekday())
-
-
-def pending_weekly_episode_week(case):
-    """
-    يرجّع تاريخ بداية (الاثنين) أقدم أسبوع لم يُسجَّل له تقرير نوبات
-    أسبوعي بعد من طرف المريض، بدءاً من أسبوع إنشاء الحالة ولغاية آخر
-    أسبوع اكتمل فعلياً (لا نطلب تقرير عن أسبوع لسا ما خلص). يرجّع None
-    لو المريض مسجّل كل الأسابيع المستحقة، أو لو الحالة مغلقة.
-
-    يُستخدم هذا لإجبار المريض على تسجيل عدد نوباته كل أسبوع (رسالة
-    إلزامية بالواجهة تبقى تظهر لحد ما يجاوب، حتى لو أغلق التطبيق ورجع)،
-    وبتراكم هذي التقارير الأسبوعية نقدر نبني سلسلة زمنية فعلية لعدد
-    النوبات (بعكس Case.monthly_episode_count اللي هو رقم ثابت واحد فقط)
-    تُستخدم لاحقاً بالتحليل الإحصائي (barplot: جلسات مقابل نوبات عبر
-    الزمن، وتجميع كل 4 أسابيع = شهر واحد).
-    """
-    if case.status == CaseStatus.CLOSED:
-        return None
-
-    today = timezone.localdate()
-    # تاريخ الإنشاء بتوقيت بغداد، وليس UTC: حالة أُنشئت ليلة الاثنين
-    # الساعة 00:30 هي يوم الاثنين محلياً لكنها الأحد في UTC.
-    first_week_start = _week_start(timezone.localdate(case.created_at))
-    # .all() (وليس values_list) حتى يستفيد من prefetch_related في قائمة الحالات
-    reported_weeks = {log.week_start_date for log in case.weekly_episode_logs.all()}
-
-    week = first_week_start
-    while week + timedelta(days=7) <= today:
-        if week not in reported_weeks:
-            return week
-        week += timedelta(days=7)
-    return None
-
-
-class WeeklyEpisodeLog(models.Model):
-    """
-    تقرير أسبوعي إلزامي يُدخله المريض بنفسه: كم نوبة/أزمة عانى منها
-    خلال أسبوع معيّن (week_start_date = يوم الاثنين). إدخال واحد لكل
-    أسبوع لكل حالة (unique_together)، ولا يمكن تعديله أو حذفه بعد
-    الإرسال — سجل تاريخي ثابت.
-    """
-
-    case = models.ForeignKey(
-        Case, on_delete=models.CASCADE, related_name="weekly_episode_logs"
-    )
-    week_start_date = models.DateField(
-        help_text="تاريخ يوم الاثنين لبداية الأسبوع الذي يخص هذا التقرير"
-    )
-    episode_count = models.PositiveIntegerField(
-        help_text="عدد النوبات التي أجاب بها المريض عن هذا الأسبوع"
-    )
-    submitted_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["week_start_date", "id"]
-        unique_together = ("case", "week_start_date")
-
-    def __str__(self) -> str:
-        return f"Case #{self.case_id} — week of {self.week_start_date}: {self.episode_count}"
-
 # ---------------------------------------------------------------------------
 # تسجيل النوبات عند حدوثها (بديل التقرير الأسبوعي الإلزامي)
 # ---------------------------------------------------------------------------

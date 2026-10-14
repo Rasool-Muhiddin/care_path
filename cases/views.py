@@ -19,7 +19,6 @@ from .models import (
     AttackLogConfirmation,
     Case,
     CaseProgressNote,
-    WeeklyEpisodeLog,
 )
 from .scoping import scope_by_case, scoped_cases
 from .serializers import (
@@ -27,7 +26,6 @@ from .serializers import (
     AttackLogConfirmationSerializer,
     CaseProgressNoteSerializer,
     CaseSerializer,
-    WeeklyEpisodeLogSerializer,
 )
 
 
@@ -56,13 +54,11 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         # كل ما يحتاجه CaseSerializer في عدد ثابت من الاستعلامات مهما كثرت
-        # الحالات: الأسماء ونوع الجهاز بـ JOIN، عدد الجلسات بـ annotate،
-        # والتقارير الأسبوعية (للأسبوع المستحق) بـ prefetch.
+        # الحالات: الأسماء ونوع الجهاز بـ JOIN، وعدد الجلسات بـ annotate.
         queryset = (
             scoped_cases(self.request.user)
             .select_related("patient", "doctor", "device__device_type")
             .annotate(sessions_count=Count("sessions", distinct=True))
-            .prefetch_related("weekly_episode_logs")
             # صريحاً: Django يتجاهل Meta.ordering في استعلامات GROUP BY (annotate
             # Count)، فكانت القائمة المرقّمة بلا ترتيب ثابت
             .order_by(*Case._meta.ordering)
@@ -104,44 +100,6 @@ class CaseProgressNoteViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         if user.role == UserRole.PATIENT:
             return CaseProgressNote.objects.none()
         queryset = scope_by_case(CaseProgressNote.objects.select_related("author"), user)
-
-        case_id = int_query_param(self.request, "case")
-        if case_id is not None:
-            queryset = queryset.filter(case_id=case_id)
-
-        return queryset
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context["request"] = self.request
-        return context
-
-
-class WeeklyEpisodeLogViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
-    """
-    تقارير النوبات الأسبوعية.
-    - المريض: يرسل (create) فقط تقاريره الخاصة عن الأسبوع المستحق —
-      لا تعديل ولا حذف بعد الإرسال (سجل تاريخي ثابت).
-    - الطبيب: يقرأ تقارير حالاته فقط (لبناء التحليل الإحصائي بالشارت).
-    - المهندس: يقرأ الكل (للاتساق مع باقي الـ viewsets).
-
-    إرسال نفس الأسبوع مرتين بالتزامن يصطدم بـ unique_together ويرجع 400
-    (config.drf.api_exception_handler).
-
-    فلترة اختيارية: ?case=<id> — لعرض تقارير حالة معيّنة فقط.
-    """
-
-    serializer_class = WeeklyEpisodeLogSerializer
-    http_method_names = ["get", "post", "head", "options"]
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action == "create":
-            return [permissions.IsAuthenticated(), IsPatient()]
-        return [permissions.IsAuthenticated()]
-
-    def get_queryset(self):
-        queryset = scope_by_case(WeeklyEpisodeLog.objects.all(), self.request.user)
 
         case_id = int_query_param(self.request, "case")
         if case_id is not None:

@@ -139,6 +139,8 @@ REST_FRAMEWORK = {
         # تسجيل النوبات (AttackEventViewSet.create) — يسمح بتسجيل عدة نوبات
         # فائتة متتالية، ويمنع الإغراق.
         "attack_create": os.environ.get('THROTTLE_ATTACK_CREATE', '30/hour'),
+        # محاولات كلمة المرور عند حذف الحساب (DeleteAccountView)
+        "delete_account": os.environ.get('THROTTLE_DELETE_ACCOUNT', '10/hour'),
     },
     # عدد الـ proxies أمام Django (nginx = 1) ليُقرأ IP العميل الحقيقي
     # من X-Forwarded-For بدل IP الـ proxy نفسه. Cloudflare لا يُحتسب هنا:

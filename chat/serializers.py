@@ -17,7 +17,11 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         fields = ['id', 'case', 'sender', 'sender_name', 'sender_role', 'inquiry_type', 'text', 'created_at', 'is_read', 'is_mine']
         read_only_fields = ['id', 'case', 'sender', 'created_at', 'is_read', 'sender_name', 'sender_role', 'is_mine']
 
+    DELETED_USER = 'Deleted user'
+
     def get_sender_name(self, obj):
+        if obj.sender is None:
+            return self.DELETED_USER
         return obj.sender.get_full_name() or obj.sender.username
 
     def get_sender_role(self, obj):

@@ -110,6 +110,15 @@ class AuthNotifier extends Notifier<AuthStatus> {
     await ref.read(authRepositoryProvider).logout();
     state = const AuthUnauthenticated();
   }
+
+  /// الخروج بعد نجاح حذف الحساب (AuthRepository.deleteAccount). الخادم حذف
+  /// الحساب وأبطل توكناته ورموز إشعاراته، فالتنظيف هنا محلي فقط (أي طلب
+  /// مصادَق الآن يُرفض بـ 401).
+  Future<void> signOutAfterAccountDeletion() async {
+    await FcmService.instance.teardown(serverAlreadyCleared: true);
+    await TokenStorage.instance.clear();
+    state = const AuthUnauthenticated();
+  }
 }
 
 final authStateProvider = NotifierProvider<AuthNotifier, AuthStatus>(

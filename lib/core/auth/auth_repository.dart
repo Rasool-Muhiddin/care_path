@@ -5,6 +5,17 @@ import '../network/api_endpoints.dart';
 import 'token_storage.dart';
 import 'user_model.dart';
 
+/// سبب منع حذف الحساب من التطبيق (من الخادم):
+/// doctor_has_active_cases أو manager_account.
+class AccountDeletionBlocked implements Exception {
+  AccountDeletionBlocked(this.code, this.message);
+  final String code;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// طبقة التواصل مع /api/auth/* — منفصلة عن إدارة الحالة (AuthState)
 /// حتى يسهل اختبارها أو استبدالها لاحقاً
 class AuthRepository {
@@ -63,6 +74,34 @@ class AuthRepository {
         },
       );
     } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// هل يُسمح بحذف الحساب؟ يرمي [AccountDeletionBlocked] إن كان ممنوعاً —
+  /// يُستدعى قبل طلب كلمة المرور حتى يعرف المستخدم السبب مبكراً.
+  Future<void> checkAccountDeletion() async {
+    try {
+      final response = await _client.raw.get(ApiEndpoints.deleteAccount);
+      final data = response.data as Map<String, dynamic>;
+      if (data['can_delete'] != true) {
+        throw AccountDeletionBlocked(data['code'] as String? ?? '', data['detail'] as String? ?? '');
+      }
+    } on DioException catch (e) {
+      throw _client.mapError(e);
+    }
+  }
+
+  /// يحذف الحساب نهائياً بعد التحقق من كلمة المرور. الخادم يُبطل كل
+  /// refresh tokens ويحذف رموز الإشعارات؛ التنظيف المحلي في AuthNotifier.
+  Future<void> deleteAccount(String password) async {
+    try {
+      await _client.raw.post(ApiEndpoints.deleteAccount, data: {'password': password});
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (e.response?.statusCode == 403 && data is Map && data['code'] != null) {
+        throw AccountDeletionBlocked(data['code'] as String, data['detail'] as String? ?? '');
+      }
       throw _client.mapError(e);
     }
   }

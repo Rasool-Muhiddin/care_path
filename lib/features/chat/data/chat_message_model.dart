@@ -18,7 +18,8 @@ enum InquiryType {
 class ChatMessageModel {
   final int id;
   final int caseId;
-  final int senderId;
+  /// null = the sender's account was deleted (shown as "Deleted user").
+  final int? senderId;
   final String senderName;
   final String? senderRole;
   final InquiryType inquiryType;

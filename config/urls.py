@@ -2,9 +2,16 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # صفحة عامة لمتطلب Google Play: كيف يُحذف الحساب وما الذي يُحذف
+    path(
+        "account-deletion/",
+        TemplateView.as_view(template_name="accounts/account_deletion.html"),
+        name="account-deletion",
+    ),
     path("api/", include("accounts.urls")),
     path("api/", include("devices.urls")),
     path("api/", include("cases.urls")),

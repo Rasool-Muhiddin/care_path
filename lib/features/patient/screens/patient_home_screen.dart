@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/account_menu.dart';
 import '../../../core/attacks/attack_models.dart';
 import '../../../core/attacks/attack_repository.dart';
 import '../../../core/auth/auth_state.dart';
@@ -190,10 +191,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               tooltip: 'المحادثة مع الطبيب',
               onPressed: () => context.push('/patient/chat/$myCaseId'),
             ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () => ref.read(authStateProvider.notifier).logout(),
-          ),
+          // Log out + delete account
+          AccountMenuButton(strings: AccountMenuStrings.ar),
         ],
       ),
       body: AppGradientBackground(
@@ -420,7 +419,7 @@ class _CaseSummaryCard extends StatelessWidget {
           if (myCase.deviceTypeName != null) ...[
             Row(
               children: [
-                IconBadge(icon: Icons.medical_services_outlined, color: AppAccent.device, size: 34),
+                const IconBadge(icon: Icons.medical_services_outlined, color: AppAccent.device, size: 34),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text('الجهاز: ${myCase.deviceTypeName}', style: AppText.tileTitle),
@@ -430,11 +429,11 @@ class _CaseSummaryCard extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           if (myCase.treatmentPlan.isNotEmpty) ...[
-            Row(
+            const Row(
               children: [
                 Icon(Icons.assignment_outlined, size: 16, color: AppAccent.patient),
-                const SizedBox(width: 6),
-                const Text('خطة العلاج', style: AppText.tileTitle),
+                SizedBox(width: 6),
+                Text('خطة العلاج', style: AppText.tileTitle),
               ],
             ),
             const SizedBox(height: 6),
@@ -499,14 +498,14 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+    return const GlassContainer(
+      padding: EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconBadge(icon: Icons.event_busy_outlined, color: AppAccent.patient, size: 44),
-          const SizedBox(height: 12),
-          const Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 12),
+          Text('لا توجد جلسات بعد', style: TextStyle(color: Colors.white70)),
         ],
       ),
     );
@@ -524,7 +523,7 @@ class _ErrorView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       child: Column(
         children: [
-          IconBadge(icon: Icons.error_outline, color: AppAccent.unlinked, size: 44),
+          const IconBadge(icon: Icons.error_outline, color: AppAccent.unlinked, size: 44),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center, style: AppText.error),
           const SizedBox(height: 14),

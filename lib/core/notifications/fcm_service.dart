@@ -96,7 +96,11 @@ class FcmService {
   /// يجب استدعاؤها قبل مسح JWT (AuthNotifier.logout يفعل ذلك) حتى يكون
   /// طلب الحذف مصادَقاً. الحقول تُصفَّر قبل أي انتظار حتى لا يتكرر الحذف
   /// لو استُدعيت مرة ثانية أثناء الطلب (مسار انتهاء الجلسة).
-  Future<void> teardown() async {
+  ///
+  /// [serverAlreadyCleared]: بعد حذف الحساب — الخادم حذف رموز الإشعارات
+  /// بنفسه والـ JWT لم يعد صالحاً، فلا طلب للخادم؛ يُحذف توكن FCM من
+  /// الجهاز نفسه حتى يحصل أي حساب لاحق على توكن جديد.
+  Future<void> teardown({bool serverAlreadyCleared = false}) async {
     final token = _currentToken;
     final repository = _ref != null ? _repository : null;
     _currentToken = null;
@@ -108,6 +112,14 @@ class FcmService {
       subscription.cancel();
     }
 
+    if (serverAlreadyCleared) {
+      try {
+        await FirebaseMessaging.instance.deleteToken().timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // بلا Firebase (أو بلا شبكة) لا يوجد ما يُحذف محلياً
+      }
+      return;
+    }
     // بلا JWT صالح سيُرفض الحذف أصلاً (الجلسة انتهت) — لا داعي للطلب
     if (token == null || repository == null || !await TokenStorage.instance.hasTokens) {
       return;

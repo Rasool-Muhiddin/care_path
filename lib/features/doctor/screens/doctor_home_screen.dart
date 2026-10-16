@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/account_menu.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
@@ -48,10 +49,8 @@ class DoctorHomeScreen extends ConsumerWidget {
             ),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.logout, color: Colors.white),
-              onPressed: () => ref.read(authStateProvider.notifier).logout(),
-            ),
+            // Log out + delete account
+            AccountMenuButton(strings: AccountMenuStrings.en),
           ],
         ),
         floatingActionButton: _GlassFab(

@@ -10,7 +10,11 @@ class InquiryType(models.TextChoices):
 
 class ChatMessage(models.Model):
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name='messages')
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')
+    # SET_NULL: رسائل الطبيب/المهندس تبقى بعد حذف حسابه ("Deleted user").
+    # رسائل المريض تُحذف مع حالاته (accounts/deletion.py).
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='sent_messages'
+    )
     inquiry_type = models.CharField(
         max_length=20,
         choices=InquiryType.choices,

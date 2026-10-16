@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/account_menu.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
@@ -155,10 +156,8 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
       foregroundColor: Colors.white,
       title: _BmeTitle(username: username),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white),
-          onPressed: () => ref.read(authStateProvider.notifier).logout(),
-        ),
+        // Log out + delete account
+        AccountMenuButton(strings: AccountMenuStrings.en),
       ],
       bottom: TabBar(
         controller: _tabController,
@@ -200,7 +199,7 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
             ),
             child: TabBarView(
               controller: _tabController,
-              children: [
+              children: const [
                 OverviewTab(),
                 MessagesTab(),
                 DevicesTab(),

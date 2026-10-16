@@ -27,6 +27,17 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "role", "is_manager", "date_joined"]
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    """تأكيد حذف الحساب بكلمة المرور الحالية."""
+
+    password = serializers.CharField(write_only=True)
+
+    def validate_password(self, value):
+        if not self.context["request"].user.check_password(value):
+            raise serializers.ValidationError("كلمة المرور غير صحيحة.")
+        return value
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     """
     إنشاء حساب جديد. لا يوجد تسجيل ذاتي عام: الطلب يجب أن يأتي من مستخدم

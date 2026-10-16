@@ -131,7 +131,7 @@ class CaseSerializer(serializers.ModelSerializer):
                 attrs["doctor"] = user
 
         patient = attrs.get("patient", getattr(self.instance, "patient", None))
-        status = attrs.get("status", getattr(self.instance, "status", CaseStatus.NEW))
+        status = attrs.get("status", getattr(self.instance, "status", CaseStatus.IN_TREATMENT))
         if patient is not None and status != CaseStatus.CLOSED:
             other_active = Case.objects.filter(patient=patient).exclude(status=CaseStatus.CLOSED)
             if self.instance is not None:

@@ -2,7 +2,6 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from accounts.models import UserRole
 from cases.models import Case, CaseStatus
 from cases.scoping import scoped_cases
 
@@ -46,24 +45,14 @@ class TreatmentSessionSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        عند التعديل: لا يمكن نقل الجلسة إلى حالة أخرى.
-
-        عند الإنشاء (لكل الأدوار):
-        1. الحالة يجب أن تكون ضمن نطاق المستخدم (scoped_cases) — الطبيب
-           لحالاته فقط، والمريض لحالته فقط.
+        الإنشاء فقط (لا تعديل عبر الـ API)، والمستخدم مريض دائماً
+        (TreatmentSessionViewSet.get_permissions):
+        1. الحالة يجب أن تكون حالته (scoped_cases).
         2. لا جلسات على حالة مغلقة.
-        لو المستخدم مريض أيضاً:
         3. لا يمكنه إرسال doctor_notes — هذا الحقل خاص بملاحظات الطبيب.
         4. جلسة واحدة في اليوم فقط (زر "إنهاء الجلسة اليومية"). يُعاد
            الفحص داخل قفل في create() لمنع طلبين متزامنين.
         """
-        if self.instance is not None:
-            if "case" in attrs and attrs["case"] != self.instance.case:
-                raise serializers.ValidationError(
-                    {"case": "لا يمكن نقل جلسة إلى حالة أخرى."}
-                )
-            return attrs
-
         user = self.context["request"].user
         case = attrs.get("case")
         if case is None or not scoped_cases(user).filter(pk=case.pk).exists():
@@ -74,28 +63,21 @@ class TreatmentSessionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"case": "لا يمكن تسجيل جلسة على حالة مغلقة."}
             )
-
-        if user.role == UserRole.PATIENT:
-            if "doctor_notes" in self.initial_data:
-                raise serializers.ValidationError(
-                    "لا يمكن للمريض تعديل الحقول التالية: doctor_notes"
-                )
-            if patient_logged_today(case):
-                raise serializers.ValidationError(DAILY_LIMIT_MESSAGE)
+        if "doctor_notes" in self.initial_data:
+            raise serializers.ValidationError(
+                "لا يمكن للمريض تعديل الحقول التالية: doctor_notes"
+            )
+        if patient_logged_today(case):
+            raise serializers.ValidationError(DAILY_LIMIT_MESSAGE)
         return attrs
 
     def create(self, validated_data):
-        # نسجّل تلقائياً من نفّذ الجلسة، وعلى أي جهاز (جهاز الحالة نفسها)
-        user = self.context["request"].user
+        # نسجّل تلقائياً من نفّذ الجلسة، وعلى أي جهاز (جهاز الحالة نفسها).
+        # وقت الجلسة هو وقت السيرفر. قفل صف الحالة يجعل طلبين متزامنين
+        # يمرّان واحداً تلو الآخر، فيرى الثاني جلسة الأول.
         case = validated_data["case"]
-        validated_data["performed_by"] = user
+        validated_data["performed_by"] = self.context["request"].user
         validated_data["device"] = case.device
-
-        if user.role != UserRole.PATIENT:
-            return super().create(validated_data)
-
-        # المريض: وقت الجلسة هو وقت السيرفر. قفل صف الحالة يجعل طلبين
-        # متزامنين يمرّان واحداً تلو الآخر، فيرى الثاني جلسة الأول.
         validated_data["session_date"] = timezone.now()
         with transaction.atomic():
             Case.objects.select_for_update().get(pk=case.pk)

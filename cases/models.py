@@ -55,8 +55,7 @@ def _all_disease_type_choices():
 
 
 class CaseStatus(models.TextChoices):
-    NEW = "new", "New"
-    UNDER_EVALUATION = "under_evaluation", "Under Evaluation"
+    # العلاج يبدأ لحظة إنشاء الحالة؛ لا توجد مرحلة قبله.
     IN_TREATMENT = "in_treatment", "In Treatment"
     CLOSED = "closed", "Closed"
 
@@ -104,7 +103,7 @@ class Case(models.Model):
         help_text="نوع/تصنيف فرعي للمرض — يعتمد على diagnosis_type (انظر DISEASE_TYPE_CHOICES_BY_DIAGNOSIS)",
     )
     status = models.CharField(
-        max_length=25, choices=CaseStatus.choices, default=CaseStatus.NEW
+        max_length=25, choices=CaseStatus.choices, default=CaseStatus.IN_TREATMENT
     )
 
     # تفاصيل التشخيص السريري — تُستخدم مع الصرع والشقيقة (التشخيصان

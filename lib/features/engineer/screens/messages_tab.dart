@@ -184,10 +184,6 @@ class _ConversationTile extends StatelessWidget {
     switch (status) {
       case CaseStatus.inTreatment:
         return Colors.greenAccent;
-      case CaseStatus.underEvaluation:
-        return Colors.orangeAccent;
-      case CaseStatus.newCase:
-        return Colors.lightBlueAccent;
       case CaseStatus.closed:
         return Colors.white54;
     }

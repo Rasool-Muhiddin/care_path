@@ -61,10 +61,9 @@ String diseaseTypeLabel(DiagnosisType diagnosisType, String? diseaseType) {
   return diseaseType;
 }
 
-/// Case status — matches CaseStatus in cases/models.py
+/// Case status — matches CaseStatus in cases/models.py. A case is in
+/// treatment from the moment it's created until the doctor closes it.
 enum CaseStatus {
-  newCase('new', 'New'),
-  underEvaluation('under_evaluation', 'Under Evaluation'),
   inTreatment('in_treatment', 'In Treatment'),
   closed('closed', 'Closed');
 
@@ -73,7 +72,7 @@ enum CaseStatus {
   final String label;
 
   static CaseStatus fromApiValue(String value) =>
-      CaseStatus.values.firstWhere((e) => e.apiValue == value, orElse: () => CaseStatus.newCase);
+      CaseStatus.values.firstWhere((e) => e.apiValue == value, orElse: () => CaseStatus.inTreatment);
 }
 
 /// Case model — matches CaseSerializer in cases/serializers.py

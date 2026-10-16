@@ -77,17 +77,19 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
     ]);
   }
 
-  /// Baghdad days [start, end) of the selected period.
+  /// Baghdad days [start, end) of the selected period, never starting
+  /// before the case (= treatment) start.
   (DateTime, DateTime) _rangeFor(AttackAnalysis a) {
     final today = a.today;
     final end = today.add(const Duration(days: 1));
     final (start, rangeEnd) = switch (_period) {
       StatsPeriod.last3Months => (_monthsBefore(today, 3), end),
       StatsPeriod.thisYear => (DateTime.utc(today.year), end),
-      StatsPeriod.allTime => (a.caseStartDay, end),
+      StatsPeriod.allTime => (a.treatmentStartDay, end),
       StatsPeriod.custom => _customRange ?? (_monthsBefore(today, 3), end),
     };
-    return (start.isBefore(rangeEnd) ? start : today, rangeEnd);
+    final from = start.isBefore(a.treatmentStartDay) ? a.treatmentStartDay : start;
+    return (from.isBefore(rangeEnd) ? from : today, rangeEnd);
   }
 
   /// Same day [months] calendar months earlier, clamped to that month's
@@ -111,10 +113,10 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
     final (start, end) = _rangeFor(a);
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: local(a.caseStartDay),
+      firstDate: local(a.treatmentStartDay),
       lastDate: local(a.today),
       initialDateRange: DateTimeRange(
-        start: local(start.isBefore(a.caseStartDay) ? a.caseStartDay : start),
+        start: local(start),
         end: local(end.subtract(const Duration(days: 1))),
       ),
     );
@@ -175,7 +177,6 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
     final isMigraine = c.diagnosisType == DiagnosisType.migraine;
     final (start, end) = _rangeFor(analysis);
     final summary = analysis.summarize(start, end);
-    final treatmentStart = analysis.treatmentStartDay;
 
     // Only offer groupings that keep the chart readable for this range.
     bool allowed(StatsGranularity g) =>
@@ -216,7 +217,7 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
         const SizedBox(height: 8),
         Text(
           '${_date(start)} – ${_date(end.subtract(const Duration(days: 1)))}  ·  '
-          '${treatmentStart == null ? 'No treatment session yet' : 'Treatment started ${_date(treatmentStart)}'}',
+          'Treatment started ${_date(analysis.treatmentStartDay)}',
           style: _Txt.hint,
         ),
         const SizedBox(height: 16),

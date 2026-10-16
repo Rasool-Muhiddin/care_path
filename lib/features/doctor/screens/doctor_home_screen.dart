@@ -109,19 +109,15 @@ class DoctorHomeScreen extends ConsumerWidget {
     );
   }
 
-  /// Display priority: in-treatment/under-evaluation first (need daily
-  /// follow-up), then new, then closed last (no attention needed now)
+  /// Display priority: in-treatment first (needs daily follow-up), closed
+  /// last (no attention needed now)
   List<CaseModel> _sortByPriority(List<CaseModel> cases) {
     int priorityOf(CaseStatus status) {
       switch (status) {
         case CaseStatus.inTreatment:
           return 0;
-        case CaseStatus.underEvaluation:
-          return 1;
-        case CaseStatus.newCase:
-          return 2;
         case CaseStatus.closed:
-          return 3;
+          return 1;
       }
     }
 
@@ -259,10 +255,6 @@ class _CaseTile extends ConsumerWidget {
     switch (status) {
       case CaseStatus.inTreatment:
         return const Color(0xFF6EE7A0);
-      case CaseStatus.underEvaluation:
-        return const Color(0xFFFFC46E);
-      case CaseStatus.newCase:
-        return const Color(0xFF7FB3FF);
       case CaseStatus.closed:
         return Colors.white54;
     }
@@ -307,8 +299,8 @@ class _CaseTile extends ConsumerWidget {
                         Text(caseModel.diagnosisType.label, style: AppText.tileSubtitle),
                         const Text(' • ', style: TextStyle(color: Colors.white38)),
                         sessionsAsync.when(
-                          loading: () => Text('...', style: AppText.tileSubtitle),
-                          error: (_, __) => Text('Sessions: —', style: AppText.tileSubtitle),
+                          loading: () => const Text('...', style: AppText.tileSubtitle),
+                          error: (_, __) => const Text('Sessions: —', style: AppText.tileSubtitle),
                           data: (sessions) {
                             final completedToday = sessions.any((s) => isBaghdadToday(s.sessionDate));
                             return Row(

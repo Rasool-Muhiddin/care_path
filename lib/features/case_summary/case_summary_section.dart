@@ -8,7 +8,6 @@ import '../../core/time/baghdad_time.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../core/widgets/glass_container.dart';
 import '../doctor/models/case_model.dart';
-import '../patient/models/session_model.dart';
 
 String _two(int n) => n.toString().padLeft(2, '0');
 String _date(DateTime d) {
@@ -30,35 +29,17 @@ class _Txt {
 /// — the baseline) and "Current" (treatment, device and this month's
 /// attacks). Every rate or duration field is labelled "Average".
 ///
-/// [sessionsProvider] is the role's own provider for this case's sessions
-/// (used for the treatment start = first session).
+/// Treatment starts when the case is created (no separate start event).
 class CaseSummarySection extends ConsumerWidget {
-  const CaseSummarySection({
-    super.key,
-    required this.caseModel,
-    required this.sessionsProvider,
-  });
+  const CaseSummarySection({super.key, required this.caseModel});
 
   final CaseModel caseModel;
-  final AutoDisposeFutureProvider<List<SessionModel>> sessionsProvider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = caseModel;
     final isMigraine = c.diagnosisType == DiagnosisType.migraine;
-    final sessions = ref.watch(sessionsProvider);
     final attacks = ref.watch(caseAttacksProvider(c.id));
-
-    // Treatment start = first treatment session (same rule as the stats screen).
-    final String treatmentStart = sessions.when(
-      loading: () => '…',
-      error: (_, __) => '—',
-      data: (list) {
-        if (list.isEmpty) return 'Not started (no sessions yet)';
-        final first = list.map((s) => s.sessionDate).reduce((a, b) => a.isBefore(b) ? a : b);
-        return _date(first);
-      },
-    );
 
     final sessionsValue = c.totalSessionsPlanned != null
         ? '${c.completedSessionsCount} of ${c.totalSessionsPlanned} '
@@ -106,11 +87,11 @@ class CaseSummarySection extends ConsumerWidget {
           icon: Icons.monitor_heart_outlined,
           color: AppAccent.patient,
           title: 'Current',
-          caption: 'Since receiving the device — treatment starts at the first session.',
+          caption: 'Since the case was created — treatment starts on that day.',
           children: [
             _Row('Status', c.status.label),
             _Row('Doctor', _orDash(c.doctorName)),
-            _Row('Treatment start', treatmentStart),
+            _Row('Treatment start', _date(c.createdAt)),
             _Row('Sessions completed', sessionsValue),
             _Row('Treatment plan', _orDash(c.treatmentPlan)),
             _Row('Device', _orDash(c.deviceTypeName)),

@@ -3,7 +3,6 @@ import 'package:axon/core/attacks/attack_repository.dart';
 import 'package:axon/core/time/baghdad_time.dart';
 import 'package:axon/features/case_summary/case_summary_section.dart';
 import 'package:axon/features/doctor/models/case_model.dart';
-import 'package:axon/features/patient/models/session_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,19 +32,6 @@ CaseModel _case(DiagnosisType diagnosis) => CaseModel(
       updatedAt: fromBaghdadWallTime(2026, 10, 1, 10),
     );
 
-final _sessions = FutureProvider.autoDispose<List<SessionModel>>((ref) async => [
-      SessionModel(
-        id: 1,
-        caseId: 7,
-        performedByName: '',
-        sessionDate: fromBaghdadWallTime(2026, 9, 10, 9),
-        deviceParameters: const {},
-        doctorNotes: '',
-        patientResponse: '',
-        createdAt: fromBaghdadWallTime(2026, 9, 10, 9),
-      ),
-    ]);
-
 Future<void> _pump(WidgetTester tester, CaseModel c, List<AttackEventModel> attacks) async {
   tester.view.physicalSize = const Size(360, 2400);
   tester.view.devicePixelRatio = 1;
@@ -54,7 +40,7 @@ Future<void> _pump(WidgetTester tester, CaseModel c, List<AttackEventModel> atta
     overrides: [caseAttacksProvider(7).overrideWith((ref) async => attacks)],
     child: MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: CaseSummarySection(caseModel: c, sessionsProvider: _sessions)),
+        body: SingleChildScrollView(child: CaseSummarySection(caseModel: c)),
       ),
     ),
   ));
@@ -84,7 +70,8 @@ void main() {
     expect(find.text('Average severity'), findsOneWidget);
     expect(find.text('7.0 / 10'), findsOneWidget);
     expect(find.text('Topiramate'), findsOneWidget);
-    expect(find.text('2026/09/10'), findsOneWidget); // treatment start = first session
+    // Registered + treatment start: both the case creation day.
+    expect(find.text('2026/09/01'), findsNWidgets(2));
     expect(find.text('5 of 20 (15 remaining)'), findsOneWidget);
     expect(find.text('SN-42'), findsOneWidget);
     expect(find.text('Baghdad Clinic'), findsOneWidget);

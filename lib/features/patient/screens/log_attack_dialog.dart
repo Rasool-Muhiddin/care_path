@@ -65,6 +65,11 @@ class _LogAttackDialogState extends ConsumerState<_LogAttackDialog> {
 
   bool get _isMigraine => widget.myCase.diagnosisType == DiagnosisType.migraine;
 
+  int get _daysBackAllowed {
+    final sinceCase = baghdadToday().difference(baghdadDayOf(widget.myCase.createdAt)).inDays;
+    return sinceCase.clamp(0, _maxDaysBack);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -212,7 +217,8 @@ class _LogAttackDialogState extends ConsumerState<_LogAttackDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (var i = 0; i <= _maxDaysBack; i++)
+                // لا أيام قبل يوم إنشاء الحالة (السيرفر يرفضها أيضاً).
+                for (var i = 0; i <= _daysBackAllowed; i++)
                   _choice(
                     _dayLabel(baghdadToday().subtract(Duration(days: i))),
                     _day == baghdadToday().subtract(Duration(days: i)),

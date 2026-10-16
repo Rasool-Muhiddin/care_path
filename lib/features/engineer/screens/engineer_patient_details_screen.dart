@@ -107,10 +107,7 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                     title: 'Case Summary',
                   ),
                   const SizedBox(height: 10),
-                  CaseSummarySection(
-                    caseModel: c,
-                    sessionsProvider: engineerCaseSessionsProvider(c.id),
-                  ),
+                  CaseSummarySection(caseModel: c),
                   const SizedBox(height: 28),
                   _SectionHeader(
                     icon: Icons.history_rounded,

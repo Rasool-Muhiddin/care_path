@@ -1,32 +1,33 @@
-from rest_framework import viewsets, permissions
+from rest_framework import mixins, permissions, viewsets
 
-from accounts.permissions import IsDoctorOrEngineer
+from accounts.permissions import IsPatient
 from cases.scoping import scope_by_case
 from config.drf import AtomicSaveMixin, int_query_param
 from .models import TreatmentSession
 from .serializers import TreatmentSessionSerializer
 
 
-class TreatmentSessionViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
+class TreatmentSessionViewSet(AtomicSaveMixin, mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
     """
-    - المريض: يرى جلسات حالاته الخاصة، ويستطيع إنشاء جلسة جديدة لحالته
-      (تسجيل "تم إنهاء الجلسة")، لكن لا يستطيع تعديل أو حذف جلسة بعد إنشائها.
-    - الطبيب: يرى ويسجّل ويعدّل جلسات حالاته فقط.
-    - المهندس: يرى ويسجّل ويعدّل جلسات كل الحالات (لمتابعة الأداء الفني للجهاز).
+    الجلسات عبر الـ API للقراءة فقط، والإنشاء للمريض وحده:
+    - المريض: يرى جلسات حالاته، ويسجّل جلسته اليومية (زر "تم إنهاء
+      الجلسة") — جلسة واحدة في اليوم.
+    - الطبيب: يرى جلسات حالاته فقط.
+    - المهندس: يرى جلسات كل الحالات.
     - أي دور آخر: لا شيء.
+    لا تعديل ولا حذف عبر الـ API لأي دور (لا توجد مسارات PUT/PATCH/DELETE)؛
+    التصحيحات تتم من لوحة Django admin.
 
-    فلترة اختيارية: ?case=<id> — تُستخدم من شاشة تفاصيل الجهاز عند المهندس
-    لعرض جلسات حالة معيّنة فقط (لحساب حالة الالتزام بالجلسات).
+    فلترة اختيارية: ?case=<id> — جلسات حالة معيّنة فقط.
     """
 
     serializer_class = TreatmentSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        # الإنشاء متاح لأي مستخدم مسجّل دخوله (المريض يسجّل جلسته بنفسه)؛
-        # التحقق من أن الحالة ضمن نطاق المستخدم يتم داخل الـ Serializer.
-        if self.action in ["update", "partial_update", "destroy"]:
-            return [permissions.IsAuthenticated(), IsDoctorOrEngineer()]
+        # الإنشاء للمريض فقط؛ أن الحالة حالته يُتحقق منه في الـ Serializer.
+        if self.action == "create":
+            return [permissions.IsAuthenticated(), IsPatient()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

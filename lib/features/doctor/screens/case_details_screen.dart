@@ -188,7 +188,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   title: 'Case Summary',
                 ),
                 const SizedBox(height: 10),
-                CaseSummarySection(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),
+                CaseSummarySection(caseModel: c),
 
                 const SizedBox(height: 28),
                 sessionsAsync.when(

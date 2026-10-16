@@ -113,6 +113,34 @@ class CaseBusinessRuleTests(CareWorldMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["doctor"], self.doctor_a.pk)
 
+    def test_new_case_starts_in_treatment(self):
+        response = self.client_for(self.doctor_a).post(
+            CASES, {"patient": self.patient_4.pk, "diagnosis_type": "migraine"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], CaseStatus.IN_TREATMENT)
+
+    def test_only_two_statuses_accepted(self):
+        self.assertEqual(set(CaseStatus.values), {"in_treatment", "closed"})
+        for old in ("new", "under_evaluation"):
+            response = self.client_for(self.doctor_a).patch(case_url(self.case_1), {"status": old}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_status_migration_maps_non_closed_to_in_treatment(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        migration = import_module("cases.migrations.0018_case_status_two_values")
+        Case.objects.filter(pk=self.case_1.pk).update(status="new")
+        Case.objects.filter(pk=self.case_2.pk).update(status="under_evaluation")
+        Case.objects.filter(pk=self.orphan_case.pk).update(status=CaseStatus.CLOSED)
+        migration.to_two_statuses(apps, None)
+        statuses = dict(Case.objects.values_list("pk", "status"))
+        self.assertEqual(statuses[self.case_1.pk], CaseStatus.IN_TREATMENT)
+        self.assertEqual(statuses[self.case_2.pk], CaseStatus.IN_TREATMENT)
+        self.assertEqual(statuses[self.orphan_case.pk], CaseStatus.CLOSED)
+
     def test_doctor_cannot_reassign_existing_case_to_another_doctor(self):
         response = self.client_for(self.doctor_a).patch(
             case_url(self.case_1), {"doctor": self.doctor_b.pk}, format="json"

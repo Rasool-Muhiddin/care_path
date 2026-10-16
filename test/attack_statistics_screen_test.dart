@@ -26,7 +26,7 @@ final _case = CaseModel(
   episodeDurationMinutes: 240,
   initialEvaluation: '',
   treatmentPlan: '',
-  createdAt: _daysAgo(60),
+  createdAt: _daysAgo(150),
   updatedAt: _now,
 );
 

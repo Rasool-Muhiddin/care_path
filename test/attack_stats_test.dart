@@ -52,9 +52,9 @@ void main() {
       confirmations: const [],
       today: today,
     );
-    expect(a.treatmentStartDay, DateTime.utc(2026, 9, 20));
-    expect(a.caseStartDay, DateTime.utc(2026, 9, 1));
-    expect(a.summarize(a.caseStartDay, tomorrow).attackCount, 4);
+    // Treatment starts on the case creation day, not the first session.
+    expect(a.treatmentStartDay, DateTime.utc(2026, 9, 1));
+    expect(a.summarize(a.treatmentStartDay, tomorrow).attackCount, 4);
     final fromSept19 = a.summarize(DateTime.utc(2026, 9, 19), DateTime.utc(2026, 10, 2));
     expect(fromSept19.attackCount, 2); // 9-19 and 9-20; 10-02 is the (exclusive) end
     expect(fromSept19.sessions, 2);
@@ -140,7 +140,7 @@ void main() {
       confirmations: const [],
       today: today,
     );
-    final years = a.periods(a.caseStartDay, tomorrow, StatsGranularity.yearly);
+    final years = a.periods(a.treatmentStartDay, tomorrow, StatsGranularity.yearly);
     expect(years.map((y) => y.start.year), [2025, 2026]);
     expect(years.map((y) => y.attackCount), [1, 3]);
     expect(a.calendarMonth(0).attackCount, 2);

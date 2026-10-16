@@ -97,16 +97,9 @@ class AttackAnalysis {
     required List<AttackLogConfirmationModel> confirmations,
     DateTime? today,
   })  : today = today ?? baghdadToday(),
+        treatmentStartDay = baghdadDayOf(caseCreatedAt),
         _sessionDays = sessions.map((s) => baghdadDayOf(s.sessionDate)).toList(),
         _attacks = [...attacks]..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)) {
-    treatmentStartDay = _sessionDays.isEmpty ? null : _sessionDays.reduce((a, b) => a.isBefore(b) ? a : b);
-    var start = baghdadDayOf(caseCreatedAt);
-    if (_attacks.isNotEmpty) {
-      final firstAttackDay = baghdadDayOf(_attacks.first.occurredAt);
-      if (firstAttackDay.isBefore(start)) start = firstAttackDay;
-    }
-    if (treatmentStartDay != null && treatmentStartDay!.isBefore(start)) start = treatmentStartDay!;
-    caseStartDay = start;
     for (final c in confirmations) {
       final day = baghdadDayOf(c.confirmedAt);
       for (var i = 1; i <= AttackLogConfirmationModel.coveredDays; i++) {
@@ -118,12 +111,10 @@ class AttackAnalysis {
   /// Today's Baghdad day (injectable for tests).
   final DateTime today;
 
-  /// Earliest day with any data (case registration, first attack or first
-  /// session) — the start of "All time".
-  late final DateTime caseStartDay;
-
-  /// Baghdad day of the first treatment session; null = treatment not started.
-  late final DateTime? treatmentStartDay;
+  /// Baghdad day the case was created — treatment starts then (there's no
+  /// separate start event), and it's the start of "All time". The backend
+  /// rejects attacks dated before it.
+  final DateTime treatmentStartDay;
 
   final List<DateTime> _sessionDays;
   final List<AttackEventModel> _attacks;

@@ -23,44 +23,38 @@ def payload(case, **extra):
 
 
 class SessionScopeTests(CareWorldMixin, APITestCase):
-    """C2: لا أحد يسجّل أو ينقل جلسات خارج نطاقه."""
+    """C2: الجلسات للقراءة فقط عبر الـ API — الإنشاء للمريض وحده لحالته."""
 
-    def test_doctor_cannot_create_session_on_other_doctors_case(self):
-        before = TreatmentSession.objects.filter(case=self.case_2).count()
-        response = self.client_for(self.doctor_a).post(SESSIONS, payload(self.case_2), format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("case", response.data)
-        self.assertEqual(TreatmentSession.objects.filter(case=self.case_2).count(), before)
+    def test_doctor_and_engineer_cannot_create_sessions(self):
+        before = TreatmentSession.objects.count()
+        for user in (self.doctor_a, self.engineer):
+            response = self.client_for(user).post(SESSIONS, payload(self.case_1), format="json")
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(TreatmentSession.objects.count(), before)
 
-    def test_doctor_can_create_session_on_own_case(self):
-        response = self.client_for(self.doctor_a).post(SESSIONS, payload(self.case_1), format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-    def test_doctor_cannot_move_session_to_another_case(self):
-        response = self.client_for(self.doctor_a).patch(
-            session_url(self.session_1), {"case": self.case_2.pk}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    def test_nobody_can_edit_or_delete_sessions_via_api(self):
+        for user in (self.doctor_a, self.engineer, self.patient_1):
+            client = self.client_for(user)
+            for response in (
+                client.patch(session_url(self.session_1), {"doctor_notes": "x"}, format="json"),
+                client.put(session_url(self.session_1), payload(self.case_1), format="json"),
+                client.delete(session_url(self.session_1)),
+            ):
+                self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.session_1.refresh_from_db()
         self.assertEqual(self.session_1.case, self.case_1)
+        self.assertNotEqual(self.session_1.doctor_notes, "x")
 
-    def test_doctor_cannot_edit_other_doctors_session(self):
-        response = self.client_for(self.doctor_a).patch(
-            session_url(self.session_2), {"doctor_notes": "x"}, format="json"
+    def test_doctor_and_engineer_can_read_sessions(self):
+        self.assertEqual(
+            [s["id"] for s in results(self.client_for(self.doctor_a).get(SESSIONS))], [self.session_1.pk]
         )
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        engineer_ids = {s["id"] for s in results(self.client_for(self.engineer).get(SESSIONS))}
+        self.assertEqual(engineer_ids, {self.session_1.pk, self.session_2.pk})
 
     def test_patient_cannot_create_session_for_another_patient(self):
         response = self.client_for(self.patient_1).post(SESSIONS, payload(self.case_2), format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_patient_cannot_edit_or_delete_session(self):
-        client = self.client_for(self.patient_1)
-        self.assertEqual(
-            client.patch(session_url(self.session_1), {"patient_response": "x"}, format="json").status_code,
-            status.HTTP_403_FORBIDDEN,
-        )
-        self.assertEqual(client.delete(session_url(self.session_1)).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_patient_sees_only_own_sessions(self):
         response = self.client_for(self.patient_1).get(SESSIONS)
@@ -70,7 +64,7 @@ class SessionScopeTests(CareWorldMixin, APITestCase):
         client = self.client_for(self.no_role)
         self.assertEqual(results(client.get(SESSIONS)), [])
         response = client.post(SESSIONS, payload(self.case_1), format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class PatientSessionRuleTests(CareWorldMixin, APITestCase):
@@ -91,11 +85,6 @@ class PatientSessionRuleTests(CareWorldMixin, APITestCase):
     def test_no_session_on_closed_case(self):
         Case.objects.filter(pk=self.case_1.pk).update(status=CaseStatus.CLOSED)
         response = self.client_for(self.patient_1).post(SESSIONS, payload(self.case_1), format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_doctor_also_blocked_on_closed_case(self):
-        Case.objects.filter(pk=self.case_1.pk).update(status=CaseStatus.CLOSED)
-        response = self.client_for(self.doctor_a).post(SESSIONS, payload(self.case_1), format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_patient_cannot_send_doctor_notes(self):

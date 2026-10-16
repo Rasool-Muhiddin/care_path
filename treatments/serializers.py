@@ -32,7 +32,6 @@ class TreatmentSessionSerializer(serializers.ModelSerializer):
             "duration_minutes",
             "device_parameters",
             "doctor_notes",
-            "patient_response",
             "created_at",
         ]
         # device يُؤخذ دائماً من جهاز الحالة نفسها (case.device)، وليس من الطلب

@@ -16,7 +16,6 @@ SessionModel session(DateTime when) => SessionModel(
       sessionDate: when,
       deviceParameters: const {},
       doctorNotes: '',
-      patientResponse: '',
       createdAt: when,
     );
 

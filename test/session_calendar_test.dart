@@ -4,7 +4,7 @@ import 'package:axon/features/patient/models/session_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-SessionModel _session(int id, DateTime utc, {int? minutes, String response = ''}) => SessionModel(
+SessionModel _session(int id, DateTime utc, {int? minutes}) => SessionModel(
       id: id,
       caseId: 1,
       performedByName: '',
@@ -12,7 +12,6 @@ SessionModel _session(int id, DateTime utc, {int? minutes, String response = ''}
       durationMinutes: minutes,
       deviceParameters: const {},
       doctorNotes: '',
-      patientResponse: response,
       createdAt: utc.toLocal(),
     );
 
@@ -33,7 +32,7 @@ void main() {
   testWidgets('groups by Baghdad day, counts the month, shows details on tap', (tester) async {
     await tester.pumpWidget(_host(
       [
-        _session(1, lateNightUtc, minutes: 20, response: 'ممتاز'),
+        _session(1, lateNightUtc, minutes: 20),
         _session(2, DateTime.utc(today.year, today.month, 3, 9), minutes: null),
         // Previous month — must not be counted.
         _session(3, DateTime.utc(today.year, today.month - 1, 15, 9)),
@@ -48,19 +47,17 @@ void main() {
     await tester.pump();
     expect(find.text('Time: 01:30'), findsOneWidget);
     expect(find.text('Duration: 20 min'), findsOneWidget);
-    expect(find.text('Patient feedback: ممتاز'), findsOneWidget);
 
     // The 10th has no session in Baghdad time, so tapping it shows nothing.
     await tester.tap(find.text('10'));
     await tester.pump();
     expect(find.textContaining('Time:'), findsOneWidget);
 
-    // Session without duration/feedback shows only the time.
+    // Session without a duration shows only the time.
     await tester.tap(find.text('3'));
     await tester.pump();
     expect(find.text('Time: 12:00'), findsOneWidget);
     expect(find.textContaining('Duration'), findsNothing);
-    expect(find.textContaining('feedback'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.chevron_left));
     await tester.pump();

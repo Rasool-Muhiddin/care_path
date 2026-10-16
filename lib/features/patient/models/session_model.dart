@@ -17,7 +17,6 @@ class SessionModel {
   final int? durationMinutes;
   final Map<String, dynamic> deviceParameters;
   final String doctorNotes;
-  final String patientResponse;
   final DateTime createdAt;
 
   const SessionModel({
@@ -30,7 +29,6 @@ class SessionModel {
     this.durationMinutes,
     required this.deviceParameters,
     required this.doctorNotes,
-    required this.patientResponse,
     required this.createdAt,
   });
 
@@ -46,15 +44,13 @@ class SessionModel {
       deviceParameters:
           (json['device_parameters'] as Map<String, dynamic>?) ?? const {},
       doctorNotes: json['doctor_notes'] as String? ?? '',
-      patientResponse: json['patient_response'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 }
 
 /// بيانات إنشاء جلسة جديدة من طرف المريض — يرسلها المريض نفسه عند
-/// الضغط على "إنهاء الجلسة"، بدون تقييم أو ملاحظة (patient_response
-/// اختياري بالـ backend). لا تحتوي doctor_notes إطلاقاً (لا كمفتاح
+/// الضغط على "إنهاء الجلسة"، بدون تقييم أو ملاحظة. لا تحتوي doctor_notes إطلاقاً (لا كمفتاح
 /// حتى لو فاضي)، لأن الـ backend يرفض أي طلب من مريض يحتوي هذا المفتاح
 /// ضمن بيانات الطلب، بغض النظر عن قيمته.
 class NewSessionPayload {

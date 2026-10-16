@@ -85,7 +85,6 @@ final _sessions = [
       durationMinutes: 20,
       deviceParameters: const {},
       doctorNotes: '',
-      patientResponse: 'ممتاز',
       createdAt: _daysAgo(d, 9),
     ),
 ];

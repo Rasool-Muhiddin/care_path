@@ -39,7 +39,6 @@ final _sessions = [
       sessionDate: _daysAgo(d),
       deviceParameters: const {},
       doctorNotes: '',
-      patientResponse: '',
       createdAt: _daysAgo(d),
     ),
 ];

@@ -25,7 +25,6 @@ class SessionCalendarStrings {
     required this.sessionsInMonth,
     required this.durationLabel,
     required this.timeLabel,
-    required this.feedbackLabel,
     required this.today,
   });
 
@@ -36,7 +35,6 @@ class SessionCalendarStrings {
   final String Function(int count) sessionsInMonth;
   final String Function(int minutes) durationLabel;
   final String timeLabel;
-  final String feedbackLabel;
   final String today;
 
   static final en = SessionCalendarStrings(
@@ -50,7 +48,6 @@ class SessionCalendarStrings {
     sessionsInMonth: (n) => '$n ${n == 1 ? 'session' : 'sessions'} this month',
     durationLabel: (m) => 'Duration: $m min',
     timeLabel: 'Time',
-    feedbackLabel: 'Patient feedback',
     today: 'Today',
   );
 
@@ -65,7 +62,6 @@ class SessionCalendarStrings {
     sessionsInMonth: (n) => 'عدد الجلسات هذا الشهر: $n',
     durationLabel: (m) => 'المدة: $m دقيقة',
     timeLabel: 'الوقت',
-    feedbackLabel: 'التقييم',
     today: 'اليوم',
   );
 }
@@ -435,7 +431,7 @@ class _PickerCell extends StatelessWidget {
 }
 
 /// Details for the session(s) on the selected day: date, time, duration
-/// (only when recorded) and the patient's old feedback (only when present).
+/// (only when recorded).
 class _DayDetails extends StatelessWidget {
   const _DayDetails({
     required this.dayKey,
@@ -476,11 +472,6 @@ class _DayDetails extends StatelessWidget {
                   Text('${strings.timeLabel}: ${_two(t.hour)}:${_two(t.minute)}', style: hint),
                   if (session.durationMinutes != null)
                     Text(strings.durationLabel(session.durationMinutes!), style: hint),
-                  if (session.patientResponse.isNotEmpty)
-                    Text(
-                      '${strings.feedbackLabel}: ${session.patientResponse}',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                    ),
                 ],
               );
             }),

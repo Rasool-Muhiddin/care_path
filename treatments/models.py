@@ -35,9 +35,6 @@ class TreatmentSession(models.Model):
     )
 
     doctor_notes = models.TextField(blank=True)
-    patient_response = models.TextField(
-        blank=True, help_text="استجابة/شكوى المريض المسجّلة خلال الجلسة"
-    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

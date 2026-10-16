@@ -361,7 +361,7 @@ class _InquiryTypePicker extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'يتم إرسال الاستفسار التقني إلى المهندس فقط، والطبي إلى المهندس وطبيبك.',
+                  'يتم إرسال الاستفسار التقني إلى المهندس فقط، والطبي يصل إلى طبيبك.',
                   textAlign: TextAlign.center,
                   style: _Txt.pickerBody,
                 ),
@@ -376,7 +376,7 @@ class _InquiryTypePicker extends StatelessWidget {
                 _InquiryOption(
                   icon: Icons.medical_services_outlined,
                   title: InquiryType.medical.arabicLabel,
-                  subtitle: 'يرسل إلى المهندس وطبيبك المعالج',
+                  subtitle: 'تصل إلى طبيبك',
                   onTap: () => onSelect(InquiryType.medical),
                 ),
               ],

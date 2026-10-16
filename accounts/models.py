@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -33,6 +34,14 @@ class User(AbstractUser):
     )
     phone_number = models.CharField(max_length=20, blank=True)
 
+    # مدير فريق المهندسين: صلاحيات كاملة (حذف الأجهزة، العيادات وأنواع
+    # الأجهزة، تعديل الحالات، تسجيل الحسابات، القناة الطبية...). يُضبط من
+    # Django admin فقط (غير قابل للكتابة عبر أي API)، وللمهندسين فقط.
+    is_manager = models.BooleanField(
+        default=False,
+        help_text="مدير فريق المهندسين (صلاحيات كاملة). للمهندسين فقط — يُضبط من هنا فقط.",
+    )
+
     # حقول اختيارية تُستخدم لاحقاً حسب الدور — يمكن نقلها لموديلات منفصلة
     # (DoctorProfile / EngineerProfile) عند تعقّد البيانات أكثر.
     specialty = models.CharField(
@@ -46,6 +55,19 @@ class User(AbstractUser):
     # آخر تذكير push بتسجيل النوبات (send_attack_reminders) — تذكير واحد
     # كل 3 أيام على الأكثر.
     attack_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_manager=False) | models.Q(role="engineer"),
+                name="manager_must_be_engineer",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.is_manager and self.role != UserRole.ENGINEER:
+            raise ValidationError({"is_manager": "صلاحية المدير متاحة للمهندسين فقط."})
 
     def is_patient(self) -> bool:
         return self.role == UserRole.PATIENT

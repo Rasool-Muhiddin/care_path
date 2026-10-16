@@ -2,7 +2,7 @@ from django.db.models import Exists, OuterRef
 from rest_framework import viewsets, permissions
 
 from accounts.models import STAFF_ROLES
-from accounts.permissions import IsEngineer
+from accounts.permissions import IsEngineer, IsEngineerManager
 from config.drf import int_query_param
 from .models import Clinic, Device, DeviceType
 from .serializers import ClinicSerializer, DeviceSerializer, DeviceTypeSerializer
@@ -10,13 +10,19 @@ from .serializers import ClinicSerializer, DeviceSerializer, DeviceTypeSerialize
 
 class ClinicViewSet(viewsets.ModelViewSet):
     """
-    إدارة العيادات — مقتصرة بالكامل على المهندسين (فريقكم).
-    لا يحتاج الطبيب أو المريض رؤية قائمة العيادات إطلاقاً.
+    إدارة العيادات — القراءة لكل المهندسين، والإنشاء/التعديل (بما فيه
+    المهندس المسؤول، الذي يحدد حق الرد على المرضى) والحذف لمدير المهندسين
+    فقط. لا يحتاج الطبيب أو المريض رؤية قائمة العيادات إطلاقاً.
     """
 
     queryset = Clinic.objects.order_by("name", "pk")
     serializer_class = ClinicSerializer
-    permission_classes = [permissions.IsAuthenticated, IsEngineer]
+
+    def get_permissions(self):
+        # القراءة لكل المهندسين؛ الإنشاء/التعديل/الحذف للمدير فقط
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [permissions.IsAuthenticated(), IsEngineerManager()]
+        return [permissions.IsAuthenticated(), IsEngineer()]
 
 
 class DeviceTypeViewSet(viewsets.ModelViewSet):
@@ -24,17 +30,23 @@ class DeviceTypeViewSet(viewsets.ModelViewSet):
     إدارة أنواع الأجهزة (Type A/B/C وأي نوع يُضاف لاحقاً) — مقتصرة على
     المهندسين. الطبيب يصل لبيانات النوع بشكل غير مباشر فقط عبر
     DeviceSerializer (device_type_name, device_type_setup_schema).
+    القراءة لكل المهندسين؛ الإنشاء/التعديل/الحذف لمدير المهندسين فقط.
     """
 
     queryset = DeviceType.objects.order_by("name")
     serializer_class = DeviceTypeSerializer
-    permission_classes = [permissions.IsAuthenticated, IsEngineer]
+
+    def get_permissions(self):
+        # القراءة لكل المهندسين؛ الإنشاء/التعديل/الحذف للمدير فقط
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [permissions.IsAuthenticated(), IsEngineerManager()]
+        return [permissions.IsAuthenticated(), IsEngineer()]
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
     """
     إدارة الأجهزة.
-    - المهندس: صلاحية كاملة (إضافة/تعديل/حذف) على كل الأجهزة.
+    - المهندس: إضافة وتعديل كل الأجهزة؛ الحذف لمدير المهندسين فقط.
     - الطبيب: قراءة فقط، ويرى كل الأجهزة (وليس فقط أجهزة حالاته الحالية) —
       حتى يستطيع اختيار جهاز عند إنشاء أول حالة له.
     - المريض: لا يصل لهذا الـ Endpoint إطلاقاً (يرى جهازه فقط من خلال Case الخاص به).
@@ -51,7 +63,9 @@ class DeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action == "destroy":
+            return [permissions.IsAuthenticated(), IsEngineerManager()]
+        if self.action in ["create", "update", "partial_update"]:
             return [permissions.IsAuthenticated(), IsEngineer()]
         return [permissions.IsAuthenticated()]
 

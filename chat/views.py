@@ -15,7 +15,13 @@ from config.drf import int_query_param
 from .models import ChatMessage
 from .models import InquiryType
 from .serializers import ChatMessageSerializer, EngineerInboxRowSerializer
-from .permissions import IsCaseParticipant, engineer_can_reply, responsible_engineer_of
+from .permissions import (
+    IsCaseParticipant,
+    engineer_can_read_medical,
+    engineer_can_reply,
+    engineer_owns_chat,
+    responsible_engineer_of,
+)
 from .notifications import notify_in_background
 
 # أول فتح للمحادثة (أو ?before_id=) يرجع آخر 50 رسالة فقط
@@ -53,9 +59,9 @@ class CaseMessagesView(generics.ListCreateAPIView):
         if getattr(user, 'role', None) == UserRole.DOCTOR:
             queryset = queryset.filter(inquiry_type=InquiryType.MEDICAL)
 
-        # كل المهندسين يقرؤون القناة التقنية، أما الاطلاع على القناة الطبية
-        # فيبقى كما كان: للمهندس المسؤول عن عيادة الجهاز (أو أي مهندس إن لم يوجد).
-        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, self.get_case()):
+        # كل المهندسين يقرؤون القناة التقنية، أما القناة الطبية (مريض ↔ طبيب)
+        # فلمدير المهندسين وحده.
+        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_read_medical(user):
             queryset = queryset.filter(inquiry_type=InquiryType.TECHNICAL)
 
         # تعرض الواجهة قناة واحدة في كل مرة كي لا تختلط مراسلات الدعم
@@ -77,8 +83,8 @@ class CaseMessagesView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        # حق الرد في القناة التقنية للمهندس المسؤول عن عيادة الجهاز فقط
-        # (القناة الطبية يرفضها الـ serializer للمهندس أصلاً).
+        # حق الرد في القناة التقنية للمهندس المسؤول عن عيادة الجهاز، وللمدير
+        # في أي محادثة (القناة الطبية يرفضها الـ serializer للمهندس أصلاً).
         user = self.request.user
         if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, self.get_case()):
             responsible = responsible_engineer_of(self.get_case())
@@ -100,13 +106,13 @@ class CaseMessagesView(generics.ListCreateAPIView):
             messages = list(queryset.order_by('-id')[:CHAT_PAGE_SIZE])[::-1]
         data = self.get_serializer(messages, many=True).data
 
-        # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة. المهندس يطّلع على
+        # عند فتح الشاشة، علّم رسائل الطرف الآخر كمقروءة. المدير يطّلع على
         # القناة الطبية فقط، فلا نعلّمها مقروءة كي لا يختفي عدّاد الطبيب/المريض.
-        # والمهندس الذي لا يملك حق الرد يقرأ فقط: لا يعلّم شيئاً كي يبقى
-        # العدّاد ظاهراً لدى المهندس المسؤول.
+        # والمهندس غير المسؤول عن المحادثة (ومنه المدير في محادثة غيره) لا
+        # يعلّم شيئاً كي يبقى العدّاد ظاهراً لدى المهندس المسؤول.
         unread = queryset.exclude(sender=request.user)
         if getattr(request.user, 'role', None) == UserRole.ENGINEER:
-            if not engineer_can_reply(request.user, self.get_case()):
+            if not engineer_owns_chat(request.user, self.get_case()):
                 unread = unread.none()
             unread = unread.filter(inquiry_type=InquiryType.TECHNICAL)
         unread.update(is_read=True)

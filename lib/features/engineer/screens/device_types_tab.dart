@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -19,21 +20,25 @@ class DeviceTypesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = ref.watch(isManagerProvider);
     final typesAsync = ref.watch(deviceTypesListProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showAddDeviceTypeDialog(context),
-        backgroundColor: Colors.white.withValues(alpha: 0.18),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('New Type'),
-      ),
+      // الإضافة لمدير المهندسين فقط (السيرفر يرفضها لغيره)
+      floatingActionButton: !isManager
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => showAddDeviceTypeDialog(context),
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('New Type'),
+            ),
       body: RefreshIndicator(
         color: AppGlassColors.baseDark,
         backgroundColor: Colors.white,
@@ -111,12 +116,13 @@ class _DeviceTypesGroup extends StatelessWidget {
   }
 }
 
-class _DeviceTypeTile extends StatelessWidget {
+class _DeviceTypeTile extends ConsumerWidget {
   const _DeviceTypeTile({required this.type});
   final DeviceTypeModel type;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = ref.watch(isManagerProvider);
     final badgeColor = type.isActive ? AppAccent.device : Colors.white38;
 
     return Padding(
@@ -155,11 +161,13 @@ class _DeviceTypeTile extends StatelessWidget {
             ),
             const SizedBox(width: 4),
           ],
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Colors.white70),
-            tooltip: 'Edit',
-            onPressed: () => showEditDeviceTypeDialog(context, type),
-          ),
+          // التعديل لمدير المهندسين فقط
+          if (isManager)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+              tooltip: 'Edit',
+              onPressed: () => showEditDeviceTypeDialog(context, type),
+            ),
         ],
       ),
     );

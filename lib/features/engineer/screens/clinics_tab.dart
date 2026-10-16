@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -19,21 +20,25 @@ class ClinicsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = ref.watch(isManagerProvider);
     final clinicsAsync = ref.watch(clinicsListProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showAddClinicDialog(context),
-        backgroundColor: Colors.white.withValues(alpha: 0.18),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('New Clinic'),
-      ),
+      // الإضافة لمدير المهندسين فقط (السيرفر يرفضها لغيره)
+      floatingActionButton: !isManager
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => showAddClinicDialog(context),
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('New Clinic'),
+            ),
       body: RefreshIndicator(
         color: AppGlassColors.baseDark,
         backgroundColor: Colors.white,
@@ -111,12 +116,13 @@ class _ClinicsGroup extends StatelessWidget {
   }
 }
 
-class _ClinicTile extends StatelessWidget {
+class _ClinicTile extends ConsumerWidget {
   const _ClinicTile({required this.clinic});
   final ClinicModel clinic;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = ref.watch(isManagerProvider);
     final subtitleParts = [
       if (clinic.address.isNotEmpty) clinic.address,
       if (clinic.phoneNumber.isNotEmpty) clinic.phoneNumber,
@@ -126,7 +132,7 @@ class _ClinicTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          IconBadge(icon: Icons.local_hospital_outlined, color: AppAccent.clinic),
+          const IconBadge(icon: Icons.local_hospital_outlined, color: AppAccent.clinic),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -154,16 +160,18 @@ class _ClinicTile extends StatelessWidget {
               ),
               child: Text(
                 clinic.contactPerson,
-                style: TextStyle(fontSize: 12, color: AppAccent.clinic),
+                style: const TextStyle(fontSize: 12, color: AppAccent.clinic),
               ),
             ),
             const SizedBox(width: 4),
           ],
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Colors.white70),
-            tooltip: 'Edit',
-            onPressed: () => showEditClinicDialog(context, clinic),
-          ),
+          // التعديل لمدير المهندسين فقط
+          if (isManager)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+              tooltip: 'Edit',
+              onPressed: () => showEditClinicDialog(context, clinic),
+            ),
         ],
       ),
     );

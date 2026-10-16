@@ -263,12 +263,32 @@ class EngineerReplyRightsTests(CareWorldMixin, APITestCase):
         self.technical.refresh_from_db()
         self.assertTrue(self.technical.is_read)
 
-    def test_medical_channel_access_unchanged_for_non_responsible_engineer(self, _notify):
-        response = self.client_for(self.engineer_b).get(messages_url(self.case_1), {"inquiry_type": "medical"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [])
-        response = self.client_for(self.engineer).get(messages_url(self.case_1), {"inquiry_type": "medical"})
+    def test_only_manager_reads_medical_channel(self, _notify):
+        # المهندس العادي لا يرى القناة الطبية، حتى المسؤول عن عيادة الجهاز
+        for user in (self.engineer_b, self.engineer):
+            response = self.client_for(user).get(messages_url(self.case_1), {"inquiry_type": "medical"})
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.data, [])
+            response = self.client_for(user).get(messages_url(self.case_1))
+            self.assertEqual([m["text"] for m in response.data], ["device beeps"])
+        response = self.client_for(self.manager).get(messages_url(self.case_1), {"inquiry_type": "medical"})
         self.assertEqual([m["text"] for m in response.data], ["headache"])
+
+    def test_manager_does_not_mark_medical_read(self, _notify):
+        self.client_for(self.manager).get(messages_url(self.case_1), {"inquiry_type": "medical"})
+        self.assertFalse(ChatMessage.objects.get(text="headache").is_read)
+
+    def test_manager_cannot_write_in_medical_channel(self, _notify):
+        self.assertEqual(self.send(self.manager, self.case_1, "medical").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_manager_can_reply_anywhere_without_marking_read(self, _notify):
+        # case_1 مسؤولها engineer وليس المدير
+        self.client_for(self.manager).get(messages_url(self.case_1), {"inquiry_type": "technical"})
+        self.technical.refresh_from_db()
+        self.assertFalse(self.technical.is_read)
+        self.assertEqual(self.send(self.manager, self.case_1).status_code, status.HTTP_201_CREATED)
+        url = f"/api/chat/cases/{self.case_1.pk}/reply-rights/"
+        self.assertTrue(self.client_for(self.manager).get(url).data["can_reply"])
 
     def test_clinic_without_engineer_lets_any_engineer_reply(self, _notify):
         for user in (self.engineer, self.engineer_b):
@@ -324,7 +344,7 @@ class TechnicalPushRecipientsTests(CareWorldMixin, APITestCase):
         self.assertEqual(self.recipients_for(self.case_1), {self.engineer})
 
     def test_without_responsible_engineer_all_engineers_are_notified(self):
-        self.assertEqual(self.recipients_for(self.case_2), {self.engineer, self.engineer_b})
+        self.assertEqual(self.recipients_for(self.case_2), {self.engineer, self.engineer_b, self.manager})
 
     def test_changing_clinic_engineer_moves_push(self):
         Clinic.objects.filter(pk=self.clinic_a.pk).update(responsible_engineer=self.engineer_b)

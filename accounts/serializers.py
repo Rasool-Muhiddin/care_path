@@ -20,9 +20,11 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "phone_number",
             "specialty",
+            "is_manager",
             "date_joined",
         ]
-        read_only_fields = ["id", "role", "date_joined"]  # لا يمكن للمستخدم تغيير دوره بنفسه
+        # لا يمكن للمستخدم تغيير دوره أو صلاحية المدير بنفسه (Django admin فقط)
+        read_only_fields = ["id", "role", "is_manager", "date_joined"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -30,7 +32,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     إنشاء حساب جديد. لا يوجد تسجيل ذاتي عام: الطلب يجب أن يأتي من مستخدم
     مسجَّل دخوله (انظر RegisterView)، وما يستطيع إنشاءه يعتمد على دوره:
       - الطبيب: مرضى فقط (يستخدمها حوار "إضافة مريض" في التطبيق).
-      - المهندس: مرضى أو أطباء.
+      - مدير المهندسين: مرضى أو أطباء (المهندس العادي يُرفض في RegisterView).
       - حسابات المهندسين: من Django admin فقط، لا عبر هذا الـ API إطلاقاً.
     """
 

@@ -9,6 +9,10 @@ class UserModel {
   final String? phoneNumber;
   final String? specialty; // يُستخدم فقط للطبيب عادة
 
+  /// مهندس بصلاحية مدير (يُضبط من Django admin فقط). يُستخدم لإخفاء ما لا
+  /// يملكه المهندس العادي؛ السيرفر هو من يفرض الصلاحيات فعلياً.
+  final bool isManager;
+
   const UserModel({
     required this.id,
     required this.username,
@@ -16,6 +20,7 @@ class UserModel {
     required this.role,
     this.phoneNumber,
     this.specialty,
+    this.isManager = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +31,7 @@ class UserModel {
       role: UserRole.fromApiValue(json['role'] as String),
       phoneNumber: json['phone_number'] as String?,
       specialty: json['specialty'] as String?,
+      isManager: json['is_manager'] as bool? ?? false,
     );
   }
 }

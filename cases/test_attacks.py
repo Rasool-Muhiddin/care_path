@@ -165,13 +165,15 @@ class AttackEventReadDeleteTests(AttackEventTestBase):
         response = self.client_for(self.patient_1).delete(f"{ATTACKS}{self.event_2.pk}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_doctor_cannot_delete_engineer_can(self):
+    def test_only_manager_deletes_besides_patient(self):
         url = f"{ATTACKS}{self.event_1.pk}/"
         self.assertEqual(self.client_for(self.doctor_a).delete(url).status_code, 403)
         AttackEvent.objects.filter(pk=self.event_1.pk).update(
             created_at=timezone.now() - timedelta(days=30)
         )
-        self.assertEqual(self.client_for(self.engineer).delete(url).status_code, 204)
+        self.assertEqual(self.client_for(self.engineer).delete(url).status_code, 403)
+        self.assertTrue(AttackEvent.objects.filter(pk=self.event_1.pk).exists())
+        self.assertEqual(self.client_for(self.manager).delete(url).status_code, 204)
 
     def test_no_edit(self):
         response = self.client_for(self.patient_1).patch(

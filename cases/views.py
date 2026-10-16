@@ -6,10 +6,10 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.models import UserRole
 from accounts.permissions import (
-    IsDoctorOrEngineer,
-    IsEngineer,
+    IsDoctorOrEngineerManager,
+    IsEngineerManager,
     IsPatient,
-    IsPatientOrEngineer,
+    IsPatientOrEngineerManager,
 )
 from config.drf import AtomicSaveMixin, int_query_param, uuid_query_param
 from .models import (
@@ -30,9 +30,9 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     """
     - المريض: قراءة حالاته الخاصة فقط — لا تعديل ولا حذف.
     - الطبيب: يرى الحالات المسندة إليه، ينشئ حالات لنفسه ويعدّلها، ولا يحذف.
-    - المهندس: يرى ويعدّل كل الحالات (لربطها بالأجهزة ومتابعة الاستخدام)،
-      وهو الوحيد الذي يحذف — الحذف يمسح بالتسلسل كل الجلسات والتقارير
-      والمحادثات المرتبطة.
+    - المهندس: يرى كل الحالات (لمتابعة الأجهزة والاستخدام) — قراءة فقط.
+    - مدير المهندسين: ينشئ ويعدّل كل الحالات، وهو الوحيد الذي يحذف — الحذف
+      يمسح بالتسلسل كل الجلسات والنوبات والمحادثات المرتبطة.
     - أي دور آخر: لا شيء (راجع cases/scoping.py).
 
     فلترة اختيارية: ?device=<uuid> — تُستخدم من شاشة تفاصيل الجهاز عند
@@ -44,9 +44,9 @@ class CaseViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "destroy":
-            return [permissions.IsAuthenticated(), IsEngineer()]
+            return [permissions.IsAuthenticated(), IsEngineerManager()]
         if self.action in ["create", "update", "partial_update"]:
-            return [permissions.IsAuthenticated(), IsDoctorOrEngineer()]
+            return [permissions.IsAuthenticated(), IsDoctorOrEngineerManager()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -79,7 +79,8 @@ class AttackEventViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
     - المريض: ينشئ نوبات لحالته فقط، ويحذف نوبة سجّلها خلال 24 ساعة من
       تسجيلها (للأخطاء). لا تعديل — الخطأ يُحذف ويُسجَّل من جديد.
     - الطبيب: قراءة نوبات حالاته فقط.
-    - المهندس: قراءة الكل، وحذف أي نوبة (للدعم الفني).
+    - المهندس: قراءة الكل.
+    - مدير المهندسين: قراءة الكل، وحذف أي نوبة (للدعم الفني).
 
     إنشاء النوبات له حد خاص (throttle_scope="attack_create").
     فلترة اختيارية: ?case=<id>.
@@ -93,7 +94,7 @@ class AttackEventViewSet(AtomicSaveMixin, viewsets.ModelViewSet):
         if self.action == "create":
             return [permissions.IsAuthenticated(), IsPatient()]
         if self.action == "destroy":
-            return [permissions.IsAuthenticated(), IsPatientOrEngineer()]
+            return [permissions.IsAuthenticated(), IsPatientOrEngineerManager()]
         return [permissions.IsAuthenticated()]
 
     def get_throttles(self):

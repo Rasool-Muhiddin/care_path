@@ -13,12 +13,14 @@ def new_user(role, username="new_user"):
 
 
 class RegisterTests(APITestCase):
-    """لا تسجيل ذاتي: الطبيب ينشئ مرضى فقط، والمهندس مرضى أو أطباء، والمهندسون من admin فقط."""
+    """لا تسجيل ذاتي: الطبيب ينشئ مرضى فقط، ومدير المهندسين مرضى أو أطباء،
+    والمهندس العادي لا شيء، والمهندسون من admin فقط."""
 
     @classmethod
     def setUpTestData(cls):
         cls.doctor = make_user("doctor", UserRole.DOCTOR)
         cls.engineer = make_user("engineer", UserRole.ENGINEER)
+        cls.manager = make_user("manager", UserRole.ENGINEER, is_manager=True)
         cls.patient = make_user("patient", UserRole.PATIENT)
 
     def post_as(self, user, payload):
@@ -40,12 +42,20 @@ class RegisterTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username="new_user").exists())
 
-    def test_engineer_creates_doctor(self):
-        response = self.post_as(self.engineer, new_user(UserRole.DOCTOR))
+    def test_manager_creates_doctor_and_patient(self):
+        response = self.post_as(self.manager, new_user(UserRole.DOCTOR))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = self.post_as(self.manager, new_user(UserRole.PATIENT, username="new_patient"))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_regular_engineer_cannot_register_accounts(self):
+        for role in (UserRole.DOCTOR, UserRole.PATIENT):
+            response = self.post_as(self.engineer, new_user(role))
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(User.objects.filter(username="new_user").exists())
+
     def test_nobody_creates_engineers_through_api(self):
-        for creator in (self.doctor, self.engineer):
+        for creator in (self.doctor, self.manager):
             response = self.post_as(creator, new_user(UserRole.ENGINEER))
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username="new_user").exists())
@@ -85,6 +95,36 @@ class UserListTests(APITestCase):
         response = self.get_as(self.patient, "/api/auth/me/")
         self.assertEqual(response.data["role"], UserRole.PATIENT)
         self.assertEqual(response.data["username"], "patient")
+
+
+class ManagerFlagTests(APITestCase):
+    """is_manager: افتراضياً False، للمهندسين فقط، يُقرأ من /me ولا يُكتب عبر الـ API."""
+
+    def test_default_false_and_returned_by_me(self):
+        engineer = make_user("engineer", UserRole.ENGINEER)
+        manager = make_user("manager", UserRole.ENGINEER, is_manager=True)
+        for user, expected in ((engineer, False), (manager, True)):
+            client = APIClient()
+            client.force_authenticate(user)
+            self.assertIs(client.get("/api/auth/me/").data["is_manager"], expected)
+
+    def test_api_cannot_grant_manager(self):
+        manager = make_user("manager", UserRole.ENGINEER, is_manager=True)
+        client = APIClient()
+        client.force_authenticate(manager)
+        payload = {**new_user(UserRole.DOCTOR), "is_manager": True}
+        self.assertEqual(client.post(REGISTER, payload, format="json").status_code, status.HTTP_201_CREATED)
+        self.assertFalse(User.objects.get(username="new_user").is_manager)
+
+    def test_only_engineers_can_be_managers(self):
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError, transaction
+
+        doctor = User(username="doc", role=UserRole.DOCTOR, is_manager=True)
+        with self.assertRaises(ValidationError):
+            doctor.clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            make_user("doc2", UserRole.DOCTOR, is_manager=True)
 
 
 class InactiveAccountTests(APITestCase):

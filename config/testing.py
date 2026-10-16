@@ -7,6 +7,7 @@ chat. كل اختبار يبدأ من نفس "العالم":
     (بلا طبيب) ─ orphan_case (patient_3, بلا جهاز)
     device_free: جهاز غير مرتبط بأي حالة
     patient_4: مريض بلا حالة
+    engineer: مهندس عادي — manager: مهندس بصلاحية مدير (is_manager)
     no_role: superuser بدور فارغ '' (كما ينشئه createsuperuser)
 """
 
@@ -42,6 +43,7 @@ class CareWorldMixin:
         cls.patient_3 = make_user("patient_3", UserRole.PATIENT)
         cls.patient_4 = make_user("patient_4", UserRole.PATIENT)
         cls.engineer = make_user("engineer", UserRole.ENGINEER)
+        cls.manager = make_user("manager", UserRole.ENGINEER, is_manager=True)
         cls.no_role = User.objects.create_superuser("root", "root@example.com", PASSWORD)
 
         cls.device_1 = Device.objects.create(serial_number="SN-1")

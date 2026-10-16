@@ -57,8 +57,8 @@ class PatientCaseReadOnlyTests(CareWorldMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Case.objects.filter(pk=self.case_1.pk).exists())
 
-    def test_engineer_can_delete_case(self):
-        response = self.client_for(self.engineer).delete(case_url(self.orphan_case))
+    def test_manager_can_delete_case(self):
+        response = self.client_for(self.manager).delete(case_url(self.orphan_case))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
 
@@ -83,8 +83,8 @@ class CaseBusinessRuleTests(CareWorldMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_engineer_cannot_move_device_onto_case_when_linked_elsewhere(self):
-        response = self.client_for(self.engineer).patch(
+    def test_manager_cannot_move_device_onto_case_when_linked_elsewhere(self):
+        response = self.client_for(self.manager).patch(
             case_url(self.orphan_case), {"device": str(self.device_2.pk)}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -148,8 +148,8 @@ class CaseBusinessRuleTests(CareWorldMixin, APITestCase):
         self.case_1.refresh_from_db()
         self.assertEqual(self.case_1.doctor, self.doctor_a)
 
-    def test_engineer_can_assign_doctor(self):
-        response = self.client_for(self.engineer).patch(
+    def test_manager_can_assign_doctor(self):
+        response = self.client_for(self.manager).patch(
             case_url(self.orphan_case), {"doctor": self.doctor_b.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -174,7 +174,7 @@ class CaseBusinessRuleTests(CareWorldMixin, APITestCase):
         )
 
     def test_staff_cannot_move_case_to_another_patient(self):
-        for user in (self.doctor_a, self.engineer):
+        for user in (self.doctor_a, self.manager):
             response = self.client_for(user).patch(
                 case_url(self.case_1), {"patient": self.patient_4.pk}, format="json"
             )
@@ -278,7 +278,7 @@ class CaseConstraintTests(CareWorldMixin, APITestCase):
     def test_concurrent_active_case_returns_400_not_500(self):
         # نحاكي طلباً متزامناً تجاوز فحص الـ serializer: القيد يلتقطه
         with mock.patch.object(CaseSerializer, "validate", lambda self, attrs: attrs):
-            response = self.client_for(self.engineer).post(
+            response = self.client_for(self.manager).post(
                 CASES, {"patient": self.patient_1.pk, "diagnosis_type": "migraine"}, format="json"
             )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -286,7 +286,7 @@ class CaseConstraintTests(CareWorldMixin, APITestCase):
 
     def test_concurrent_device_link_returns_400_not_500(self):
         with mock.patch.object(CaseSerializer, "validate", lambda self, attrs: attrs):
-            response = self.client_for(self.engineer).post(
+            response = self.client_for(self.manager).post(
                 CASES,
                 {"patient": self.patient_4.pk, "diagnosis_type": "migraine", "device": str(self.device_1.pk)},
                 format="json",
@@ -464,3 +464,27 @@ class CaseDeviceDetailsTests(CareWorldMixin, APITestCase):
         self.assertEqual(data[self.case_1.pk]["clinic_name"], "Baghdad Clinic")
         self.assertIsNone(data[self.case_2.pk]["clinic_name"])
         self.assertIsNone(data[self.orphan_case.pk]["device_serial_number"])
+
+
+class ManagerOnlyCaseWriteTests(CareWorldMixin, APITestCase):
+    """إنشاء/تعديل/حذف الحالات عبر الـ API: الطبيب لحالاته، والمدير لكل الحالات،
+    والمهندس العادي قراءة فقط."""
+
+    def test_regular_engineer_reads_but_cannot_write(self):
+        client = self.client_for(self.engineer)
+        self.assertEqual(client.get(case_url(self.case_1)).status_code, status.HTTP_200_OK)
+        response = client.post(CASES, {"patient": self.patient_4.pk, "diagnosis_type": "migraine"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = client.patch(case_url(self.case_1), {"treatment_plan": "x"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(client.delete(case_url(self.orphan_case)).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Case.objects.filter(pk=self.orphan_case.pk).exists())
+        self.assertFalse(Case.objects.filter(patient=self.patient_4).exists())
+
+    def test_manager_creates_edits_and_deletes(self):
+        client = self.client_for(self.manager)
+        response = client.post(CASES, {"patient": self.patient_4.pk, "diagnosis_type": "migraine"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = client.patch(case_url(self.case_1), {"treatment_plan": "x"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(client.delete(case_url(self.orphan_case)).status_code, status.HTTP_204_NO_CONTENT)

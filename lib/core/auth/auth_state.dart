@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../network/api_client.dart';
 import '../notifications/fcm_service.dart';
+import '../permissions/user_role.dart';
 import 'auth_repository.dart';
 import 'token_storage.dart';
 import 'user_model.dart';
@@ -114,3 +115,10 @@ class AuthNotifier extends Notifier<AuthStatus> {
 final authStateProvider = NotifierProvider<AuthNotifier, AuthStatus>(
   AuthNotifier.new,
 );
+
+/// هل المستخدم الحالي مدير المهندسين؟ — لإخفاء الأزرار التي لا يملكها
+/// المهندس العادي (إضافة/تعديل العيادات وأنواع الأجهزة، القناة الطبية...).
+final isManagerProvider = Provider<bool>((ref) {
+  final auth = ref.watch(authStateProvider);
+  return auth is AuthAuthenticated && auth.user.role == UserRole.engineer && auth.user.isManager;
+});

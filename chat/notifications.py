@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def _recipients_for(message: ChatMessage):
     case = message.case
     if message.inquiry_type == InquiryType.TECHNICAL:
-        # نفس قاعدة حق الرد (engineer_can_reply): المهندس المسؤول عن عيادة
+        # نفس قاعدة صاحب المحادثة (engineer_owns_chat): المهندس المسؤول عن عيادة
         # الجهاز فقط. بلا مسؤول يستطيع أي مهندس الرد، فيُشعَر الجميع.
         engineer = responsible_engineer_of(case)
         if engineer:

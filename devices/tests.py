@@ -52,3 +52,72 @@ class DeviceListQueryCountTests(CareWorldMixin, APITestCase):
         with self.assertNumQueries(self.EXPECTED_QUERIES):
             response = client.get(DEVICES, {"available": "true"})
         self.assertEqual(response.data["count"], 6)
+
+
+class ManagerOnlyDeviceAdminTests(CareWorldMixin, APITestCase):
+    """المهندس العادي: يقرأ العيادات وأنواع الأجهزة، ويضيف ويعدّل الأجهزة.
+    المدير وحده: حذف الأجهزة، وإنشاء/تعديل/حذف العيادات وأنواع الأجهزة."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.clinic = Clinic.objects.create(name="Clinic")
+        cls.device_type = DeviceType.objects.create(name="Type A")
+
+    def test_regular_engineer_device_rights(self):
+        client = self.client_for(self.engineer)
+        response = client.post(DEVICES, {"serial_number": "SN-NEW"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = client.patch(f"{DEVICES}{self.device_free.pk}/", {"status": "maintenance"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = client.delete(f"{DEVICES}{self.device_free.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Device.objects.filter(pk=self.device_free.pk).exists())
+
+    def test_manager_deletes_device(self):
+        response = self.client_for(self.manager).delete(f"{DEVICES}{self.device_free.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def _write_all(self, client, url, item_url, create, edit):
+        return (
+            client.post(url, create, format="json").status_code,
+            client.patch(item_url, edit, format="json").status_code,
+            client.delete(item_url).status_code,
+        )
+
+    def test_regular_engineer_reads_but_cannot_change_clinics_or_types(self):
+        client = self.client_for(self.engineer)
+        for url, item, create in (
+            ("/api/clinics/", self.clinic, {"name": "New clinic"}),
+            ("/api/device-types/", self.device_type, {"name": "Type B"}),
+        ):
+            self.assertEqual(client.get(url).status_code, status.HTTP_200_OK)
+            codes = self._write_all(client, url, f"{url}{item.pk}/", create, {"name": "Renamed"})
+            self.assertEqual(codes, (403, 403, 403))
+        response = client.patch(
+            f"/api/clinics/{self.clinic.pk}/", {"responsible_engineer": self.engineer.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.clinic.refresh_from_db()
+        self.assertEqual((self.clinic.name, self.clinic.responsible_engineer), ("Clinic", None))
+        self.assertFalse(Clinic.objects.filter(name="New clinic").exists())
+        self.assertTrue(DeviceType.objects.filter(pk=self.device_type.pk, name="Type A").exists())
+
+    def test_manager_manages_clinics_and_types(self):
+        client = self.client_for(self.manager)
+        response = client.patch(
+            f"/api/clinics/{self.clinic.pk}/", {"responsible_engineer": self.engineer.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for url, item, create in (
+            ("/api/clinics/", self.clinic, {"name": "New clinic"}),
+            ("/api/device-types/", self.device_type, {"name": "Type B"}),
+        ):
+            codes = self._write_all(client, url, f"{url}{item.pk}/", create, {"name": "Renamed"})
+            self.assertEqual(codes, (201, 200, 204))
+
+    def test_doctor_has_no_access(self):
+        client = self.client_for(self.doctor_a)
+        for url in ("/api/clinics/", "/api/device-types/"):
+            self.assertEqual(client.get(url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(client.delete(f"{DEVICES}{self.device_free.pk}/").status_code, 403)

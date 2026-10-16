@@ -134,7 +134,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onPressed: () => setState(() => _selectedInquiryType = null),
               )
             : null,
-        actions: currentRole == UserRole.engineer
+        // اختيار القناة للمدير فقط: المهندس العادي لا يرى القناة الطبية
+        // (مريض ↔ طبيب)، فتبقى له القناة التقنية وحدها.
+        actions: currentRole == UserRole.engineer && ref.watch(isManagerProvider)
             ? [
                 PopupMenuButton<InquiryType>(
                   tooltip: 'اختيار قناة المحادثة',

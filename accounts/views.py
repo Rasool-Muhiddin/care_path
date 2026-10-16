@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import UserRole
-from .permissions import IsDoctorOrEngineer, IsEngineer
+from .permissions import IsDoctorOrEngineer, IsDoctorOrEngineerManager, IsEngineer
 from .serializers import (
     DoctorListSerializer,
     EngineerListSerializer,
@@ -19,13 +19,13 @@ User = get_user_model()
 class RegisterView(generics.CreateAPIView):
     """
     POST /api/auth/register/
-    إنشاء حساب مريض/طبيب. مقيَّد بمن سجّل دخوله كطبيب أو مهندس فقط —
+    إنشاء حساب مريض/طبيب. مقيَّد بمن سجّل دخوله كطبيب أو مدير المهندسين —
     لا يوجد تسجيل عام بدون مصادقة، حتى لا يستطيع أي شخص إنشاء حساب طبيب
     والوصول لبيانات المرضى. القيود حسب دور المنشئ داخل RegisterSerializer.
     """
 
     serializer_class = RegisterSerializer
-    permission_classes = [permissions.IsAuthenticated, IsDoctorOrEngineer]
+    permission_classes = [permissions.IsAuthenticated, IsDoctorOrEngineerManager]
 
 
 class MeView(APIView):

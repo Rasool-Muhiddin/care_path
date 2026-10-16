@@ -8,8 +8,8 @@ import 'glass_container.dart';
 
 String _two(int n) => n.toString().padLeft(2, '0');
 
-/// UI strings for [AttackList] — English for doctor/engineer, Arabic for
-/// the patient. Direction follows the ambient [Directionality].
+/// UI strings for [AttackList] (Arabic, for the patient). Direction
+/// follows the ambient [Directionality].
 class AttackListStrings {
   const AttackListStrings({
     required this.arabicDurations,
@@ -33,18 +33,6 @@ class AttackListStrings {
   final String showLess;
   final String delete;
 
-  static final en = AttackListStrings(
-    arabicDurations: false,
-    severity: (s) => 'Severity $s/10',
-    medication: 'Took medication',
-    noMedication: 'No medication',
-    approximate: 'approx.',
-    lateLogged: (d) => 'Logged ${d.inDays >= 1 ? '${d.inDays} d' : '${d.inHours} h'} later',
-    showAll: (n) => 'Show all $n attacks',
-    showLess: 'Show less',
-    delete: 'Delete',
-  );
-
   static final ar = AttackListStrings(
     arabicDurations: true,
     severity: (s) => 'الشدة $s/10',
@@ -60,8 +48,7 @@ class AttackListStrings {
 
 /// The attack log: newest first, one row per attack with date/time
 /// (Baghdad), duration, severity (migraine), medication, and badges for
-/// approximate time and late logging. Shared by the patient home screen
-/// and the doctor/engineer statistics screen.
+/// approximate time and late logging. Shown on the patient home screen.
 class AttackList extends StatefulWidget {
   const AttackList({
     super.key,

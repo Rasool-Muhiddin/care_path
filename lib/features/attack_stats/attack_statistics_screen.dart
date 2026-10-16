@@ -6,7 +6,6 @@ import '../../core/attacks/attack_repository.dart';
 import '../../core/attacks/attack_stats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
-import '../../core/widgets/attack_list.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/ltr_scope.dart';
 import '../../core/widgets/sessions_vs_attacks_chart.dart';
@@ -17,18 +16,30 @@ String _two(int n) => n.toString().padLeft(2, '0');
 String _date(DateTime d) => '${d.year}/${_two(d.month)}/${_two(d.day)}';
 
 class _Txt {
-  static const title = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600);
   static const label = TextStyle(color: Colors.white60, fontSize: 12.5);
-  static const value = TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600);
+  static const value = TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold);
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
+}
+
+/// The period the statistics screen covers. Defaults to [last3Months] so a
+/// case with years of data opens on recent, readable numbers.
+enum StatsPeriod {
+  last3Months('Last 3 months'),
+  thisYear('This year'),
+  allTime('All time'),
+  custom('Custom');
+
+  const StatsPeriod(this.label);
+  final String label;
 }
 
 /// Detailed attack statistics for one case — shared by the doctor and the
 /// engineer (English, LTR; the patient doesn't get this screen).
 ///
-/// "Baseline (before treatment)" and "During treatment" are separate
-/// sections and their numbers never mix: treatment starts on the Baghdad
-/// day of the first treatment session.
+/// Top to bottom: period selector, summary cards for that period, and the
+/// sessions-vs-attacks chart grouped weekly/monthly/yearly. Nothing here
+/// grows with the size of the history: the chart is capped at
+/// [maxChartPeriods] bars and there are no per-attack or per-period lists.
 class AttackStatisticsScreen extends ConsumerStatefulWidget {
   const AttackStatisticsScreen({
     super.key,
@@ -46,7 +57,13 @@ class AttackStatisticsScreen extends ConsumerStatefulWidget {
 }
 
 class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen> {
-  StatsGranularity _granularity = StatsGranularity.monthly;
+  StatsPeriod _period = StatsPeriod.last3Months;
+
+  /// Baghdad days [start, end) of a custom range; null until one is picked.
+  (DateTime, DateTime)? _customRange;
+
+  /// Null = follow [autoGranularity] for the current range.
+  StatsGranularity? _granularity;
 
   Future<void> _refresh() async {
     final id = widget.caseModel.id;
@@ -58,6 +75,58 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
       ref.read(caseAttacksProvider(id).future),
       ref.read(caseAttackConfirmationsProvider(id).future),
     ]);
+  }
+
+  /// Baghdad days [start, end) of the selected period.
+  (DateTime, DateTime) _rangeFor(AttackAnalysis a) {
+    final today = a.today;
+    final end = today.add(const Duration(days: 1));
+    final (start, rangeEnd) = switch (_period) {
+      StatsPeriod.last3Months => (_monthsBefore(today, 3), end),
+      StatsPeriod.thisYear => (DateTime.utc(today.year), end),
+      StatsPeriod.allTime => (a.caseStartDay, end),
+      StatsPeriod.custom => _customRange ?? (_monthsBefore(today, 3), end),
+    };
+    return (start.isBefore(rangeEnd) ? start : today, rangeEnd);
+  }
+
+  /// Same day [months] calendar months earlier, clamped to that month's
+  /// last day (May 31 -> Feb 28).
+  static DateTime _monthsBefore(DateTime day, int months) {
+    final firstOfMonth = DateTime.utc(day.year, day.month - months);
+    final lastDay = DateTime.utc(firstOfMonth.year, firstOfMonth.month + 1, 0).day;
+    return DateTime.utc(firstOfMonth.year, firstOfMonth.month, day.day > lastDay ? lastDay : day.day);
+  }
+
+  Future<void> _selectPeriod(StatsPeriod period, AttackAnalysis a) async {
+    if (period != StatsPeriod.custom) {
+      setState(() {
+        _period = period;
+        _granularity = null;
+      });
+      return;
+    }
+    // The picker works on local date-only values; Baghdad days are UTC dates.
+    DateTime local(DateTime d) => DateTime(d.year, d.month, d.day);
+    final (start, end) = _rangeFor(a);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: local(a.caseStartDay),
+      lastDate: local(a.today),
+      initialDateRange: DateTimeRange(
+        start: local(start.isBefore(a.caseStartDay) ? a.caseStartDay : start),
+        end: local(end.subtract(const Duration(days: 1))),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _period = StatsPeriod.custom;
+      _customRange = (
+        DateTime.utc(picked.start.year, picked.start.month, picked.start.day),
+        DateTime.utc(picked.end.year, picked.end.month, picked.end.day + 1),
+      );
+      _granularity = null;
+    });
   }
 
   @override
@@ -104,8 +173,16 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
 
   Widget _content(CaseModel c, AttackAnalysis analysis) {
     final isMigraine = c.diagnosisType == DiagnosisType.migraine;
-    final periods = analysis.treatmentPeriods(_granularity);
+    final (start, end) = _rangeFor(analysis);
+    final summary = analysis.summarize(start, end);
     final treatmentStart = analysis.treatmentStartDay;
+
+    // Only offer groupings that keep the chart readable for this range.
+    bool allowed(StatsGranularity g) =>
+        g == StatsGranularity.yearly || periodCountIn(start, end, g) <= maxChartPeriods;
+    final requested = _granularity ?? autoGranularity(start, end);
+    final granularity = allowed(requested) ? requested : StatsGranularity.yearly;
+    final periods = analysis.periods(start, end, granularity);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -113,218 +190,182 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
       children: [
         // Full patient name here (wraps) — the AppBar title is one line only.
         Text(c.patientName.isNotEmpty ? c.patientName : 'Patient #${c.patientId}', style: AppText.headline),
-        const SizedBox(height: 16),
-        // --- Baseline (before treatment) ---
-        SectionHeader(
-          icon: Icons.history_toggle_off,
-          color: AppAccent.caseC,
-          title: 'Baseline (before treatment)',
-          subtitleText: treatmentStart == null
-              ? 'No treatment session yet — every logged attack so far is baseline.'
-              : 'Up to the first treatment session on ${_date(treatmentStart)}.',
-        ),
-        const SizedBox(height: 10),
-        _BaselineCard(caseModel: c, logged: analysis.baseline(), isMigraine: isMigraine),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
-        // --- During treatment ---
-        SectionHeader(
-          icon: Icons.show_chart_outlined,
-          color: AppAccent.patient,
-          title: 'During treatment',
-          subtitleText: treatmentStart == null
-              ? 'Starts at the first treatment session.'
-              : 'Since ${_date(treatmentStart)} (first treatment session).',
-        ),
-        const SizedBox(height: 10),
-        if (treatmentStart == null)
-          const GlassContainer(
-            padding: EdgeInsets.all(14),
-            child: Text('No treatment sessions recorded yet.', style: _Txt.hint),
-          )
-        else ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SegmentedButton<StatsGranularity>(
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        // --- Period selector ---
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final p in StatsPeriod.values)
+              ChoiceChip(
+                label: Text(p.label),
+                selected: _period == p,
+                showCheckmark: false,
+                labelStyle: const TextStyle(color: Colors.white, fontSize: 13),
+                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                selectedColor: Colors.white.withValues(alpha: 0.22),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                avatar: p == StatsPeriod.custom
+                    ? const Icon(Icons.date_range_outlined, size: 16, color: Colors.white)
+                    : null,
+                onSelected: (_) => _selectPeriod(p, analysis),
               ),
-              segments: const [
-                ButtonSegment(value: StatsGranularity.weekly, label: Text('Weekly')),
-                ButtonSegment(value: StatsGranularity.monthly, label: Text('Monthly')),
-                ButtonSegment(value: StatsGranularity.yearly, label: Text('Yearly')),
-              ],
-              selected: {_granularity},
-              onSelectionChanged: (s) => setState(() => _granularity = s.first),
-            ),
-          ),
-          const SizedBox(height: 10),
-          GlassContainer(
-            padding: const EdgeInsets.all(12),
-            child: SessionsVsAttacksChart(
-              periods: periods,
-              granularity: _granularity,
-              baseline: baselineForGranularity(c.monthlyEpisodeCount, _granularity),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'A period with no logged attacks counts as a clean zero only when the patient '
-            'confirmed every past day of it ("no unlogged attacks").',
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${_date(start)} – ${_date(end.subtract(const Duration(days: 1)))}  ·  '
+          '${treatmentStart == null ? 'No treatment session yet' : 'Treatment started ${_date(treatmentStart)}'}',
+          style: _Txt.hint,
+        ),
+        const SizedBox(height: 16),
+
+        // --- Summary for the selected period ---
+        _SummaryGrid(summary: summary, isMigraine: isMigraine),
+        if (summary.pastDays > 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            'The patient confirmed "no unlogged attacks" for ${summary.confirmedDays} of '
+            '${summary.pastDays} past days in this period.',
             style: _Txt.hint,
           ),
-          const SizedBox(height: 10),
-          for (final p in periods.reversed) ...[
-            _PeriodCard(period: p, granularity: _granularity, isMigraine: isMigraine),
-            const SizedBox(height: 8),
-          ],
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
-        // --- Full attack log ---
-        SectionHeader(
-          icon: Icons.list_alt_outlined,
-          color: AppAccent.unlinked,
-          title: 'Attack log',
-          subtitleText: '${analysis.attacksNewestFirst.length} attacks logged in total',
+        // --- Sessions vs attacks chart ---
+        const SectionHeader(
+          icon: Icons.bar_chart_outlined,
+          color: AppAccent.patient,
+          title: 'Sessions vs attacks',
         ),
         const SizedBox(height: 10),
-        if (analysis.attacksNewestFirst.isEmpty)
-          const GlassContainer(
-            padding: EdgeInsets.all(14),
-            child: Text('The patient has not logged any attacks yet.', style: _Txt.hint),
-          )
-        else
-          AttackList(
-            attacks: analysis.attacksNewestFirst,
-            strings: AttackListStrings.en,
-            initialLimit: 20,
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedButton<StatsGranularity>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            segments: [
+              ButtonSegment(
+                value: StatsGranularity.weekly,
+                label: const Text('Weekly'),
+                enabled: allowed(StatsGranularity.weekly),
+              ),
+              ButtonSegment(
+                value: StatsGranularity.monthly,
+                label: const Text('Monthly'),
+                enabled: allowed(StatsGranularity.monthly),
+              ),
+              const ButtonSegment(value: StatsGranularity.yearly, label: Text('Yearly')),
+            ],
+            selected: {granularity},
+            onSelectionChanged: (s) => setState(() => _granularity = s.first),
           ),
+        ),
+        const SizedBox(height: 10),
+        GlassContainer(
+          padding: const EdgeInsets.all(12),
+          child: SessionsVsAttacksChart(periods: periods, granularity: granularity),
+        ),
       ],
     );
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row(this.label, this.value);
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 130, child: Text(label, style: _Txt.label)),
-            Expanded(child: Text(value, style: _Txt.value)),
-          ],
-        ),
-      );
-}
-
-/// The lines shared by baseline and period cards: duration range/average,
-/// severity, medication use, late/approximate counts.
-List<Widget> _attackDetailRows(PeriodStats p, bool isMigraine) {
-  if (p.attackCount == 0) return const [];
-  return [
-    _Row('Average attack duration', formatAttackDuration(p.avgDurationSeconds!)),
-    _Row(
-      'Shortest – longest',
-      '${formatAttackDuration(p.minDurationSeconds!)} – ${formatAttackDuration(p.maxDurationSeconds!)}',
-    ),
-    if (isMigraine && p.avgSeverity != null) _Row('Average severity', '${p.avgSeverity!.toStringAsFixed(1)} / 10'),
-    _Row(
-      'With medication',
-      '${p.medicatedCount} of ${p.attackCount} (${(p.medicatedShare! * 100).round()}%)',
-    ),
-    if (p.lateCount > 0) _Row('Logged late', '${p.lateCount} (over 24 h after the attack)'),
-    if (p.approximateCount > 0) _Row('Approximate time', '${p.approximateCount}'),
-  ];
-}
-
-class _BaselineCard extends StatelessWidget {
-  const _BaselineCard({required this.caseModel, required this.logged, required this.isMigraine});
-  final CaseModel caseModel;
-  final PeriodStats logged;
+/// Compact figures for the selected period, two per row.
+class _SummaryGrid extends StatelessWidget {
+  const _SummaryGrid({required this.summary, required this.isMigraine});
+  final PeriodStats summary;
   final bool isMigraine;
 
   @override
   Widget build(BuildContext context) {
-    final c = caseModel;
-    return GlassContainer(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Entered by the doctor', style: _Txt.title),
-          const SizedBox(height: 6),
-          _Row('Average attacks / month', c.monthlyEpisodeCount?.toString() ?? '—'),
-          _Row(
-            'Average attack duration',
-            c.episodeDurationMinutes != null ? formatAttackDuration(c.episodeDurationMinutes! * 60) : '—',
-          ),
-          const SizedBox(height: 12),
-          const Text('Logged by the patient before treatment', style: _Txt.title),
-          const SizedBox(height: 6),
-          _Row('Attacks', '${logged.attackCount}'),
-          ..._attackDetailRows(logged, isMigraine),
-        ],
+    final s = summary;
+    final hasAttacks = s.attackCount > 0;
+    final tiles = [
+      _SummaryTile(icon: Icons.bolt_outlined, color: AppAccent.unlinked, label: 'Attacks', value: '${s.attackCount}'),
+      _SummaryTile(
+        icon: Icons.event_note_outlined,
+        color: AppAccent.patient,
+        label: 'Sessions',
+        value: '${s.sessions}',
       ),
+      _SummaryTile(
+        icon: Icons.timer_outlined,
+        color: AppAccent.doctor,
+        label: 'Average duration',
+        value: hasAttacks ? formatAttackDuration(s.avgDurationSeconds!) : '—',
+        detail: hasAttacks
+            ? 'Range ${formatAttackDuration(s.minDurationSeconds!)} – ${formatAttackDuration(s.maxDurationSeconds!)}'
+            : null,
+      ),
+      if (isMigraine)
+        _SummaryTile(
+          icon: Icons.speed_outlined,
+          color: AppAccent.caseC,
+          label: 'Average severity',
+          value: s.avgSeverity != null ? '${s.avgSeverity!.toStringAsFixed(1)} / 10' : '—',
+        ),
+      _SummaryTile(
+        icon: Icons.medication_outlined,
+        color: AppAccent.device,
+        label: 'With medication',
+        value: hasAttacks ? '${(s.medicatedShare! * 100).round()}%' : '—',
+        detail: hasAttacks ? '${s.medicatedCount} of ${s.attackCount} attacks' : null,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 10.0;
+        final width = (constraints.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [for (final t in tiles) SizedBox(width: width, child: t)],
+        );
+      },
     );
   }
 }
 
-class _PeriodCard extends StatelessWidget {
-  const _PeriodCard({required this.period, required this.granularity, required this.isMigraine});
-  final PeriodStats period;
-  final StatsGranularity granularity;
-  final bool isMigraine;
-
-  static String _title(PeriodStats p, StatsGranularity g) => switch (g) {
-        StatsGranularity.weekly =>
-          'Week of ${_date(p.start)} – ${_date(p.end.subtract(const Duration(days: 1)))}',
-        StatsGranularity.monthly => SessionsVsAttacksChart.periodLabel(p.start, g),
-        StatsGranularity.yearly => '${p.start.year}',
-      };
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    this.detail,
+  });
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
-    final p = period;
-    final (statusLabel, statusColor) = switch (p.confirmation) {
-      ConfirmationStatus.confirmed => ('Confirmed', AppAccent.patient),
-      ConfirmationStatus.partial => ('Partly confirmed (${p.confirmedDays}/${p.pastDays} days)', AppAccent.caseC),
-      ConfirmationStatus.unconfirmed => ('Unconfirmed', Colors.white54),
-      ConfirmationStatus.inProgress => ('In progress', Colors.white54),
-    };
-    final attacksText = p.isUnconfirmedZero
-        ? '0 attacks logged (unconfirmed)'
-        : '${p.attackCount} ${p.attackCount == 1 ? 'attack' : 'attacks'}';
-
     return GlassContainer(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: Text(_title(p, granularity), style: _Txt.title)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.7)),
-                ),
-                child: Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 11)),
-              ),
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(child: Text(label, style: _Txt.label)),
             ],
           ),
           const SizedBox(height: 6),
-          _Row('Attacks', attacksText),
-          _Row('Sessions', '${p.sessions}'),
-          ..._attackDetailRows(p, isMigraine),
+          Text(value, style: _Txt.value),
+          if (detail != null) ...[
+            const SizedBox(height: 2),
+            Text(detail!, style: _Txt.hint),
+          ],
         ],
       ),
     );

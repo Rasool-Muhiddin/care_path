@@ -7,11 +7,33 @@ import 'attack_models.dart';
 /// per case per year). All grouping is by Baghdad calendar day, the same
 /// day boundary as the session calendar and the backend.
 ///
-/// "Baseline (before treatment)" and "During treatment" never mix: the
-/// treatment period starts on the Baghdad day of the first treatment
-/// session; attacks logged before that day belong to the baseline.
+/// Everything is computed for a selected day range (see [AttackAnalysis.summarize]
+/// and [AttackAnalysis.periods]); the before-treatment baseline the doctor
+/// entered is shown in the case summary, not here.
 
 enum StatsGranularity { weekly, monthly, yearly }
+
+/// Upper bound for chart bars — a granularity that would need more periods
+/// than this for the selected range isn't offered.
+const int maxChartPeriods = 60;
+
+/// Number of periods of [g] that overlap the Baghdad-day range [start, end).
+int periodCountIn(DateTime start, DateTime end, StatsGranularity g) {
+  var n = 0;
+  for (var p = periodStartOf(start, g); p.isBefore(end); p = nextPeriodStart(p, g)) {
+    n++;
+  }
+  return n;
+}
+
+/// A sensible default grouping for a range: weekly up to ~4 months,
+/// monthly up to 3 years, yearly beyond that.
+StatsGranularity autoGranularity(DateTime start, DateTime end) {
+  final days = end.difference(start).inDays;
+  if (days <= 120) return StatsGranularity.weekly;
+  if (days <= 3 * 366) return StatsGranularity.monthly;
+  return StatsGranularity.yearly;
+}
 
 DateTime periodStartOf(DateTime day, StatsGranularity g) => switch (g) {
       StatsGranularity.weekly => saturdayWeekStart(day),
@@ -24,16 +46,6 @@ DateTime nextPeriodStart(DateTime start, StatsGranularity g) => switch (g) {
       StatsGranularity.monthly => DateTime.utc(start.year, start.month + 1),
       StatsGranularity.yearly => DateTime.utc(start.year + 1),
     };
-
-/// Whether the patient confirmed they had no unlogged attacks over a
-/// period's past days.
-enum ConfirmationStatus {
-  /// No fully past day in the period yet (e.g. the current week's first day).
-  inProgress,
-  confirmed,
-  partial,
-  unconfirmed,
-}
 
 class PeriodStats {
   PeriodStats._({
@@ -51,7 +63,7 @@ class PeriodStats {
   final int sessions;
   final List<AttackEventModel> attacks;
 
-  /// Days of the period (inside the analysed range) that are fully past.
+  /// Days of the period (inside the selected range) that are fully past.
   final int pastDays;
 
   /// Of [pastDays], how many are covered by a "no unlogged attacks" confirmation.
@@ -75,19 +87,6 @@ class PeriodStats {
 
   int get medicatedCount => attacks.where((a) => a.tookMedication).length;
   double? get medicatedShare => attacks.isEmpty ? null : medicatedCount / attacks.length;
-  int get lateCount => attacks.where((a) => a.isLateLogged).length;
-  int get approximateCount => attacks.where((a) => a.timeIsApproximate).length;
-
-  ConfirmationStatus get confirmation {
-    if (pastDays == 0) return ConfirmationStatus.inProgress;
-    if (confirmedDays >= pastDays) return ConfirmationStatus.confirmed;
-    if (confirmedDays == 0) return ConfirmationStatus.unconfirmed;
-    return ConfirmationStatus.partial;
-  }
-
-  /// Zero attacks that the patient hasn't confirmed — must not be shown
-  /// as a clean zero.
-  bool get isUnconfirmedZero => attackCount == 0 && confirmation != ConfirmationStatus.confirmed;
 }
 
 class AttackAnalysis {
@@ -100,13 +99,14 @@ class AttackAnalysis {
   })  : today = today ?? baghdadToday(),
         _sessionDays = sessions.map((s) => baghdadDayOf(s.sessionDate)).toList(),
         _attacks = [...attacks]..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)) {
+    treatmentStartDay = _sessionDays.isEmpty ? null : _sessionDays.reduce((a, b) => a.isBefore(b) ? a : b);
     var start = baghdadDayOf(caseCreatedAt);
     if (_attacks.isNotEmpty) {
       final firstAttackDay = baghdadDayOf(_attacks.first.occurredAt);
       if (firstAttackDay.isBefore(start)) start = firstAttackDay;
     }
+    if (treatmentStartDay != null && treatmentStartDay!.isBefore(start)) start = treatmentStartDay!;
     caseStartDay = start;
-    treatmentStartDay = _sessionDays.isEmpty ? null : _sessionDays.reduce((a, b) => a.isBefore(b) ? a : b);
     for (final c in confirmations) {
       final day = baghdadDayOf(c.confirmedAt);
       for (var i = 1; i <= AttackLogConfirmationModel.coveredDays; i++) {
@@ -117,6 +117,9 @@ class AttackAnalysis {
 
   /// Today's Baghdad day (injectable for tests).
   final DateTime today;
+
+  /// Earliest day with any data (case registration, first attack or first
+  /// session) — the start of "All time".
   late final DateTime caseStartDay;
 
   /// Baghdad day of the first treatment session; null = treatment not started.
@@ -126,23 +129,19 @@ class AttackAnalysis {
   final List<AttackEventModel> _attacks;
   final Set<DateTime> _coveredDays = {};
 
-  List<AttackEventModel> get attacksNewestFirst => _attacks.reversed.toList();
+  /// Totals for the Baghdad-day range [start, end).
+  PeriodStats summarize(DateTime start, DateTime end) => _summarize(start, end);
 
-  /// Everything before the treatment period (all of it if there's no
-  /// session yet).
-  PeriodStats baseline() =>
-      _summarize(caseStartDay, treatmentStartDay ?? today.add(const Duration(days: 1)));
-
-  /// During-treatment periods from the first session up to today, oldest
-  /// first, including periods with zero attacks. Empty before treatment.
-  List<PeriodStats> treatmentPeriods(StatsGranularity g) {
-    final start = treatmentStartDay;
-    if (start == null) return const [];
-    final periods = <PeriodStats>[];
-    for (var p = periodStartOf(start, g); !p.isAfter(today); p = nextPeriodStart(p, g)) {
-      periods.add(_summarize(p, nextPeriodStart(p, g), rangeStart: start));
+  /// The [g] periods overlapping [start, end), oldest first, including
+  /// periods with zero attacks and never past today. Each period's numbers
+  /// only count days inside the range (a range starting mid-month gives a
+  /// partial first month).
+  List<PeriodStats> periods(DateTime start, DateTime end, StatsGranularity g) {
+    final out = <PeriodStats>[];
+    for (var p = periodStartOf(start, g); p.isBefore(end) && !p.isAfter(today); p = nextPeriodStart(p, g)) {
+      out.add(_summarize(p, nextPeriodStart(p, g), rangeStart: start, rangeEnd: end));
     }
-    return periods;
+    return out;
   }
 
   /// A calendar month (any phase) — for the summary card's
@@ -152,13 +151,14 @@ class AttackAnalysis {
     return _summarize(start, DateTime.utc(start.year, start.month + 1));
   }
 
-  PeriodStats _summarize(DateTime start, DateTime end, {DateTime? rangeStart}) {
+  PeriodStats _summarize(DateTime start, DateTime end, {DateTime? rangeStart, DateTime? rangeEnd}) {
     final from = rangeStart != null && rangeStart.isAfter(start) ? rangeStart : start;
-    bool inRange(DateTime day) => !day.isBefore(from) && day.isBefore(end);
+    final to = rangeEnd != null && rangeEnd.isBefore(end) ? rangeEnd : end;
+    bool inRange(DateTime day) => !day.isBefore(from) && day.isBefore(to);
 
     var pastDays = 0;
     var confirmedDays = 0;
-    for (var d = from; d.isBefore(end) && d.isBefore(today); d = d.add(const Duration(days: 1))) {
+    for (var d = from; d.isBefore(to) && d.isBefore(today); d = d.add(const Duration(days: 1))) {
       pastDays++;
       if (_coveredDays.contains(d)) confirmedDays++;
     }
@@ -172,17 +172,6 @@ class AttackAnalysis {
       confirmedDays: confirmedDays,
     );
   }
-}
-
-/// The doctor's "attacks per month before treatment" baseline, scaled to
-/// a period length so it can be drawn as a reference line on any view.
-double? baselineForGranularity(int? monthlyAttacks, StatsGranularity g) {
-  if (monthlyAttacks == null) return null;
-  return switch (g) {
-    StatsGranularity.weekly => monthlyAttacks * 7 / 30.44,
-    StatsGranularity.monthly => monthlyAttacks.toDouble(),
-    StatsGranularity.yearly => monthlyAttacks * 12.0,
-  };
 }
 
 /// "3 h 20 min", "1 min 45 s", "45 s" (English) or the Arabic equivalent.

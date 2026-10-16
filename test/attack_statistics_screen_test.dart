@@ -60,7 +60,7 @@ final _testSessionsProvider = FutureProvider.autoDispose<List<SessionModel>>((re
 Widget _app(Widget child) => ProviderScope(
       overrides: [
         caseAttacksProvider(7).overrideWith((ref) async => [
-              _attack(1, 50), // before the first session -> baseline
+              _attack(1, 120), // outside the default 3-month window
               _attack(2, 2, severity: 4, medication: true),
               _attack(3, 1, severity: 8),
             ]),
@@ -70,7 +70,7 @@ Widget _app(Widget child) => ProviderScope(
     );
 
 void main() {
-  testWidgets('statistics screen separates baseline from treatment and switches to yearly', (tester) async {
+  testWidgets('statistics screen defaults to the last 3 months and has no baseline or lists', (tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -80,20 +80,18 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Baseline (before treatment)'), findsWidgets); // section + chart legend
-    expect(find.text('During treatment'), findsOneWidget);
-    expect(find.text('Attack log'), findsOneWidget);
-    expect(find.text('3 attacks logged in total'), findsOneWidget);
+    // Last 3 months: only the 2 recent attacks.
+    expect(find.text('Last 3 months'), findsOneWidget);
+    expect(find.text('Attacks'), findsWidgets);
+    expect(find.text('Sessions vs attacks'), findsOneWidget);
+    expect(find.text('1 of 2 attacks'), findsOneWidget);
+    expect(find.text('6.0 / 10'), findsOneWidget);
+    expect(find.textContaining('Baseline'), findsNothing);
+    expect(find.text('Attack log'), findsNothing);
 
-    await tester.tap(find.text('Yearly'));
+    await tester.tap(find.text('All time'));
     await tester.pumpAndSettle();
-    // Treatment-period years only contain the 2 attacks after the first session
-    // (skipped on Jan 1-2, when those two attacks fall in different years).
-    if (_daysAgo(2).year == _today.year) {
-      expect(find.text('2 attacks'), findsWidgets);
-      expect(find.text('1 of 2 (50%)'), findsWidgets);
-      expect(find.text('6.0 / 10'), findsWidgets);
-    }
+    expect(find.text('1 of 3 attacks'), findsOneWidget);
   });
 
   testWidgets('statistics screen lays out at phone size without overflow', (tester) async {
@@ -105,8 +103,16 @@ void main() {
       AttackStatisticsScreen(caseModel: _case, sessionsProvider: _testSessionsProvider),
     ));
     await tester.pumpAndSettle();
-    for (final view in ['Weekly', 'Monthly', 'Yearly']) {
-      await tester.tap(find.text(view));
+    for (final period in ['This year', 'All time', 'Last 3 months']) {
+      await tester.tap(find.text(period));
+      await tester.pumpAndSettle();
+      for (final view in ['Weekly', 'Monthly', 'Yearly']) {
+        await tester.ensureVisible(find.text(view));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(view), warnIfMissed: false); // disabled segments ignore the tap
+        await tester.pumpAndSettle();
+      }
+      await tester.drag(find.byType(ListView).first, const Offset(0, 3000));
       await tester.pumpAndSettle();
     }
     await tester.drag(find.byType(ListView).first, const Offset(0, -3000));

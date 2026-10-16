@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/time/baghdad_time.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
+import '../../../core/widgets/session_calendar.dart';
 import '../../attack_stats/attack_statistics_screen.dart';
 import '../../case_summary/case_summary_section.dart';
 import '../../doctor/models/case_model.dart';
@@ -33,7 +34,7 @@ class _Txt {
 }
 
 /// صفحة تفاصيل مريض عند المهندس (للقراءة فقط) — تُفتح بالضغط على المريض
-/// في لوحة المتابعة، وتعرض ملخص حالته والشارت (جلسات مقابل نوبات).
+/// في لوحة المتابعة، وتعرض ملخص حالته وتقويم أيام الجلسات وملخص النوبات.
 class EngineerPatientDetailsScreen extends ConsumerWidget {
   const EngineerPatientDetailsScreen({super.key, required this.caseModel});
 
@@ -51,6 +52,7 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = caseModel;
+    final sessionsAsync = ref.watch(engineerCaseSessionsProvider(c.id));
 
     return LtrScope(
       child: Scaffold(
@@ -110,12 +112,36 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                     sessionsProvider: engineerCaseSessionsProvider(c.id),
                   ),
                   const SizedBox(height: 28),
+                  _SectionHeader(
+                    icon: Icons.history_rounded,
+                    accent: _Accent.sessions,
+                    title: 'Session History',
+                    subtitle: sessionsAsync.hasValue ? '${sessionsAsync.value!.length} sessions logged' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  sessionsAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                    ),
+                    error: (e, _) => GlassContainer(
+                      padding: const EdgeInsets.all(14),
+                      child: Text('Failed to load sessions: $e', style: AppText.error),
+                    ),
+                    data: (sessions) => sessions.isEmpty
+                        ? const GlassContainer(
+                            padding: EdgeInsets.all(14),
+                            child: Text('No sessions logged yet for this case.', style: _Txt.sectionSubtitle),
+                          )
+                        : SessionCalendar(sessions: sessions, strings: SessionCalendarStrings.en),
+                  ),
+                  const SizedBox(height: 28),
                   const _SectionHeader(
                     icon: Icons.bolt_rounded,
                     accent: _Accent.chart,
                     title: 'Attacks',
                     subtitle: 'Attacks logged by the patient. The detailed statistics compare them '
-                        'with sessions and with the before-treatment baseline.',
+                        'with sessions over any period.',
                   ),
                   const SizedBox(height: 10),
                   AttackSummaryCard(

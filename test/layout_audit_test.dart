@@ -304,8 +304,22 @@ void main() {
     for (final g in ['Weekly', 'Monthly', 'Yearly']) {
       testWidgets('attack statistics — $g', (t) => _audit(t, 'attack statistics $g',
           AttackStatisticsScreen(caseModel: migraine, sessionsProvider: doctor.caseSessionsProvider(7)),
-          _common(UserRole.doctor, migraine), interact: (t) => t.tap(find.text(g))));
+          _common(UserRole.doctor, migraine), interact: (t) async {
+            await t.ensureVisible(find.text(g));
+            await t.pumpAndSettle();
+            await t.tap(find.text(g));
+          }));
     }
+    testWidgets('attack statistics — all time', (t) => _audit(t, 'attack statistics all time',
+        AttackStatisticsScreen(caseModel: migraine, sessionsProvider: doctor.caseSessionsProvider(7)),
+        _common(UserRole.doctor, migraine), interact: (t) => t.tap(find.text('All time'))));
+    testWidgets('case details — edit case sheet', (t) => _audit(t, 'doctor edit case sheet',
+        CaseDetailsScreen(caseModel: migraine), _common(UserRole.doctor, migraine),
+        interact: (t) async {
+          await t.tap(find.byTooltip('Edit case'));
+          await t.pumpAndSettle();
+          expect(find.text('Save Changes'), findsOneWidget, reason: 'edit sheet did not open');
+        }));
   });
 
   group('engineer', () {

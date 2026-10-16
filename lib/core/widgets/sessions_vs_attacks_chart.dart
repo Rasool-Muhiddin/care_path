@@ -4,27 +4,22 @@ import 'package:flutter/material.dart';
 import '../attacks/attack_stats.dart';
 
 /// Grouped bar chart comparing sessions done vs attacks logged per period
-/// (weekly / monthly / yearly — chosen by the parent so the stats table
-/// next to it follows the same periods). Attack counts come from the
-/// patient's individual attack records (AttackEvent). An optional dashed
-/// line marks the doctor's before-treatment baseline, scaled to the
-/// period length (see baselineForGranularity).
+/// (weekly / monthly / yearly — chosen by the parent, which caps the
+/// number of periods at [maxChartPeriods]). Attack counts come from the
+/// patient's individual attack records (AttackEvent).
 class SessionsVsAttacksChart extends StatelessWidget {
   const SessionsVsAttacksChart({
     super.key,
     required this.periods,
     required this.granularity,
-    this.baseline,
   });
 
   /// Oldest first.
   final List<PeriodStats> periods;
   final StatsGranularity granularity;
-  final double? baseline;
 
   /// لون بار الجلسات (رصاصي فاتح مائل للأبيض) — يُستخدم بالبار والـ legend
   static const Color _sessionsColor = Color(0xFFD9DCE1);
-  static const Color _baselineColor = Color(0xFFFBBF24);
 
   /// عرض كل مجموعة أعمدة (جلسات + نوبات) — إذا عدد المجموعات كبير
   /// (مثلاً 5 شهور بالأسبوعي) الشارت يصير قابل للتمرير أفقياً.
@@ -43,7 +38,7 @@ class SessionsVsAttacksChart extends StatelessWidget {
     final attackColor = Theme.of(context).colorScheme.error;
 
     // maxY رقم صحيح دائماً (حتى ما يطلع 8.2 ويتداخل مع أرقام المحور)
-    var highest = baseline ?? 0;
+    var highest = 0.0;
     for (final p in periods) {
       if (p.sessions > highest) highest = p.sessions.toDouble();
       if (p.attackCount > highest) highest = p.attackCount.toDouble();
@@ -59,7 +54,6 @@ class SessionsVsAttacksChart extends StatelessWidget {
           children: [
             const _LegendDot(color: _sessionsColor, label: 'Sessions'),
             _LegendDot(color: attackColor, label: 'Attacks'),
-            if (baseline != null) const _LegendDot(color: _baselineColor, label: 'Baseline average (before treatment)'),
           ],
         ),
         const SizedBox(height: 12),
@@ -90,17 +84,6 @@ class SessionsVsAttacksChart extends StatelessWidget {
                       alignment: BarChartAlignment.spaceAround,
                       gridData: const FlGridData(show: true, drawVerticalLine: false),
                       borderData: FlBorderData(show: false),
-                      extraLinesData: ExtraLinesData(
-                        horizontalLines: [
-                          if (baseline != null)
-                            HorizontalLine(
-                              y: baseline!,
-                              color: _baselineColor,
-                              strokeWidth: 1.5,
-                              dashArray: [6, 4],
-                            ),
-                        ],
-                      ),
                       titlesData: FlTitlesData(
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(

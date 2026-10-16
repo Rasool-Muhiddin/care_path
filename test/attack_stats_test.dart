@@ -26,25 +26,25 @@ AttackEventModel attack(
   int seconds = 3600,
   int? severity,
   bool medication = false,
-  bool approximate = false,
-  DateTime? loggedAt,
 }) =>
     AttackEventModel(
       id: ++_id,
       caseId: 1,
       occurredAt: when,
-      timeIsApproximate: approximate,
+      timeIsApproximate: false,
       durationSeconds: seconds,
       severity: severity,
       tookMedication: medication,
-      createdAt: loggedAt ?? when.add(const Duration(hours: 1)),
+      createdAt: when.add(const Duration(hours: 1)),
     );
 
 AttackLogConfirmationModel confirmation(DateTime when) =>
     AttackLogConfirmationModel(id: ++_id, caseId: 1, hadUnlogged: false, confirmedAt: when);
 
+final tomorrow = today.add(const Duration(days: 1));
+
 void main() {
-  test('baseline and treatment never mix; treatment starts at first session', () {
+  test('range summary counts attacks and sessions of every phase inside the range', () {
     final a = AttackAnalysis(
       caseCreatedAt: at(9, 1),
       sessions: [session(at(9, 20)), session(at(10, 1))],
@@ -53,52 +53,49 @@ void main() {
       today: today,
     );
     expect(a.treatmentStartDay, DateTime.utc(2026, 9, 20));
-    expect(a.baseline().attackCount, 2);
+    expect(a.caseStartDay, DateTime.utc(2026, 9, 1));
+    expect(a.summarize(a.caseStartDay, tomorrow).attackCount, 4);
+    final fromSept19 = a.summarize(DateTime.utc(2026, 9, 19), DateTime.utc(2026, 10, 2));
+    expect(fromSept19.attackCount, 2); // 9-19 and 9-20; 10-02 is the (exclusive) end
+    expect(fromSept19.sessions, 2);
+  });
 
-    final months = a.treatmentPeriods(StatsGranularity.monthly);
+  test('periods are clipped to the range and never go past today', () {
+    final a = AttackAnalysis(
+      caseCreatedAt: at(9, 1),
+      sessions: [session(at(9, 20)), session(at(10, 1))],
+      attacks: [attack(at(9, 5)), attack(at(9, 19)), attack(at(9, 20)), attack(at(10, 2))],
+      confirmations: const [],
+      today: today,
+    );
+    final months = a.periods(DateTime.utc(2026, 9, 20), DateTime.utc(2027, 1), StatsGranularity.monthly);
     expect(months.map((p) => p.start), [DateTime.utc(2026, 9), DateTime.utc(2026, 10)]);
-    // September during treatment = 20th onwards only.
+    // September = 20th onwards only.
     expect(months[0].attackCount, 1);
     expect(months[0].sessions, 1);
     expect(months[1].attackCount, 1);
   });
 
-  test('no session yet: everything is baseline, no treatment periods', () {
-    final a = AttackAnalysis(
-      caseCreatedAt: at(10, 1),
-      sessions: const [],
-      attacks: [attack(at(10, 3)), attack(at(10, 13))],
-      confirmations: const [],
-      today: today,
-    );
-    expect(a.treatmentStartDay, isNull);
-    expect(a.baseline().attackCount, 2);
-    expect(a.treatmentPeriods(StatsGranularity.weekly), isEmpty);
-  });
-
-  test('per-period duration, severity, medication, late and approximate stats', () {
+  test('summary duration, severity and medication stats', () {
     final a = AttackAnalysis(
       caseCreatedAt: at(10, 1),
       sessions: [session(at(10, 1))],
       attacks: [
         attack(at(10, 5), seconds: 2 * 3600, severity: 4, medication: true),
-        attack(at(10, 6), seconds: 5 * 3600, severity: 8, approximate: true,
-            loggedAt: at(10, 8)),
+        attack(at(10, 6), seconds: 5 * 3600, severity: 8),
         attack(at(10, 7), seconds: 3 * 3600, severity: 6),
       ],
       confirmations: const [],
       today: today,
     );
-    final october = a.treatmentPeriods(StatsGranularity.monthly).single;
-    expect(october.attackCount, 3);
-    expect(october.minDurationSeconds, 2 * 3600);
-    expect(october.maxDurationSeconds, 5 * 3600);
-    expect(october.avgDurationSeconds, 10 * 3600 / 3);
-    expect(october.avgSeverity, 6);
-    expect(october.medicatedCount, 1);
-    expect(october.medicatedShare, closeTo(1 / 3, 1e-9));
-    expect(october.lateCount, 1);
-    expect(october.approximateCount, 1);
+    final s = a.summarize(DateTime.utc(2026, 10), tomorrow);
+    expect(s.attackCount, 3);
+    expect(s.minDurationSeconds, 2 * 3600);
+    expect(s.maxDurationSeconds, 5 * 3600);
+    expect(s.avgDurationSeconds, 10 * 3600 / 3);
+    expect(s.avgSeverity, 6);
+    expect(s.medicatedCount, 1);
+    expect(s.medicatedShare, closeTo(1 / 3, 1e-9));
   });
 
   test('groups by Baghdad day even when UTC is the previous day', () {
@@ -110,35 +107,27 @@ void main() {
       confirmations: const [],
       today: today,
     );
-    final weeks = a.treatmentPeriods(StatsGranularity.weekly);
+    final weeks = a.periods(DateTime.utc(2026, 10), tomorrow, StatsGranularity.weekly);
     expect(weeks.last.start, DateTime.utc(2026, 10, 10));
     expect(weeks.last.attackCount, 1);
     expect(weeks[weeks.length - 2].attackCount, 0);
   });
 
-  test('a zero week is unconfirmed unless covered by a confirmation', () {
+  test('confirmed days count only past days covered by a confirmation', () {
     final a = AttackAnalysis(
       caseCreatedAt: at(9, 1),
       sessions: [session(at(9, 1))],
       attacks: const [],
-      // Confirmed on Sat 10-10: covers Sat 10-03 .. Fri 10-09 (the whole previous week).
+      // Confirmed on Sat 10-10: covers Sat 10-03 .. Fri 10-09.
       confirmations: [confirmation(at(10, 10, 9))],
       today: today,
     );
-    final weeks = a.treatmentPeriods(StatsGranularity.weekly);
-    final previous = weeks.firstWhere((w) => w.start == DateTime.utc(2026, 10, 3));
-    final older = weeks.firstWhere((w) => w.start == DateTime.utc(2026, 9, 26));
-    final current = weeks.last; // Sat 10-10 .. today (Wed): 4 past days, none covered
-
-    expect(previous.confirmation, ConfirmationStatus.confirmed);
-    expect(previous.isUnconfirmedZero, isFalse);
-    expect(older.confirmation, ConfirmationStatus.unconfirmed);
-    expect(older.isUnconfirmedZero, isTrue);
-    expect(current.pastDays, 4);
-    expect(current.confirmation, ConfirmationStatus.unconfirmed);
+    final s = a.summarize(DateTime.utc(2026, 9, 26), tomorrow);
+    expect(s.pastDays, 18); // 9-26 .. 10-13 (today isn't past)
+    expect(s.confirmedDays, 7);
   });
 
-  test('yearly view and month comparison', () {
+  test('yearly periods and month comparison', () {
     final a = AttackAnalysis(
       caseCreatedAt: DateTime.utc(2025, 12, 1),
       sessions: [session(fromBaghdadWallTime(2025, 12, 1, 12))],
@@ -151,17 +140,25 @@ void main() {
       confirmations: const [],
       today: today,
     );
-    final years = a.treatmentPeriods(StatsGranularity.yearly);
+    final years = a.periods(a.caseStartDay, tomorrow, StatsGranularity.yearly);
     expect(years.map((y) => y.start.year), [2025, 2026]);
     expect(years.map((y) => y.attackCount), [1, 3]);
     expect(a.calendarMonth(0).attackCount, 2);
     expect(a.calendarMonth(1).attackCount, 1);
   });
 
-  test('baseline line scales per granularity, duration formatting', () {
-    expect(baselineForGranularity(null, StatsGranularity.monthly), isNull);
-    expect(baselineForGranularity(10, StatsGranularity.yearly), 120);
-    expect(baselineForGranularity(10, StatsGranularity.weekly), closeTo(2.3, 0.01));
+  test('auto granularity keeps multi-year ranges to a few dozen bars', () {
+    final threeMonths = DateTime.utc(2026, 7, 14);
+    expect(autoGranularity(threeMonths, tomorrow), StatsGranularity.weekly);
+    expect(autoGranularity(DateTime.utc(2026), tomorrow), StatsGranularity.monthly);
+    final threeYears = DateTime.utc(2023, 10, 14);
+    expect(autoGranularity(threeYears, tomorrow), StatsGranularity.monthly);
+    expect(periodCountIn(threeYears, tomorrow, StatsGranularity.monthly), lessThanOrEqualTo(maxChartPeriods));
+    expect(periodCountIn(threeYears, tomorrow, StatsGranularity.weekly), greaterThan(maxChartPeriods));
+    expect(autoGranularity(DateTime.utc(2020), tomorrow), StatsGranularity.yearly);
+  });
+
+  test('duration formatting', () {
     expect(formatAttackDuration(3 * 3600 + 20 * 60), '3 h 20 min');
     expect(formatAttackDuration(105), '1 min 45 s');
     expect(formatAttackDuration(105, arabic: true), '1 دقيقة و45 ثانية');

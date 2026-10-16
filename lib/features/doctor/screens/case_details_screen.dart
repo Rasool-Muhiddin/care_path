@@ -12,6 +12,7 @@ import '../../case_summary/case_summary_section.dart';
 import '../../chat/logic/chat_notifier.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
+import 'edit_case_sheet.dart';
 
 /// Number of calendar days since [createdAt], counting the registration
 /// day itself as day 1.
@@ -32,40 +33,12 @@ int _daysSinceRegistration(DateTime createdAt) {
 
 /// Shared text styles for this screen's glass surfaces (white-on-navy).
 class _Txt {
-  static const sectionTitle = TextStyle(
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-  );
   static const sectionTitleMedium = TextStyle(
     color: Colors.white,
     fontSize: 16,
     fontWeight: FontWeight.w600,
   );
   static const hint = TextStyle(color: Colors.white54, fontSize: 12);
-  static const body = TextStyle(color: Colors.white, fontSize: 14);
-}
-
-/// A field label with a small colored leading icon, used above every
-/// editable field on this screen instead of a plain white caption.
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text, {this.icon});
-  final String text;
-  final IconData? icon;
-  static const Color color = AppAccent.doctor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-        ],
-        Text(text, style: _Txt.sectionTitle),
-      ],
-    );
-  }
 }
 
 /// Compact inline empty/error panel used for sections nested inside the
@@ -111,38 +84,10 @@ class _InlineStatePanel extends StatelessWidget {
   }
 }
 
-/// Reusable "field wrapped in a glass panel" [InputDecoration], used for
-/// every [TextFormField]/[DropdownButtonFormField] on this screen so they
-/// read consistently against the navy gradient background.
-InputDecoration _fieldDecoration({String? hint}) {
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: _Txt.hint,
-    filled: true,
-    fillColor: Colors.white.withValues(alpha: 0.06),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Colors.white, width: 1.4),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Colors.redAccent),
-    ),
-  );
-}
-
 /// Case details screen — opened by tapping a case in the doctor's home
-/// screen. Shows full case info, lets the doctor edit status / treatment
-/// plan / initial evaluation, and shows the case's sessions on a calendar.
+/// screen. Shows full case info and the case's sessions on a calendar; the
+/// AppBar pencil opens the edit form (status / sessions planned / initial
+/// evaluation / treatment plan) in a bottom sheet.
 class CaseDetailsScreen extends ConsumerStatefulWidget {
   const CaseDetailsScreen({super.key, required this.caseModel});
 
@@ -153,69 +98,21 @@ class CaseDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
-  late CaseStatus _status;
-  late final TextEditingController _treatmentPlanController;
-  late final TextEditingController _initialEvaluationController;
-  late final TextEditingController _totalSessionsController;
-  bool _isSaving = false;
-  bool _hasUnsavedChanges = false;
+  /// The latest saved version of the case (replaced after an edit).
+  late CaseModel _case = widget.caseModel;
 
-  @override
-  void initState() {
-    super.initState();
-    _status = widget.caseModel.status;
-    _treatmentPlanController = TextEditingController(text: widget.caseModel.treatmentPlan);
-    _initialEvaluationController = TextEditingController(text: widget.caseModel.initialEvaluation);
-    _totalSessionsController =
-        TextEditingController(text: widget.caseModel.totalSessionsPlanned?.toString() ?? '');
-    _treatmentPlanController.addListener(_markChanged);
-    _initialEvaluationController.addListener(_markChanged);
-    _totalSessionsController.addListener(_markChanged);
-  }
-
-  void _markChanged() {
-    if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
-  }
-
-  @override
-  void dispose() {
-    _treatmentPlanController.dispose();
-    _initialEvaluationController.dispose();
-    _totalSessionsController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() => _isSaving = true);
-    try {
-      await ref.read(doctorRepositoryProvider).updateCase(
-            widget.caseModel.id,
-            CaseUpdatePayload(
-              status: _status,
-              treatmentPlan: _treatmentPlanController.text.trim(),
-              initialEvaluation: _initialEvaluationController.text.trim(),
-              totalSessionsPlanned: int.tryParse(_totalSessionsController.text.trim()),
-            ),
-          );
-      ref.invalidate(myCasesProvider);
-      if (mounted) {
-        setState(() => _hasUnsavedChanges = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Changes saved')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
+  Future<void> _edit() async {
+    final updated = await showEditCaseSheet(context, _case);
+    if (updated == null || !mounted) return;
+    setState(() => _case = updated);
+    ref.invalidate(myCasesProvider);
+    ref.invalidate(caseSessionsProvider(updated.id));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Changes saved')));
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.caseModel;
+    final c = _case;
     final sessionsAsync = ref.watch(caseSessionsProvider(c.id));
     final unreadByCase = ref.watch(unreadByCaseProvider).value ?? {};
     final unreadForThisCase = unreadByCase[c.id] ?? 0;
@@ -229,6 +126,11 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
           foregroundColor: Colors.white,
           title: const Text('Case Details', style: TextStyle(color: Colors.white)),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              tooltip: 'Edit case',
+              onPressed: _edit,
+            ),
             IconButton(
               icon: Badge(
                 isLabelVisible: unreadForThisCase > 0,
@@ -287,95 +189,6 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 ),
                 const SizedBox(height: 10),
                 CaseSummarySection(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),
-                const SizedBox(height: 20),
-
-                // --- Editable section ---
-                SectionHeader(
-                  titleStyle: _Txt.sectionTitleMedium,
-                  icon: Icons.edit_outlined,
-                  color: AppAccent.doctor,
-                  title: 'Edit Case',
-                ),
-                const SizedBox(height: 14),
-                const _FieldLabel('Status', icon: Icons.flag_outlined),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<CaseStatus>(
-                  // isExpanded: يأخذ عرض الحقل، والنص الطويل يلتف بدل أن يتجاوز الشاشة
-                  isExpanded: true,
-                  initialValue: _status,
-                  decoration: _fieldDecoration(),
-                  dropdownColor: AppGlassColors.baseDark,
-                  style: _Txt.body,
-                  iconEnabledColor: Colors.white70,
-                  items: CaseStatus.values
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _status = value!;
-                      _hasUnsavedChanges = true;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                const _FieldLabel('Total Sessions Planned', icon: Icons.format_list_numbered),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _totalSessionsController,
-                  keyboardType: TextInputType.number,
-                  style: _Txt.body,
-                  cursorColor: Colors.white,
-                  decoration: _fieldDecoration(hint: 'e.g. 20'),
-                ),
-                const SizedBox(height: 20),
-
-                const _FieldLabel('Initial Evaluation', icon: Icons.fact_check_outlined),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _initialEvaluationController,
-                  maxLines: 3,
-                  style: _Txt.body,
-                  cursorColor: Colors.white,
-                  decoration: _fieldDecoration(),
-                ),
-                const SizedBox(height: 20),
-
-                const _FieldLabel('Treatment Plan', icon: Icons.assignment_outlined),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _treatmentPlanController,
-                  maxLines: 3,
-                  style: _Txt.body,
-                  cursorColor: Colors.white,
-                  decoration: _fieldDecoration(),
-                ),
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.18),
-                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.06),
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white38,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                    ),
-                    onPressed: (_isSaving || !_hasUnsavedChanges) ? null : _save,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
 
                 const SizedBox(height: 28),
                 sessionsAsync.when(
@@ -417,7 +230,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   ),
                   data: (sessions) {
                     if (sessions.isEmpty) {
-                      return _InlineStatePanel(
+                      return const _InlineStatePanel(
                         icon: Icons.event_busy_outlined,
                         color: AppAccent.patient,
                         message: 'No sessions logged yet for this case.',
@@ -437,7 +250,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                   color: AppAccent.caseC,
                   title: 'Attacks',
                   subtitleText: 'Attacks logged by the patient. The detailed statistics compare them '
-                      'with sessions and with the before-treatment baseline.',
+                      'with sessions over any period.',
                 ),
                 const SizedBox(height: 10),
                 AttackSummaryCard(caseModel: c, sessionsProvider: caseSessionsProvider(c.id)),

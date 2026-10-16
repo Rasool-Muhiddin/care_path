@@ -28,9 +28,6 @@ class ApiEndpoints {
   // treatments
   static const String sessions = '$api/sessions/';
 
-  // feedback
-  static const String feedback = '$api/feedback/';
-
   // app updates
   static const String appVersionLatest = '$api/app-version/latest/';
 

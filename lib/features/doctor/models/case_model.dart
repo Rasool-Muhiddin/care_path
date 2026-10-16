@@ -99,10 +99,6 @@ class CaseModel {
   final int? remainingSessionsCount;
   final String initialEvaluation;
   final String treatmentPlan;
-  final String guarantorName;
-  final String guarantorPhoneNumber;
-  final String guarantorEmail;
-  final String guarantorAddress;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -129,10 +125,6 @@ class CaseModel {
     this.remainingSessionsCount,
     required this.initialEvaluation,
     required this.treatmentPlan,
-    this.guarantorName = '',
-    this.guarantorPhoneNumber = '',
-    this.guarantorEmail = '',
-    this.guarantorAddress = '',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -164,10 +156,6 @@ class CaseModel {
       remainingSessionsCount: json['remaining_sessions_count'] as int?,
       initialEvaluation: json['initial_evaluation'] as String? ?? '',
       treatmentPlan: json['treatment_plan'] as String? ?? '',
-      guarantorName: json['guarantor_name'] as String? ?? '',
-      guarantorPhoneNumber: json['guarantor_phone_number'] as String? ?? '',
-      guarantorEmail: json['guarantor_email'] as String? ?? '',
-      guarantorAddress: json['guarantor_address'] as String? ?? '',
       // الخادم يرسل الأوقات مع الإزاحة؛ نحوّلها لتوقيت الجهاز قبل العرض
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
       updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),

@@ -1,6 +1,6 @@
 """
 بيانات اختبار مشتركة لاختبارات الصلاحيات في cases / treatments /
-feedback / chat. كل اختبار يبدأ من نفس "العالم":
+chat. كل اختبار يبدأ من نفس "العالم":
 
     doctor_a ── case_1 (patient_1, device_1, in_treatment) ── session_1
     doctor_b ── case_2 (patient_2, device_2, in_treatment) ── session_2

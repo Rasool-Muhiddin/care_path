@@ -9,7 +9,6 @@ urlpatterns = [
     path("api/", include("devices.urls")),
     path("api/", include("cases.urls")),
     path("api/", include("treatments.urls")),
-    path("api/", include("feedback.urls")),
     path("api/", include("app_updates.urls")),
     path("api/", include("notifications.urls")),
     path('api/chat/', include('chat.urls')),
@@ -28,4 +27,3 @@ if settings.DEBUG:
 #   GET  /api/devices/
 #   GET  /api/cases/
 #   GET  /api/sessions/
-#   GET  /api/feedback/

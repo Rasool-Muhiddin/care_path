@@ -128,21 +128,6 @@ class Case(models.Model):
         null=True, blank=True, help_text="العدد الإجمالي المخطط لجلسات العلاج"
     )
 
-    # بيانات الكفيل/المرافق المسؤول عن شراء الجهاز — مطلوبة لأن الجهاز
-    # يُباع للمريض بضمان كفيل يتحمل المسؤولية المالية/الإدارية
-    guarantor_name = models.CharField(
-        max_length=150, blank=True, help_text="Guarantor's full name"
-    )
-    guarantor_address = models.CharField(
-        max_length=255, blank=True, help_text="Guarantor's address"
-    )
-    guarantor_phone_number = models.CharField(
-        max_length=20, blank=True, help_text="Guarantor's phone number"
-    )
-    guarantor_email = models.EmailField(
-        blank=True, help_text="Guarantor's email address"
-    )
-
     initial_evaluation = models.TextField(
         blank=True, help_text="ملاحظات التقييم الأولي من الطبيب"
     )

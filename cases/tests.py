@@ -8,7 +8,6 @@ from rest_framework.test import APITestCase
 
 from config.testing import CareWorldMixin, make_user, results
 from treatments.models import TreatmentSession
-from feedback.models import Feedback
 
 from .models import AttackEvent, Case, CaseStatus
 from .serializers import CaseSerializer
@@ -194,8 +193,6 @@ class DeviceReuseTests(CareWorldMixin, APITestCase):
         Case.objects.filter(pk=self.case_1.pk).update(status=CaseStatus.CLOSED)
 
     def test_freed_device_can_be_linked_to_new_patient(self):
-        feedback = Feedback.objects.create(session=self.session_1, submitted_by=self.patient_1,
-                                           source="patient", rating=4)
         attack = AttackEvent.objects.create(case=self.case_1, occurred_at=timezone.now(),
                                             duration_seconds=600, severity=5, took_medication=False)
         self.close_case_1()
@@ -214,7 +211,6 @@ class DeviceReuseTests(CareWorldMixin, APITestCase):
         self.assertEqual(self.case_1.status, CaseStatus.CLOSED)
         self.assertEqual(self.session_1.case, self.case_1)
         self.assertEqual(self.session_1.device, self.device_1)
-        self.assertTrue(Feedback.objects.filter(pk=feedback.pk, session=self.session_1).exists())
         self.assertTrue(AttackEvent.objects.filter(pk=attack.pk, case=self.case_1).exists())
         self.assertEqual(Case.objects.filter(device=self.device_1).count(), 2)
 

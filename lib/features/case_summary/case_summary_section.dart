@@ -57,9 +57,6 @@ class CaseSummarySection extends ConsumerWidget {
     }
     final attackLoading = attacks.isLoading ? '…' : '—';
 
-    final hasGuarantor = [c.guarantorName, c.guarantorPhoneNumber, c.guarantorEmail, c.guarantorAddress]
-        .any((s) => s.trim().isNotEmpty);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -112,15 +109,6 @@ class CaseSummarySection extends ConsumerWidget {
                     ? '${thisMonth!.avgSeverity!.toStringAsFixed(1)} / 10'
                     : (thisMonth != null ? '—' : attackLoading),
               ),
-            const _SubTitle('Guarantor'),
-            if (!hasGuarantor)
-              const _Row('Guarantor', '—')
-            else ...[
-              _Row('Name', _orDash(c.guarantorName)),
-              _Row('Phone', _orDash(c.guarantorPhoneNumber)),
-              _Row('Email', _orDash(c.guarantorEmail)),
-              _Row('Address', _orDash(c.guarantorAddress)),
-            ],
             const SizedBox(height: 4),
             _Row('Last updated', _date(c.updatedAt)),
           ],

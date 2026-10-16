@@ -27,7 +27,6 @@ CaseModel _case(DiagnosisType diagnosis) => CaseModel(
       remainingSessionsCount: 15,
       initialEvaluation: '',
       treatmentPlan: 'Daily 20 min',
-      guarantorName: 'Omar',
       createdAt: fromBaghdadWallTime(2026, 9, 1, 10),
       updatedAt: fromBaghdadWallTime(2026, 10, 1, 10),
     );
@@ -75,7 +74,7 @@ void main() {
     expect(find.text('5 of 20 (15 remaining)'), findsOneWidget);
     expect(find.text('SN-42'), findsOneWidget);
     expect(find.text('Baghdad Clinic'), findsOneWidget);
-    expect(find.text('Omar'), findsOneWidget);
+    expect(find.text('Guarantor'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

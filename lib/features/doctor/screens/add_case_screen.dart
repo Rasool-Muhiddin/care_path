@@ -103,8 +103,6 @@ class _RetryButton extends StatelessWidget {
 /// New case screen — the doctor selects a patient from the registered
 /// list, an optional device, diagnosis type, disease sub-type, symptoms,
 /// clinical details, and writes an initial evaluation and treatment plan.
-/// Guarantor / device-purchase info is handled separately by the
-/// engineer's device purchase screen (not built yet), not here.
 class AddCaseScreen extends ConsumerStatefulWidget {
   const AddCaseScreen({super.key});
 

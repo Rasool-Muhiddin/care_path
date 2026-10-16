@@ -71,10 +71,6 @@ CaseModel _case(DiagnosisType diagnosis, {CaseStatus status = CaseStatus.inTreat
       remainingSessionsCount: 18,
       initialEvaluation: 'Frequent attacks for three years',
       treatmentPlan: 'Daily 20-minute sessions for six weeks',
-      guarantorName: 'Mohammed Al-Husseini',
-      guarantorPhoneNumber: '07701234567',
-      guarantorEmail: 'guarantor.long.address@example.com',
-      guarantorAddress: 'Baghdad, Al-Mansour district, street 14',
       createdAt: _daysAgo(60),
       updatedAt: _now,
     );

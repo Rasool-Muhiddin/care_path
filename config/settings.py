@@ -91,7 +91,6 @@ INSTALLED_APPS = [
     "devices",
     'cases',
     'treatments',
-    'feedback',
     'chat',
     'app_updates',
     'notifications',

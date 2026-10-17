@@ -127,6 +127,8 @@ class _ClinicTile extends ConsumerWidget {
       if (clinic.address.isNotEmpty) clinic.address,
       if (clinic.phoneNumber.isNotEmpty) clinic.phoneNumber,
     ];
+    final engineerName = clinic.responsibleEngineerName?.trim() ?? '';
+    final engineerLabel = engineerName.isNotEmpty ? engineerName : 'Not assigned';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -150,9 +152,7 @@ class _ClinicTile extends ConsumerWidget {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        clinic.responsibleEngineerName?.trim().isNotEmpty == true
-                            ? clinic.responsibleEngineerName!.trim()
-                            : 'Not assigned',
+                        'Supervising Engineer: $engineerLabel',
                         style: AppText.tileSubtitle,
                       ),
                     ),

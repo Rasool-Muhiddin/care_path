@@ -88,7 +88,7 @@ class CaseSummarySection extends ConsumerWidget {
           children: [
             _Row('Status', c.status.label),
             _Row('Doctor', _orDash(c.doctorName)),
-            _Row('Responsible engineer', c.responsibleEngineerName?.trim().isNotEmpty == true
+            _Row('Supervising Engineer', c.responsibleEngineerName?.trim().isNotEmpty == true
                 ? c.responsibleEngineerName!.trim()
                 : 'Not assigned'),
             _Row('Treatment start', _date(c.createdAt)),

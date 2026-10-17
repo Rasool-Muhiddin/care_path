@@ -137,7 +137,7 @@ class _FilterToggle extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       child: Row(
         children: [
-          _segment('My clinics', Icons.person_pin_circle_outlined, selected: mine, value: true),
+          _segment('My messages', Icons.person_pin_circle_outlined, selected: mine, value: true),
           _segment('All', Icons.all_inbox_outlined, selected: !mine, value: false),
         ],
       ),

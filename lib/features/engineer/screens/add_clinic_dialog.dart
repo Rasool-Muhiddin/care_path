@@ -152,7 +152,7 @@ class _AddClinicDialogState extends ConsumerState<_AddClinicDialog> {
                 SectionHeader(
                   icon: Icons.engineering_outlined,
                   color: AppAccent.clinic,
-                  title: 'Responsible Engineer',
+                  title: 'Supervising Engineer',
                 ),
                 const SizedBox(height: 8),
                 engineersAsync.when(

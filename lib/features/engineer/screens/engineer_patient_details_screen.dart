@@ -85,7 +85,7 @@ class EngineerPatientDetailsScreen extends ConsumerWidget {
                         child: _StatBox(
                           icon: Icons.calendar_today_rounded,
                           accent: _Accent.days,
-                          label: 'Days since registration',
+                          label: 'Required sessions',
                           value: '${baghdadToday().difference(baghdadDayOf(c.createdAt)).inDays + 1}',
                         ),
                       ),

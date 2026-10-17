@@ -162,7 +162,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                     Expanded(
                       child: _StatBox(
                         icon: Icons.calendar_today_outlined,
-                        label: 'Days since registration',
+                        label: 'Required sessions',
                         value: '${_daysSinceRegistration(c.createdAt)}',
                         color: AppAccent.caseC,
                       ),

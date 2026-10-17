@@ -41,6 +41,8 @@ class CaseMessagesView(generics.ListCreateAPIView):
     # - ?before_id=<id>: الـ CHAT_PAGE_SIZE رسالة الأقدم منها (التمرير للأعلى).
     # - ?after_id=<id>: كل الرسائل الأحدث منها (polling).
     # الرد دائماً قائمة مرتّبة من الأقدم للأحدث.
+    # الـ header "X-Case-Status" يحمل حالة الحالة (in_treatment / closed) مع كل
+    # polling، فتخفي الشاشة حقل الكتابة فور إغلاق الحالة دون طلب إضافي.
     pagination_class = None
 
     def get_case(self):
@@ -107,7 +109,7 @@ class CaseMessagesView(generics.ListCreateAPIView):
                 unread = unread.none()
             unread = unread.filter(inquiry_type=InquiryType.TECHNICAL)
         unread.update(is_read=True)
-        return Response(data)
+        return Response(data, headers={'X-Case-Status': self.get_case().status})
 
 
 class UnreadCountView(APIView):

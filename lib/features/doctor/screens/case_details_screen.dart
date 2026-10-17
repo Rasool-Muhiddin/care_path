@@ -138,7 +138,7 @@ class _CaseDetailsScreenState extends ConsumerState<CaseDetailsScreen> {
                 child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
               ),
               tooltip: 'Chat with patient',
-              onPressed: () => context.push('/doctor/chat/${c.id}'),
+              onPressed: () => context.push('/doctor/chat/${c.id}', extra: c.status),
             ),
           ],
         ),

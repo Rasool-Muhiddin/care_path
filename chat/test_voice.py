@@ -167,8 +167,16 @@ class VoicePermissionTests(VoiceStorageMixin, CareWorldMixin, APITestCase):
             with self.subTest(user=user.username):
                 self.assert_both(user, self.case_1, channel, status.HTTP_403_FORBIDDEN)
         self.assertFalse(ChatMessage.objects.exists())
-        # القراءة تبقى متاحة في الحالة المغلقة
-        self.assertEqual(self.client_for(self.patient_1).get(messages_url(self.case_1)).status_code, 200)
+        # القراءة تبقى متاحة في الحالة المغلقة، والـ header يخبر التطبيق بالإغلاق
+        response = self.client_for(self.patient_1).get(messages_url(self.case_1))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["X-Case-Status"], CaseStatus.CLOSED)
+
+    def test_message_list_reports_open_case_status(self, _notify):
+        for user in (self.patient_1, self.doctor_a, self.engineer):
+            with self.subTest(user=user.username):
+                response = self.client_for(user).get(messages_url(self.case_1), {"after_id": 0})
+                self.assertEqual(response["X-Case-Status"], CaseStatus.IN_TREATMENT)
 
     def test_voice_message_shape_and_push(self, notify):
         with self.captureOnCommitCallbacks(execute=True):

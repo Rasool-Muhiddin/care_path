@@ -5,8 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/auth/auth_state.dart'; // فيه تعريف apiClientProvider
+import '../../doctor/models/case_model.dart';
 import 'chat_message_model.dart';
 import 'engineer_conversation_model.dart';
+
+/// صفحة رسائل من الخادم. [caseStatus] null إن لم يرسل الخادم الـ header.
+class ChatPage {
+  const ChatPage(this.messages, this.caseStatus);
+  final List<ChatMessageModel> messages;
+  final CaseStatus? caseStatus;
+}
 
 class ChatRepository {
   final ApiClient _apiClient;
@@ -18,8 +26,9 @@ class ChatRepository {
   /// بلا معاملات: آخر [pageSize] رسالة (أول فتح للشاشة).
   /// [afterId]: كل الرسائل الأحدث من هذا الـ id (polling تزايدي).
   /// [beforeId]: الـ [pageSize] رسالة الأقدم منه (التمرير للأعلى).
-  /// الرد دائماً من الأقدم للأحدث.
-  Future<List<ChatMessageModel>> getMessages(
+  /// الرد دائماً من الأقدم للأحدث، ومعه حالة الحالة (header X-Case-Status)
+  /// كي تخفي الشاشة حقل الكتابة فور إغلاق الحالة.
+  Future<ChatPage> getMessages(
     int caseId,
     InquiryType inquiryType, {
     int? afterId,
@@ -34,7 +43,11 @@ class ChatRepository {
           if (beforeId != null) 'before_id': beforeId,
         },
       );
-      return (response.data as List).map((e) => ChatMessageModel.fromJson(e)).toList();
+      final status = response.headers.value('x-case-status');
+      return ChatPage(
+        (response.data as List).map((e) => ChatMessageModel.fromJson(e)).toList(),
+        status == null ? null : CaseStatus.fromApiValue(status),
+      );
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }

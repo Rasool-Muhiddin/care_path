@@ -189,7 +189,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
               ),
               tooltip: 'المحادثة مع الطبيب',
-              onPressed: () => context.push('/patient/chat/$myCaseId'),
+              onPressed: () => context.push('/patient/chat/$myCaseId', extra: caseAsync.value?.status),
             ),
           // Settings (account info, log out, delete account, ...)
           SettingsButton(strings: SettingsStrings.ar),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/notifications/fcm_service.dart';
+import '../../doctor/models/case_model.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
 
@@ -29,11 +30,15 @@ class ChatState {
   final bool hasOlder;
   final bool isLoadingOlder;
 
+  /// حالة الحالة كما أرسلها الخادم مع آخر تحميل؛ null قبل أول رد.
+  final CaseStatus? caseStatus;
+
   ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.hasOlder = false,
     this.isLoadingOlder = false,
+    this.caseStatus,
   });
 
   ChatState copyWith({
@@ -41,12 +46,14 @@ class ChatState {
     bool? isLoading,
     bool? hasOlder,
     bool? isLoadingOlder,
+    CaseStatus? caseStatus,
   }) =>
       ChatState(
         messages: messages ?? this.messages,
         isLoading: isLoading ?? this.isLoading,
         hasOlder: hasOlder ?? this.hasOlder,
         isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+        caseStatus: caseStatus ?? this.caseStatus,
       );
 }
 
@@ -84,13 +91,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (!silent) state = state.copyWith(isLoading: true);
     try {
       final isFirstPage = _lastPolledId == null;
-      final fetched = await _repo.getMessages(
+      final page = await _repo.getMessages(
         conversation.caseId,
         conversation.inquiryType,
         afterId: _lastPolledId,
       );
       // الشاشة قد تُغلق أثناء الطلب (autoDispose) — لا نكتب حالة بعد التفكيك
       if (!mounted) return;
+      final fetched = page.messages;
       for (final message in fetched) {
         if (_lastPolledId == null || message.id > _lastPolledId!) _lastPolledId = message.id;
       }
@@ -99,6 +107,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isLoading: false,
         // أول تحميل يرجع آخر صفحة فقط؛ صفحة ممتلئة تعني غالباً وجود أقدم منها
         hasOlder: isFirstPage ? fetched.length >= ChatRepository.pageSize : null,
+        // أُغلقت الحالة أثناء فتح المحادثة: الشاشة تخفي حقل الكتابة في هذا التحديث
+        caseStatus: page.caseStatus,
       );
     } catch (_) {
       if (!silent && mounted) state = state.copyWith(isLoading: false);
@@ -128,22 +138,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (!state.hasOlder || state.isLoadingOlder || state.messages.isEmpty) return;
     state = state.copyWith(isLoadingOlder: true);
     try {
-      final older = await _repo.getMessages(
+      final page = await _repo.getMessages(
         conversation.caseId,
         conversation.inquiryType,
         beforeId: state.messages.first.id,
       );
       if (!mounted) return;
       state = state.copyWith(
-        messages: _merge(state.messages, older),
-        hasOlder: older.length >= ChatRepository.pageSize,
+        messages: _merge(state.messages, page.messages),
+        hasOlder: page.messages.length >= ChatRepository.pageSize,
         isLoadingOlder: false,
+        caseStatus: page.caseStatus,
       );
     } catch (_) {
       // فشل مؤقت: يمكن المحاولة مجدداً بالتمرير للأعلى مرة أخرى
       if (mounted) state = state.copyWith(isLoadingOlder: false);
     }
   }
+
+  /// تحديث فوري خارج دورة الـ polling (مثلاً بعد رفض الإرسال بـ 403 لأن
+  /// الحالة أُغلقت).
+  void refresh() => _load(silent: true);
 
   /// يرمي الاستثناء عند الفشل كي تُبقي الشاشة النص وتعرض الخطأ.
   Future<void> send(String text) async {

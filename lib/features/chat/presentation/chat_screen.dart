@@ -7,6 +7,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/permissions/user_role.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
+import '../../doctor/models/case_model.dart';
 import '../data/engineer_conversation_model.dart';
 import '../logic/chat_notifier.dart';
 import '../logic/engineer_inbox_notifier.dart';
@@ -78,7 +79,17 @@ class ChatScreen extends ConsumerStatefulWidget {
   /// للمهندس: حق الرد المعروف مسبقاً (من صندوق الرسائل) يُعرض فوراً إلى
   /// أن يصل رد الخادم (replyRightsProvider).
   final ReplyRights? initialReplyRights;
-  const ChatScreen({super.key, required this.caseId, this.doctorName, this.initialReplyRights});
+
+  /// حالة الحالة المعروفة عند فتح المحادثة (من الشاشة السابقة) تُعرض فوراً،
+  /// ثم يحلّ محلها ما يرسله الخادم مع كل تحميل للرسائل (ChatState.caseStatus).
+  final CaseStatus? initialCaseStatus;
+  const ChatScreen({
+    super.key,
+    required this.caseId,
+    this.doctorName,
+    this.initialReplyRights,
+    this.initialCaseStatus,
+  });
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -92,7 +103,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// زر الميكروفون يظهر مكان زر الإرسال حين يكون الحقل فارغاً
   bool _hasText = false;
   final _recorder = VoiceRecorderController();
-  late final _playback = VoicePlaybackController(ref.read(chatRepositoryProvider));
+
+  // المشغّل يُنشأ عند أول رسالة صوتية معروضة فقط
+  VoicePlaybackController? _playbackInstance;
+  VoicePlaybackController get _playback =>
+      _playbackInstance ??= VoicePlaybackController(ref.read(chatRepositoryProvider));
 
   @override
   void initState() {
@@ -107,7 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// القناة التي سُجّلت فيها فقط.
   void _selectChannel(InquiryType? type) {
     _recorder.discard();
-    _playback.stopAll();
+    _playbackInstance?.stopAll();
     setState(() => _selectedInquiryType = type);
   }
 
@@ -135,10 +150,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? ref.watch(replyRightsProvider(widget.caseId)).valueOrNull ?? widget.initialReplyRights
         : null;
     final isEngineerTechnicalReadOnly = replyRights != null && !replyRights.canReply;
-    // صار للقراءة فقط أثناء التسجيل (تغيّر مهندس العيادة): لا يبقى تسجيل بلا واجهة
-    if ((isEngineerMedicalReadOnly || isEngineerTechnicalReadOnly) && _recorder.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _recorder.discard());
-    }
     final doctorLabel = (widget.doctorName != null && widget.doctorName!.trim().isNotEmpty)
         ? 'د. ${widget.doctorName!.trim()}'
         : 'الطبيب المعالج';
@@ -147,6 +158,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         : null;
     final conversation = ChatConversation(widget.caseId, inquiryType);
     final state = ref.watch(chatProvider(conversation));
+    // الحالة المغلقة لا تقبل رسائل (الخادم يرفض بـ 403)؛ القراءة تبقى متاحة
+    final isCaseClosed = (state.caseStatus ?? widget.initialCaseStatus) == CaseStatus.closed;
+    // صار للقراءة فقط أثناء التسجيل (أُغلقت الحالة أو تغيّر مهندس العيادة):
+    // لا يبقى تسجيل بلا واجهة
+    if ((isCaseClosed || isEngineerMedicalReadOnly || isEngineerTechnicalReadOnly) && _recorder.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recorder.discard());
+    }
 
     final content = Scaffold(
       extendBodyBehindAppBar: true,
@@ -251,7 +269,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                       ),
               ),
-              if (isEngineerMedicalReadOnly)
+              if (isCaseClosed)
+                _ReadOnlyBar(
+                  text: isStaff
+                      ? "This case is closed — new messages can't be sent."
+                      : 'هذه الحالة مغلقة، لا يمكن إرسال رسائل جديدة',
+                )
+              else if (isEngineerMedicalReadOnly)
                 const _ReadOnlyBar(
                   text: 'View only — medical conversation between the patient and the doctor.',
                 )
@@ -349,7 +373,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _startRecording() async {
     // لا تُسمع رسالة صوتية أثناء التسجيل
-    await _playback.stopAll();
+    await _playbackInstance?.stopAll();
     final result = await _recorder.start();
     if (!mounted) return;
     final message = switch (result) {
@@ -400,6 +424,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (e is ApiException && e.statusCode == 403 && currentRole == UserRole.engineer) {
       ref.invalidate(replyRightsProvider(widget.caseId));
     }
+    // 403 قد يعني أن الحالة أُغلقت للتو: حدّث فوراً ليظهر إشعار الإغلاق
+    final target = _sendTarget();
+    if (e is ApiException && e.statusCode == 403 && target != null) {
+      ref.read(chatProvider(target).notifier).refresh();
+    }
     final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('تعذّر إرسال الرسالة: $reason')),
@@ -418,7 +447,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _controller.dispose();
     _recorder.dispose();
-    _playback.dispose();
+    _playbackInstance?.dispose();
     super.dispose();
   }
 }

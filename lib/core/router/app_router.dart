@@ -6,6 +6,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/chat/data/engineer_conversation_model.dart';
 import '../../features/chat/presentation/chat_screen.dart';
+import '../../features/doctor/models/case_model.dart';
 import '../../features/doctor/screens/add_case_screen.dart';
 import '../../features/doctor/screens/doctor_home_screen.dart';
 import '../../features/engineer/screens/add_device_screen.dart';
@@ -38,10 +39,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/patient',
         builder: (context, state) => const PatientHomeScreen(),
         routes: [
+          // extra = حالة الحالة المعروفة (CaseStatus) لعرض إشعار الإغلاق فوراً؛
+          // بلا extra (من إشعار) تأتي الحالة مع أول تحميل للرسائل.
           GoRoute(
             path: 'chat/:caseId',
-            builder: (context, state) =>
-                ChatScreen(caseId: int.parse(state.pathParameters['caseId']!)),
+            builder: (context, state) => ChatScreen(
+              caseId: int.parse(state.pathParameters['caseId']!),
+              initialCaseStatus: state.extra is CaseStatus ? state.extra as CaseStatus : null,
+            ),
           ),
         ],
       ),
@@ -55,8 +60,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'chat/:caseId',
-            builder: (context, state) =>
-                ChatScreen(caseId: int.parse(state.pathParameters['caseId']!)),
+            builder: (context, state) => ChatScreen(
+              caseId: int.parse(state.pathParameters['caseId']!),
+              initialCaseStatus: state.extra is CaseStatus ? state.extra as CaseStatus : null,
+            ),
           ),
         ],
       ),
@@ -68,14 +75,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: 'new-device',
             builder: (context, state) => const AddDeviceScreen(),
           ),
-          // من صندوق الرسائل (extra = حق الرد المعروف مسبقاً لتفادي وميض
-          // حقل الكتابة) أو من الضغط على إشعار (بلا extra، يُجلب من الخادم).
+          // من صندوق الرسائل (extra = صف المحادثة: حق الرد وحالة الحالة
+          // المعروفان مسبقاً لتفادي وميض حقل الكتابة) أو من الضغط على إشعار
+          // (بلا extra، يُجلبان من الخادم).
           GoRoute(
             path: 'chat/:caseId',
-            builder: (context, state) => ChatScreen(
-              caseId: int.parse(state.pathParameters['caseId']!),
-              initialReplyRights: state.extra is ReplyRights ? state.extra as ReplyRights : null,
-            ),
+            builder: (context, state) {
+              final row = state.extra is EngineerConversationModel ? state.extra as EngineerConversationModel : null;
+              return ChatScreen(
+                caseId: int.parse(state.pathParameters['caseId']!),
+                initialReplyRights: row?.replyRights,
+                initialCaseStatus: row?.caseStatus,
+              );
+            },
           ),
         ],
       ),

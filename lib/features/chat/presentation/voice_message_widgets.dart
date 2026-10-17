@@ -30,7 +30,10 @@ enum VoiceStartResult { started, permissionDenied, failed }
 /// التمرير ولوحة المفاتيح). AAC أحادي بـ 64kbps في ملف m4a: دقيقتان ≈ 1MB.
 /// يتوقف تلقائياً عند [voiceNoteMaxDuration] ويبقى الملف جاهزاً للإرسال.
 class VoiceRecorderController extends ChangeNotifier {
-  final _recorder = AudioRecorder();
+  // يُنشأ عند أول تسجيل فقط: AudioRecorder يحجز مسجّلاً في المنصة فور إنشائه،
+  // ومعظم من يفتح المحادثة لا يسجّل.
+  AudioRecorder? _recorderInstance;
+  AudioRecorder get _recorder => _recorderInstance ??= AudioRecorder();
   final _stopwatch = Stopwatch();
   Timer? _ticker;
   VoiceRecorderStatus _status = VoiceRecorderStatus.idle;
@@ -132,9 +135,12 @@ class VoiceRecorderController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ticker?.cancel();
-    if (_status == VoiceRecorderStatus.recording) _recorder.cancel().ignore();
+    final recorder = _recorderInstance;
+    if (recorder != null) {
+      if (_status == VoiceRecorderStatus.recording) recorder.cancel().ignore();
+      recorder.dispose().ignore();
+    }
     _deleteFile(_path);
-    _recorder.dispose().ignore();
     super.dispose();
   }
 }

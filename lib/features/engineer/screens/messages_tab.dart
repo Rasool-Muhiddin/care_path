@@ -112,7 +112,7 @@ class MessagesTab extends ConsumerWidget {
             onTap: () async {
               await context.push(
                 '/engineer/chat/${conversation.caseId}',
-                extra: conversation.replyRights,
+                extra: conversation,
               );
               // فتح المحادثة يعلّمها مقروءة (للمسؤول) — حدّث العدّادات
               notifier.refresh();

@@ -56,3 +56,4 @@ android/key.properties
 backups/
 media/
 staticfiles/
+private_media/

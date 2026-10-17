@@ -1,7 +1,8 @@
 from functools import partial
 
+from django.conf import settings
+from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import transaction
@@ -17,12 +18,14 @@ from .models import InquiryType
 from .serializers import ChatMessageSerializer, EngineerInboxRowSerializer
 from .permissions import (
     IsCaseParticipant,
-    engineer_can_read_medical,
+    check_can_send,
     engineer_can_reply,
     engineer_owns_chat,
+    messages_visible_to,
     responsible_engineer_of,
 )
 from .notifications import notify_in_background
+from .voice import CONTENT_TYPE as VOICE_CONTENT_TYPE
 
 # أول فتح للمحادثة (أو ?before_id=) يرجع آخر 50 رسالة فقط
 CHAT_PAGE_SIZE = 50
@@ -52,17 +55,8 @@ class CaseMessagesView(generics.ListCreateAPIView):
         return {**super().get_serializer_context(), 'request': self.request}
 
     def get_queryset(self):
-        queryset = ChatMessage.objects.filter(case=self.get_case()).select_related('sender')
-        user = self.request.user
-
-        # لا يجوز للطبيب أن يطّلع على الاستفسارات التقنية أو ردودها.
-        if getattr(user, 'role', None) == UserRole.DOCTOR:
-            queryset = queryset.filter(inquiry_type=InquiryType.MEDICAL)
-
-        # كل المهندسين يقرؤون القناة التقنية، أما القناة الطبية (مريض ↔ طبيب)
-        # فلمدير المهندسين وحده.
-        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_read_medical(user):
-            queryset = queryset.filter(inquiry_type=InquiryType.TECHNICAL)
+        # الطبيب لا يرى القناة التقنية، والطبية للمدير وحده من المهندسين
+        queryset = messages_visible_to(self.request.user, self.get_case()).select_related('sender')
 
         # تعرض الواجهة قناة واحدة في كل مرة كي لا تختلط مراسلات الدعم
         # مع الاستفسارات الطبية لدى المريض أو المهندس.
@@ -82,16 +76,13 @@ class CaseMessagesView(generics.ListCreateAPIView):
             queryset = queryset.filter(id__lt=before_id)
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        # قواعد الإرسال (حالة مغلقة، حق رد المهندس) قبل التحقق من المحتوى، فلا
+        # يُقرأ ملف صوتي ممن لا يحق له الإرسال. نفس المسار للنص والصوت.
+        check_can_send(request.user, self.get_case())
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        # حق الرد في القناة التقنية للمهندس المسؤول عن عيادة الجهاز، وللمدير
-        # في أي محادثة (القناة الطبية يرفضها الـ serializer للمهندس أصلاً).
-        user = self.request.user
-        if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, self.get_case()):
-            responsible = responsible_engineer_of(self.get_case())
-            name = responsible.get_full_name() or responsible.username
-            raise PermissionDenied(
-                f'لا يمكنك الرد في هذه المحادثة. الرد مخصص للمهندس المسؤول عن عيادة الجهاز: {name}.'
-            )
         serializer.save(case=self.get_case(), sender=self.request.user)
         # الإشعار بعد نجاح الحفظ فعلياً، وفي thread منفصل حتى لا ينتظر
         # الطلب (وعامل gunicorn) اتصال FCM بخوادم Google.
@@ -184,6 +175,7 @@ class EngineerInboxView(generics.ListAPIView):
             Case.objects.annotate(
                 last_message_id=Subquery(technical.values('id')[:1]),
                 last_message_text=Subquery(technical.values('text')[:1]),
+                last_message_audio=Subquery(technical.values('audio')[:1]),
                 last_message_at=Subquery(technical.values('created_at')[:1]),
                 unread_count=Coalesce(Subquery(unread, output_field=IntegerField()), Value(0)),
             )
@@ -222,3 +214,45 @@ class CaseReplyRightsView(APIView):
                 (responsible.get_full_name() or responsible.username) if responsible else None
             ),
         })
+
+
+class VoiceNoteView(APIView):
+    """ملف الرسالة الصوتية — بنفس صلاحيات قراءة الرسالة نفسها.
+
+    IsCaseParticipant على حالة الرسالة ثم messages_visible_to (نفس قاعدة
+    CaseMessagesView). لا يعلّم الرسالة مقروءة. على السيرفر يسلّم الملف لـ
+    nginx عبر X-Accel-Redirect (VOICE_NOTES_X_ACCEL_PREFIX)؛ محلياً يقرؤه Django.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsCaseParticipant]
+
+    def get_case(self):
+        if not hasattr(self, '_case'):
+            message = get_object_or_404(
+                ChatMessage.objects.select_related('case__device__clinic'), pk=self.kwargs['message_id']
+            )
+            self._case = message.case
+        return self._case
+
+    def perform_content_negotiation(self, request, force=False):
+        # الرد ملف صوتي وليس JSON: لا نرفض طلباً لأن Accept فيه audio/* فقط
+        return super().perform_content_negotiation(request, force=True)
+
+    def get(self, request, message_id):
+        message = get_object_or_404(
+            messages_visible_to(request.user, self.get_case()).exclude(audio=''), pk=message_id
+        )
+        prefix = settings.VOICE_NOTES_X_ACCEL_PREFIX
+        if prefix:
+            response = HttpResponse(content_type=VOICE_CONTENT_TYPE)
+            response['X-Accel-Redirect'] = prefix.rstrip('/') + '/' + message.audio.name
+        else:
+            try:
+                response = FileResponse(message.audio.open('rb'), content_type=VOICE_CONTENT_TYPE)
+            except FileNotFoundError:
+                raise Http404
+        response['Content-Disposition'] = f'inline; filename="voice-{message.pk}.m4a"'
+        # مراسلات طبية: لا تُخزَّن في أي cache وسيط
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response

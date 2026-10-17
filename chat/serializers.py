@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from accounts.models import UserRole
@@ -5,17 +6,32 @@ from cases.models import Case
 
 from .models import ChatMessage, InquiryType
 from .permissions import engineer_can_reply, responsible_engineer_of
+from .voice import validate_voice_note
+
+# معاينة الرسالة الصوتية في صندوق الوارد (لا نص لها)
+VOICE_PREVIEW = '🎤 رسالة صوتية'
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
     sender_role = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
+    # "text" أو "voice". الصوت يُرفع multipart في الحقل audio ويُنزَّل من audio_url
+    # (مسار نسبي، يتطلب نفس توكن الدخول).
+    kind = serializers.SerializerMethodField()
+    audio = serializers.FileField(write_only=True, required=False)
+    audio_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'case', 'sender', 'sender_name', 'sender_role', 'inquiry_type', 'text', 'created_at', 'is_read', 'is_mine']
-        read_only_fields = ['id', 'case', 'sender', 'created_at', 'is_read', 'sender_name', 'sender_role', 'is_mine']
+        fields = [
+            'id', 'case', 'sender', 'sender_name', 'sender_role', 'inquiry_type', 'kind', 'text',
+            'audio', 'audio_url', 'duration_seconds', 'created_at', 'is_read', 'is_mine',
+        ]
+        read_only_fields = [
+            'id', 'case', 'sender', 'created_at', 'is_read', 'sender_name', 'sender_role', 'is_mine',
+            'duration_seconds',
+        ]
 
     DELETED_USER = 'Deleted user'
 
@@ -30,6 +46,12 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     def get_is_mine(self, obj):
         request = self.context.get('request')
         return bool(request and obj.sender_id == request.user.id)
+
+    def get_kind(self, obj):
+        return 'voice' if obj.is_voice else 'text'
+
+    def get_audio_url(self, obj):
+        return reverse('chat-voice-note', args=[obj.pk]) if obj.is_voice else None
 
     def validate_inquiry_type(self, value):
         """المريض يختار نوع استفساره؛ الطبيب يكتب طبياً فقط.
@@ -58,6 +80,14 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         inquiry_type = attrs.get('inquiry_type', InquiryType.MEDICAL)
         if role == UserRole.ENGINEER and inquiry_type == InquiryType.MEDICAL:
             raise PermissionDenied('المهندس يستطيع قراءة القناة الطبية فقط ولا يمكنه الرد فيها.')
+
+        # بعد فحص الصلاحية: لا نقرأ ملف من لا يحق له الإرسال أصلاً
+        text = attrs.get('text', '')
+        audio = attrs.get('audio')
+        if bool(text) == bool(audio):
+            raise serializers.ValidationError('الرسالة إما نص أو رسالة صوتية (واحد منهما فقط).')
+        if audio:
+            attrs['duration_seconds'] = validate_voice_note(audio)
         return attrs
 
 def _display_name(user):
@@ -100,6 +130,8 @@ class EngineerInboxRowSerializer(serializers.ModelSerializer):
         return _display_name(responsible_engineer_of(obj))
 
     def get_last_message_text(self, obj):
+        if obj.last_message_audio:
+            return VOICE_PREVIEW
         return (obj.last_message_text or '')[: self.PREVIEW_LENGTH]
 
     def get_can_reply(self, obj):

@@ -1,7 +1,11 @@
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
 from accounts.models import UserRole
 from accounts.permissions import is_engineer_manager
+from cases.models import CaseStatus
+
+from .models import ChatMessage, InquiryType
 
 
 def responsible_engineer_of(case):
@@ -43,6 +47,39 @@ def engineer_can_reply(user, case) -> bool:
 def engineer_can_read_medical(user) -> bool:
     """القناة الطبية (مريض ↔ طبيب): للاطلاع فقط، ولمدير المهندسين وحده."""
     return is_engineer_manager(user)
+
+
+def messages_visible_to(user, case):
+    """رسائل الحالة التي يحق للمستخدم قراءتها — المصدر الوحيد لقاعدة القراءة،
+    يستعمله عرض المحادثة وتنزيل ملف الرسالة الصوتية (بعد IsCaseParticipant).
+
+    الطبيب لا يرى القناة التقنية. كل المهندسين يقرؤون القناة التقنية، أما
+    القناة الطبية (مريض ↔ طبيب) فلمدير المهندسين وحده.
+    """
+    queryset = ChatMessage.objects.filter(case=case)
+    role = getattr(user, 'role', None)
+    if role == UserRole.DOCTOR:
+        queryset = queryset.filter(inquiry_type=InquiryType.MEDICAL)
+    if role == UserRole.ENGINEER and not engineer_can_read_medical(user):
+        queryset = queryset.filter(inquiry_type=InquiryType.TECHNICAL)
+    return queryset
+
+
+def check_can_send(user, case) -> None:
+    """قواعد الإرسال على مستوى الحالة، للنص والصوت معاً. يرفع PermissionDenied.
+
+    - لا إرسال في حالة مغلقة.
+    - في القناة التقنية يرد المهندس المسؤول عن عيادة الجهاز، والمدير في أي
+      محادثة. (القناة الطبية يرفضها ChatMessageSerializer للمهندس أصلاً.)
+    """
+    if case.status == CaseStatus.CLOSED:
+        raise PermissionDenied('هذه الحالة مغلقة، لا يمكن إرسال رسائل جديدة فيها.')
+    if getattr(user, 'role', None) == UserRole.ENGINEER and not engineer_can_reply(user, case):
+        responsible = responsible_engineer_of(case)
+        name = responsible.get_full_name() or responsible.username
+        raise PermissionDenied(
+            f'لا يمكنك الرد في هذه المحادثة. الرد مخصص للمهندس المسؤول عن عيادة الجهاز: {name}.'
+        )
 
 
 class IsCaseParticipant(BasePermission):

@@ -246,6 +246,17 @@ STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles'))
 MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
 
+# الرسائل الصوتية في المحادثة: مراسلات طبية خاصة، فتُخزَّن خارج MEDIA_ROOT
+# (لا يصلها /media/) ولا تُقدَّم إلا عبر chat-voice-note بعد فحص الصلاحية.
+VOICE_NOTES_ROOT = Path(os.environ.get('VOICE_NOTES_ROOT', BASE_DIR / 'private_media' / 'voice'))
+# على السيرفر: Django يفحص الصلاحية ثم يسلّم الملف لـ nginx عبر X-Accel-Redirect
+# إلى location داخلية (internal) بهذا المسار. فارغ = Django يقرأ الملف بنفسه.
+VOICE_NOTES_X_ACCEL_PREFIX = os.environ.get('VOICE_NOTES_X_ACCEL_PREFIX', '')
+# حدود الرسالة الصوتية (التطبيق يوقف التسجيل عند الحد نفسه)
+VOICE_NOTE_MAX_SECONDS = 120
+# AAC أحادي بـ 64kbps: دقيقتان ≈ 1MB. الحد أعلى بهامش لأي معدّل ترميز أعلى.
+VOICE_NOTE_MAX_BYTES = 5 * 1024 * 1024
+
 # مسار ملف Firebase Admin SDK (Service Account JSON) — خارج Git دائماً.
 # إشعارات FCM تُعطَّل بصمت طالما هذا المتغيّر غير مضبوط.
 FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH')

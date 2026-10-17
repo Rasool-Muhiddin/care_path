@@ -47,6 +47,8 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>يستخدم Axon الميكروفون لتسجيل الرسائل الصوتية في المحادثة فقط. Axon uses the microphone only to record voice messages in chat.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

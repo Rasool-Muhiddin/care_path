@@ -33,6 +33,10 @@
     sudo chmod 755 /var/www/axon /var/www/axon/static
     sudo chmod 2775 /var/www/axon/media
     sudo chown axon:axon /var/backups/axon
+    # الرسائل الصوتية: خارج media، يقرؤها nginx (www-data) عبر X-Accel-Redirect فقط
+    sudo mkdir -p /var/www/axon/private/voice
+    sudo chown -R axon:www-data /var/www/axon/private
+    sudo chmod 2750 /var/www/axon/private /var/www/axon/private/voice
 (مستخدم مخصص بدل `ubuntu` يعني أن اختراق هذا المشروع لا يعطي وصولاً لملفات المشاريع الأخرى.)
 
 ## 3) قاعدة PostgreSQL جديدة (نفس خادم PostgreSQL الموجود، بأسماء جديدة)

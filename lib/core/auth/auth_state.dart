@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/chat/data/voice_cache.dart';
 import '../network/api_client.dart';
 import '../notifications/fcm_service.dart';
 import '../permissions/user_role.dart';
@@ -109,6 +112,9 @@ class AuthNotifier extends Notifier<AuthStatus> {
     await FcmService.instance.teardown();
     await ref.read(authRepositoryProvider).logout();
     state = const AuthUnauthenticated();
+    // الرسائل الصوتية المحمّلة مراسلات طبية: لا تبقى على الجهاز بعد الخروج.
+    // في الخلفية: التنظيف لا يؤخر الخروج.
+    unawaited(VoiceCache.clear());
   }
 
   /// الخروج بعد نجاح حذف الحساب (AuthRepository.deleteAccount). الخادم حذف
@@ -118,6 +124,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
     await FcmService.instance.teardown(serverAlreadyCleared: true);
     await TokenStorage.instance.clear();
     state = const AuthUnauthenticated();
+    unawaited(VoiceCache.clear());
   }
 }
 

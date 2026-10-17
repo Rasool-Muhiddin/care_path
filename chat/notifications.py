@@ -34,11 +34,11 @@ def notify_new_message(message: ChatMessage) -> None:
         return
 
     # نص عام بلا محتوى الرسالة ولا اسم المرسل: الإشعار يظهر على شاشة القفل
-    # ويمر عبر خوادم Google، والمحادثة طبية.
+    # ويمر عبر خوادم Google، والمحادثة طبية. الصوتية تُذكر كنوع فقط.
     send_push_to_users(
         recipients,
         title="رسالة جديدة",
-        body="لديك رسالة جديدة",
+        body="رسالة صوتية جديدة" if message.is_voice else "لديك رسالة جديدة",
         data={
             "type": "chat_message",
             "case_id": message.case_id,

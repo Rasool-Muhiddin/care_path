@@ -157,6 +157,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(messages: _merge(state.messages, [sent]));
   }
 
+  /// مثل [send]: يرمي الاستثناء عند الفشل كي تُبقي الشاشة التسجيل للمحاولة مجدداً.
+  Future<void> sendVoice(String filePath) async {
+    final sent = await _repo.sendVoice(conversation.caseId, conversation.inquiryType, filePath);
+    if (!mounted) return;
+    state = state.copyWith(messages: _merge(state.messages, [sent]));
+  }
+
   @override
   void dispose() {
     _pollTimer?.cancel();

@@ -6,9 +6,11 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/permissions/user_role.dart';
 import '../data/chat_message_model.dart';
+import '../data/chat_repository.dart';
 import '../data/engineer_conversation_model.dart';
 import '../logic/chat_notifier.dart';
 import '../logic/engineer_inbox_notifier.dart';
+import 'voice_message_widgets.dart';
 
 /// Chat-only background: a deep teal-to-navy gradient with a soft glow
 /// near the top, distinct from [AppGradientBackground] so the messaging
@@ -87,6 +89,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   InquiryType? _selectedInquiryType;
   bool _isSending = false;
 
+  /// زر الميكروفون يظهر مكان زر الإرسال حين يكون الحقل فارغاً
+  bool _hasText = false;
+  final _recorder = VoiceRecorderController();
+  late final _playback = VoicePlaybackController(ref.read(chatRepositoryProvider));
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      final hasText = _controller.text.trim().isNotEmpty;
+      if (hasText != _hasText) setState(() => _hasText = hasText);
+    });
+  }
+
+  /// تغيير القناة يلغي أي تسجيل جارٍ ويوقف التشغيل: الرسالة الصوتية تخص
+  /// القناة التي سُجّلت فيها فقط.
+  void _selectChannel(InquiryType? type) {
+    _recorder.discard();
+    _playback.stopAll();
+    setState(() => _selectedInquiryType = type);
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
@@ -97,7 +121,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // استفسار تقني للطبيب بالخطأ، ويجعل القناتين واضحتين منذ البداية.
     if (currentRole == UserRole.patient && _selectedInquiryType == null) {
       return _InquiryTypePicker(
-        onSelect: (type) => setState(() => _selectedInquiryType = type),
+        onSelect: _selectChannel,
       );
     }
 
@@ -111,6 +135,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? ref.watch(replyRightsProvider(widget.caseId)).valueOrNull ?? widget.initialReplyRights
         : null;
     final isEngineerTechnicalReadOnly = replyRights != null && !replyRights.canReply;
+    // صار للقراءة فقط أثناء التسجيل (تغيّر مهندس العيادة): لا يبقى تسجيل بلا واجهة
+    if ((isEngineerMedicalReadOnly || isEngineerTechnicalReadOnly) && _recorder.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recorder.discard());
+    }
     final doctorLabel = (widget.doctorName != null && widget.doctorName!.trim().isNotEmpty)
         ? 'د. ${widget.doctorName!.trim()}'
         : 'الطبيب المعالج';
@@ -131,7 +159,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 tooltip: 'تغيير نوع الاستفسار',
-                onPressed: () => setState(() => _selectedInquiryType = null),
+                onPressed: () => _selectChannel(null),
               )
             : null,
         // اختيار القناة للمدير فقط: المهندس العادي لا يرى القناة الطبية
@@ -142,7 +170,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   tooltip: 'اختيار قناة المحادثة',
                   icon: const Icon(Icons.more_vert, color: Colors.white),
                   color: AppGlassColors.baseDark,
-                  onSelected: (type) => setState(() => _selectedInquiryType = type),
+                  onSelected: _selectChannel,
                   itemBuilder: (context) => InquiryType.values
                       .map(
                         (type) => PopupMenuItem(
@@ -202,10 +230,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         if (!msg.isMine) Text(msg.senderName, style: _Txt.senderName),
-                                        Text(
-                                          msg.text,
-                                          style: msg.isMine ? _Txt.bubbleTextMine : _Txt.bubbleTextTheirs,
-                                        ),
+                                        if (msg.isVoice)
+                                          VoiceMessageContent(
+                                            message: msg,
+                                            playback: _playback,
+                                            onError: _showPlaybackError,
+                                          )
+                                        else
+                                          Text(
+                                            msg.text,
+                                            style: msg.isMine ? _Txt.bubbleTextMine : _Txt.bubbleTextTheirs,
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -227,31 +262,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               else
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: GlassContainer(
-                    borderRadius: 24,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            style: const TextStyle(color: Colors.white),
-                            cursorColor: Colors.white,
-                            decoration: InputDecoration(
-                              hintText: isStaff ? 'Type a message...' : 'اكتب رسالة...',
-                              hintStyle: const TextStyle(color: Colors.white54),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: ListenableBuilder(
+                    listenable: _recorder,
+                    builder: (context, _) => _recorder.isActive
+                        ? VoiceRecordingBar(
+                            recorder: _recorder,
+                            isStaff: isStaff,
+                            isSending: _isSending,
+                            onCancel: _recorder.discard,
+                            onSend: _sendVoice,
+                          )
+                        : GlassContainer(
+                            borderRadius: 24,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _controller,
+                                    style: const TextStyle(color: Colors.white),
+                                    cursorColor: Colors.white,
+                                    decoration: InputDecoration(
+                                      hintText: isStaff ? 'Type a message...' : 'اكتب رسالة...',
+                                      hintStyle: const TextStyle(color: Colors.white54),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    ),
+                                    onSubmitted: (_) => _send(),
+                                  ),
+                                ),
+                                if (_hasText)
+                                  IconButton(
+                                    icon: const Icon(Icons.send, color: Colors.white),
+                                    onPressed: _isSending ? null : _send,
+                                  )
+                                else
+                                  IconButton(
+                                    icon: const Icon(Icons.mic, color: Colors.white),
+                                    tooltip: isStaff ? 'Record a voice message' : 'تسجيل رسالة صوتية',
+                                    onPressed: _isSending ? null : _startRecording,
+                                  ),
+                              ],
                             ),
-                            onSubmitted: (_) => _send(),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white),
-                          onPressed: _isSending ? null : _send,
-                        ),
-                      ],
-                    ),
                   ),
                 ),
             ],
@@ -268,37 +321,104 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// ليعيد المستخدم المحاولة، ويظهر سبب الخطأ.
   Future<void> _send() async {
     final text = _controller.text;
-    if (_isSending || text.trim().isEmpty) return;
-    final authState = ref.read(authStateProvider);
-    final currentRole = authState is AuthAuthenticated ? authState.user.role : null;
-    final inquiryType =
-        currentRole == UserRole.doctor ? InquiryType.medical : _selectedInquiryType ?? InquiryType.technical;
-    // حماية إضافية: المهندس لا يرسل في القناة الطبية (والـ backend يرفض أيضاً).
-    if (currentRole == UserRole.engineer && inquiryType == InquiryType.medical) return;
+    final target = _sendTarget();
+    if (_isSending || text.trim().isEmpty || target == null) return;
 
     setState(() => _isSending = true);
     try {
-      await ref.read(chatProvider(ChatConversation(widget.caseId, inquiryType)).notifier).send(text);
+      await ref.read(chatProvider(target).notifier).send(text);
       // لا نمسح ما كتبه المستخدم أثناء الإرسال — فقط النص الذي أُرسل
       if (mounted && _controller.text == text) _controller.clear();
     } catch (e) {
-      if (!mounted) return;
-      // تغيّر مهندس العيادة أثناء فتح الشاشة: أعد جلب حق الرد ليظهر شريط القراءة فقط
-      if (e is ApiException && e.statusCode == 403 && currentRole == UserRole.engineer) {
-        ref.invalidate(replyRightsProvider(widget.caseId));
-      }
-      final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر إرسال الرسالة: $reason')),
-      );
+      _showSendError(e);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
+  /// القناة التي يرسل فيها المستخدم الآن، أو null إن لم يكن له حق الكتابة
+  /// فيها: حماية إضافية، المهندس لا يرسل في القناة الطبية (والـ backend يرفض أيضاً).
+  ChatConversation? _sendTarget() {
+    final authState = ref.read(authStateProvider);
+    final currentRole = authState is AuthAuthenticated ? authState.user.role : null;
+    final inquiryType =
+        currentRole == UserRole.doctor ? InquiryType.medical : _selectedInquiryType ?? InquiryType.technical;
+    if (currentRole == UserRole.engineer && inquiryType == InquiryType.medical) return null;
+    return ChatConversation(widget.caseId, inquiryType);
+  }
+
+  Future<void> _startRecording() async {
+    // لا تُسمع رسالة صوتية أثناء التسجيل
+    await _playback.stopAll();
+    final result = await _recorder.start();
+    if (!mounted) return;
+    final message = switch (result) {
+      VoiceStartResult.started => null,
+      VoiceStartResult.permissionDenied =>
+        'لا يمكن تسجيل رسالة صوتية بدون إذن الميكروفون. فعّل إذن الميكروفون للتطبيق من إعدادات الجهاز ثم حاول مجدداً.',
+      VoiceStartResult.failed => 'تعذّر بدء التسجيل، حاول مرة أخرى.',
+    };
+    if (message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  /// مثل النص: يُحذف التسجيل فقط بعد نجاح الإرسال؛ عند الفشل يبقى جاهزاً
+  /// ليعيد المستخدم المحاولة بزر الإرسال، ويظهر سبب الخطأ.
+  Future<void> _sendVoice() async {
+    final target = _sendTarget();
+    if (_isSending || target == null) return;
+    await _recorder.stop();
+    if (!mounted) return;
+    final path = _recorder.path;
+    if (path == null || _recorder.isTooShort) {
+      await _recorder.discard();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('التسجيل قصير جداً.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isSending = true);
+    try {
+      await ref.read(chatProvider(target).notifier).sendVoice(path);
+      await _recorder.discard();
+    } catch (e) {
+      _showSendError(e);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _showSendError(Object e) {
+    if (!mounted) return;
+    final authState = ref.read(authStateProvider);
+    final currentRole = authState is AuthAuthenticated ? authState.user.role : null;
+    // تغيّر مهندس العيادة أثناء فتح الشاشة: أعد جلب حق الرد ليظهر شريط القراءة فقط
+    if (e is ApiException && e.statusCode == 403 && currentRole == UserRole.engineer) {
+      ref.invalidate(replyRightsProvider(widget.caseId));
+    }
+    final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تعذّر إرسال الرسالة: $reason')),
+    );
+  }
+
+  void _showPlaybackError(Object e) {
+    if (!mounted) return;
+    final reason = e is ApiException ? e.message : 'حدث خطأ غير متوقع';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تعذّر تشغيل الرسالة الصوتية: $reason')),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
+    _recorder.dispose();
+    _playback.dispose();
     super.dispose();
   }
 }

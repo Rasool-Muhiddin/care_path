@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
@@ -45,6 +47,46 @@ class ChatRepository {
         data: {'text': text, 'inquiry_type': inquiryType.apiValue},
       );
       return ChatMessageModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _apiClient.mapError(e);
+    }
+  }
+
+  /// رسالة صوتية: ملف m4a (AAC) multipart على نفس endpoint النص، فتمر
+  /// بنفس قواعد الإرسال في الخادم. المدة يقرؤها الخادم من الملف نفسه.
+  Future<ChatMessageModel> sendVoice(int caseId, InquiryType inquiryType, String filePath) async {
+    try {
+      final response = await _apiClient.raw.post(
+        ApiEndpoints.caseMessages(caseId),
+        data: FormData.fromMap({
+          'inquiry_type': inquiryType.apiValue,
+          'audio': await MultipartFile.fromFile(
+            filePath,
+            filename: 'voice.m4a',
+            contentType: DioMediaType('audio', 'mp4'),
+          ),
+        }),
+        // رفع حتى دقيقتين من الصوت على شبكة ضعيفة
+        options: Options(sendTimeout: const Duration(seconds: 60)),
+      );
+      return ChatMessageModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _apiClient.mapError(e);
+    }
+  }
+
+  /// يحمّل ملف الرسالة الصوتية بتوكن الدخول (عبر الـ interceptor، ومنه
+  /// تجديد التوكن عند 401) ويكتبه في [savePath].
+  Future<void> downloadVoice(String audioUrl, String savePath) async {
+    try {
+      final response = await _apiClient.raw.get<List<int>>(
+        '${ApiEndpoints.baseUrl}$audioUrl',
+        options: Options(responseType: ResponseType.bytes, receiveTimeout: const Duration(seconds: 60)),
+      );
+      // ملف مؤقت ثم إعادة تسمية: لا يبقى ملف ناقص في الـ cache إن انقطع التحميل
+      final partial = File('$savePath.part');
+      await partial.writeAsBytes(response.data!, flush: true);
+      await partial.rename(savePath);
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }

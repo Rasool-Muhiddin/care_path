@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/widgets/account_menu.dart';
 import '../../../core/attacks/attack_models.dart';
 import '../../../core/attacks/attack_repository.dart';
 import '../../../core/auth/auth_state.dart';
@@ -18,6 +17,7 @@ import '../models/session_model.dart';
 import '../patient_providers.dart';
 import 'attack_confirmation_prompt.dart';
 import 'log_attack_dialog.dart';
+import '../../settings/settings_screen.dart';
 
 /// الشاشة الرئيسية للمريض: ملخص حالته (خطة العلاج ونوع الجهاز)، زر إنهاء
 /// الجلسة اليومية، زر فتح المحادثة مع الطبيب، وقائمة بجلساته السابقة.
@@ -191,8 +191,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               tooltip: 'المحادثة مع الطبيب',
               onPressed: () => context.push('/patient/chat/$myCaseId'),
             ),
-          // Log out + delete account
-          AccountMenuButton(strings: AccountMenuStrings.ar),
+          // Settings (account info, log out, delete account, ...)
+          SettingsButton(strings: SettingsStrings.ar),
         ],
       ),
       body: AppGradientBackground(

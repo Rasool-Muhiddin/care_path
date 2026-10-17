@@ -15,7 +15,7 @@ class ClinicViewSet(viewsets.ModelViewSet):
     فقط. لا يحتاج الطبيب أو المريض رؤية قائمة العيادات إطلاقاً.
     """
 
-    queryset = Clinic.objects.order_by("name", "pk")
+    queryset = Clinic.objects.select_related("responsible_engineer").order_by("name", "pk")
     serializer_class = ClinicSerializer
 
     def get_permissions(self):

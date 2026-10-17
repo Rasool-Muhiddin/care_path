@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/ltr_scope.dart';
-import '../../chat/presentation/chat_screen.dart';
 import '../../doctor/models/case_model.dart' show CaseStatus;
 import '../engineer_providers.dart';
 import '../models/case_summary_model.dart';
@@ -222,9 +221,6 @@ class _CaseCard extends StatelessWidget {
             caseSummary.status.label,
             style: TextStyle(fontSize: 12, color: statusColor),
           ),
-        ),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ChatScreen(caseId: caseSummary.id)),
         ),
       ),
     );

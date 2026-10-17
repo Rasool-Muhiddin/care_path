@@ -6,13 +6,11 @@ import '../auth/auth_state.dart';
 import '../permissions/user_role.dart';
 import 'glass_container.dart';
 
-/// UI strings for [AccountMenuButton] and the delete-account flow —
+/// UI strings for the delete-account flow ([deleteAccountFlow]) —
 /// English for doctor/engineer, Arabic for the patient.
 class AccountMenuStrings {
   const AccountMenuStrings({
     required this.direction,
-    required this.tooltip,
-    required this.logout,
     required this.deleteAccount,
     required this.whatIsDeleted,
     required this.passwordTitle,
@@ -29,8 +27,6 @@ class AccountMenuStrings {
   });
 
   final TextDirection direction;
-  final String tooltip;
-  final String logout;
   final String deleteAccount;
   final String Function(UserRole role) whatIsDeleted;
   final String passwordTitle;
@@ -49,8 +45,6 @@ class AccountMenuStrings {
 
   static final en = AccountMenuStrings(
     direction: TextDirection.ltr,
-    tooltip: 'Account',
-    logout: 'Log out',
     deleteAccount: 'Delete account',
     whatIsDeleted: (role) => switch (role) {
       UserRole.doctor => 'Your account and sign-in will be deleted permanently.\n\n'
@@ -82,8 +76,6 @@ class AccountMenuStrings {
 
   static final ar = AccountMenuStrings(
     direction: TextDirection.rtl,
-    tooltip: 'الحساب',
-    logout: 'تسجيل الخروج',
     deleteAccount: 'حذف الحساب',
     whatIsDeleted: (_) => 'سيتم حذف حسابك وكل بياناتك نهائياً:\n'
         '• حالتك المرضية\n'
@@ -105,66 +97,10 @@ class AccountMenuStrings {
   );
 }
 
-enum _AccountAction { logout, deleteAccount }
-
-/// AppBar account menu (log out / delete account), shared by every role's
-/// home screen so account deletion is always in the same place.
-class AccountMenuButton extends ConsumerWidget {
-  const AccountMenuButton({super.key, required this.strings});
-  final AccountMenuStrings strings;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return PopupMenuButton<_AccountAction>(
-      tooltip: strings.tooltip,
-      icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
-      color: AppGlassColors.baseDark,
-      onSelected: (action) => switch (action) {
-        _AccountAction.logout => ref.read(authStateProvider.notifier).logout(),
-        _AccountAction.deleteAccount => _deleteAccountFlow(context, ref, strings),
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: _AccountAction.logout,
-          child: _MenuRow(icon: Icons.logout, text: strings.logout, direction: strings.direction),
-        ),
-        PopupMenuItem(
-          value: _AccountAction.deleteAccount,
-          child: _MenuRow(
-            icon: Icons.delete_forever_outlined,
-            text: strings.deleteAccount,
-            direction: strings.direction,
-            color: const Color(0xFFF87171),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({required this.icon, required this.text, required this.direction, this.color = Colors.white});
-  final IconData icon;
-  final String text;
-  final TextDirection direction;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Directionality(
-        textDirection: direction,
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(width: 10),
-            Flexible(child: Text(text, style: TextStyle(color: color))),
-          ],
-        ),
-      );
-}
-
 /// Explain → password → final confirmation → API. On success the auth state
 /// becomes unauthenticated and the router goes to the login screen.
-Future<void> _deleteAccountFlow(BuildContext context, WidgetRef ref, AccountMenuStrings s) async {
+/// Started from the Settings screen's "Delete account" entry.
+Future<void> deleteAccountFlow(BuildContext context, WidgetRef ref, AccountMenuStrings s) async {
   final auth = ref.read(authStateProvider);
   if (auth is! AuthAuthenticated) return;
 

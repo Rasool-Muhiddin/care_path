@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/widgets/account_menu.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/ltr_scope.dart';
 import '../doctor_providers.dart';
 import '../models/case_model.dart';
 import 'case_details_screen.dart';
+import '../../settings/settings_screen.dart';
 
 /// Doctor's home screen: list of their cases, prioritized (active cases
 /// needing follow-up first).
@@ -49,8 +49,8 @@ class DoctorHomeScreen extends ConsumerWidget {
             ),
           ),
           actions: [
-            // Log out + delete account
-            AccountMenuButton(strings: AccountMenuStrings.en),
+            // Settings (account info, log out, delete account, ...)
+            SettingsButton(strings: SettingsStrings.en),
           ],
         ),
         floatingActionButton: _GlassFab(

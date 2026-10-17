@@ -4,6 +4,16 @@ from .models import Clinic, Device, DeviceType
 
 
 class ClinicSerializer(serializers.ModelSerializer):
+    # اسم المهندس المسؤول للعرض فقط (None إن لم يُعيَّن)؛ responsible_engineer
+    # محمّل مسبقاً في ClinicViewSet.queryset عبر select_related
+    responsible_engineer_name = serializers.SerializerMethodField()
+
+    def get_responsible_engineer_name(self, obj):
+        engineer = obj.responsible_engineer
+        if engineer is None:
+            return None
+        return engineer.get_full_name() or engineer.username
+
     class Meta:
         model = Clinic
         fields = "__all__"

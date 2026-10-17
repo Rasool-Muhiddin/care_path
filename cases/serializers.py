@@ -31,6 +31,9 @@ class CaseSerializer(serializers.ModelSerializer):
         source="device.serial_number", read_only=True, default=None
     )
     clinic_name = serializers.CharField(source="device.clinic.name", read_only=True, default=None)
+    # المهندس المسؤول عن عيادة جهاز الحالة (None إن لم يكن للجهاز عيادة أو
+    # لم يُعيَّن للعيادة مهندس) — للعرض تحت الطبيب المسؤول
+    responsible_engineer_name = serializers.SerializerMethodField()
     # الجلسات المكتملة فعلياً (تُحسب من TreatmentSession المرتبطة بالحالة)،
     # والجلسات المتبقية إذا كان total_sessions_planned محدداً.
     completed_sessions_count = serializers.SerializerMethodField()
@@ -43,6 +46,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "patient_name",
             "doctor",
             "doctor_name",
+            "responsible_engineer_name",
             "device",
             "device_type_name",
             "device_serial_number",
@@ -73,6 +77,13 @@ class CaseSerializer(serializers.ModelSerializer):
         if not obj.doctor:
             return None
         return obj.doctor.get_full_name() or obj.doctor.username
+
+    def get_responsible_engineer_name(self, obj):
+        clinic = obj.device.clinic if obj.device else None
+        engineer = clinic.responsible_engineer if clinic else None
+        if engineer is None:
+            return None
+        return engineer.get_full_name() or engineer.username
 
     def _sessions_count(self, obj):
         # sessions_count محسوبة مسبقاً في CaseViewSet.get_queryset (annotate)؛

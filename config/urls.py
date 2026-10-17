@@ -12,6 +12,12 @@ urlpatterns = [
         TemplateView.as_view(template_name="accounts/account_deletion.html"),
         name="account-deletion",
     ),
+    # صفحة عامة لسياسة الخصوصية (رابط مطلوب في المتاجر) — نص مؤقت، TODO(publisher)
+    path(
+        "privacy/",
+        TemplateView.as_view(template_name="accounts/privacy_policy.html"),
+        name="privacy-policy",
+    ),
     path("api/", include("accounts.urls")),
     path("api/", include("devices.urls")),
     path("api/", include("cases.urls")),

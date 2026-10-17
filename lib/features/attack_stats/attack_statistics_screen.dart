@@ -194,25 +194,20 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
         const SizedBox(height: 12),
 
         // --- Period selector ---
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
+        GlassSegmentedControl<StatsPeriod>(
+          segments: [
             for (final p in StatsPeriod.values)
-              ChoiceChip(
-                label: Text(p.label),
-                selected: _period == p,
-                showCheckmark: false,
-                labelStyle: const TextStyle(color: Colors.white, fontSize: 13),
-                backgroundColor: Colors.white.withValues(alpha: 0.06),
-                selectedColor: Colors.white.withValues(alpha: 0.22),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
-                avatar: p == StatsPeriod.custom
-                    ? const Icon(Icons.date_range_outlined, size: 16, color: Colors.white)
-                    : null,
-                onSelected: (_) => _selectPeriod(p, analysis),
+              GlassSegment(
+                value: p,
+                label: p.label,
+                icon: p == StatsPeriod.custom ? Icons.date_range_outlined : null,
               ),
           ],
+          selected: _period,
+          onSelected: (p) {
+            // Re-tapping "Custom" reopens the date picker; other periods are no-ops.
+            if (p != _period || p == StatsPeriod.custom) _selectPeriod(p, analysis);
+          },
         ),
         const SizedBox(height: 8),
         Text(
@@ -241,30 +236,22 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
           title: 'Sessions vs attacks',
         ),
         const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SegmentedButton<StatsGranularity>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        GlassSegmentedControl<StatsGranularity>(
+          segments: [
+            GlassSegment(
+              value: StatsGranularity.weekly,
+              label: 'Weekly',
+              enabled: allowed(StatsGranularity.weekly),
             ),
-            segments: [
-              ButtonSegment(
-                value: StatsGranularity.weekly,
-                label: const Text('Weekly'),
-                enabled: allowed(StatsGranularity.weekly),
-              ),
-              ButtonSegment(
-                value: StatsGranularity.monthly,
-                label: const Text('Monthly'),
-                enabled: allowed(StatsGranularity.monthly),
-              ),
-              const ButtonSegment(value: StatsGranularity.yearly, label: Text('Yearly')),
-            ],
-            selected: {granularity},
-            onSelectionChanged: (s) => setState(() => _granularity = s.first),
-          ),
+            GlassSegment(
+              value: StatsGranularity.monthly,
+              label: 'Monthly',
+              enabled: allowed(StatsGranularity.monthly),
+            ),
+            const GlassSegment(value: StatsGranularity.yearly, label: 'Yearly'),
+          ],
+          selected: granularity,
+          onSelected: (g) => setState(() => _granularity = g),
         ),
         const SizedBox(height: 10),
         GlassContainer(

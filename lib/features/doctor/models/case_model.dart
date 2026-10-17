@@ -82,6 +82,9 @@ class CaseModel {
   final String patientName;
   final int? doctorId;
   final String? doctorName;
+  /// Responsible engineer of the clinic where the case's device is located;
+  /// null when the device has no clinic or the clinic has no engineer.
+  final String? responsibleEngineerName;
   final String? deviceId;
   final String? deviceTypeName;
   final String? deviceSerialNumber;
@@ -108,6 +111,7 @@ class CaseModel {
     required this.patientName,
     this.doctorId,
     this.doctorName,
+    this.responsibleEngineerName,
     this.deviceId,
     this.deviceTypeName,
     this.deviceSerialNumber,
@@ -136,6 +140,7 @@ class CaseModel {
       patientName: json['patient_name'] as String? ?? '',
       doctorId: json['doctor'] as int?,
       doctorName: json['doctor_name'] as String?,
+      responsibleEngineerName: json['responsible_engineer_name'] as String?,
       deviceId: json['device'] as String?,
       deviceTypeName: json['device_type_name'] as String?,
       deviceSerialNumber: json['device_serial_number'] as String?,

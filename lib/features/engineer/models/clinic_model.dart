@@ -1,4 +1,5 @@
-/// Clinic model — matches ClinicSerializer in devices/serializers.py (fields = "__all__")
+/// Clinic model — matches ClinicSerializer in devices/serializers.py
+/// (fields = "__all__" plus read-only responsible_engineer_name)
 class ClinicModel {
   final int id;
   final String name;
@@ -6,6 +7,7 @@ class ClinicModel {
   final String phoneNumber;
   final String contactPerson;
   final int? responsibleEngineerId;
+  final String? responsibleEngineerName;
 
   const ClinicModel({
     required this.id,
@@ -14,6 +16,7 @@ class ClinicModel {
     required this.phoneNumber,
     required this.contactPerson,
     this.responsibleEngineerId,
+    this.responsibleEngineerName,
   });
 
   factory ClinicModel.fromJson(Map<String, dynamic> json) {
@@ -24,6 +27,7 @@ class ClinicModel {
       phoneNumber: json['phone_number'] as String? ?? '',
       contactPerson: json['contact_person'] as String? ?? '',
       responsibleEngineerId: json['responsible_engineer'] as int?,
+      responsibleEngineerName: json['responsible_engineer_name'] as String?,
     );
   }
 }

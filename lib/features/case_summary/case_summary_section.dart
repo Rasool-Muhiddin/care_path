@@ -64,7 +64,7 @@ class CaseSummarySection extends ConsumerWidget {
           icon: Icons.history_toggle_off,
           color: AppAccent.caseC,
           title: 'Before treatment',
-          caption: 'The patient\'s condition at registration — the baseline.',
+          caption: 'The patient\'s condition at registration',
           children: [
             _Row('Diagnosis', c.diagnosisType.label),
             _Row('${c.diagnosisType.label} type', diseaseTypeLabel(c.diagnosisType, c.diseaseType)),
@@ -74,7 +74,7 @@ class CaseSummarySection extends ConsumerWidget {
               c.episodeDurationMinutes != null ? formatAttackDuration(c.episodeDurationMinutes! * 60) : '—',
             ),
             _Row('Symptoms', _orDash(c.symptoms)),
-            _Row('Medications at registration', _orDash(c.currentMedications)),
+            _Row('Medications', _orDash(c.currentMedications)),
             _Row('Initial evaluation', _orDash(c.initialEvaluation)),
             _Row('Registered', _date(c.createdAt)),
           ],
@@ -88,6 +88,9 @@ class CaseSummarySection extends ConsumerWidget {
           children: [
             _Row('Status', c.status.label),
             _Row('Doctor', _orDash(c.doctorName)),
+            _Row('Responsible engineer', c.responsibleEngineerName?.trim().isNotEmpty == true
+                ? c.responsibleEngineerName!.trim()
+                : 'Not assigned'),
             _Row('Treatment start', _date(c.createdAt)),
             _Row('Sessions completed', sessionsValue),
             _Row('Treatment plan', _orDash(c.treatmentPlan)),

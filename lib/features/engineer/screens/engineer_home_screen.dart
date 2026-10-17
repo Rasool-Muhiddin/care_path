@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/widgets/account_menu.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/theme/app_theme.dart';
@@ -12,6 +11,7 @@ import 'device_types_tab.dart';
 import 'devices_tab.dart';
 import 'messages_tab.dart';
 import 'overview_tab.dart';
+import '../../settings/settings_screen.dart';
 
 /// AppBar title: a small glass-style "BME" badge (Biomedical Engineer)
 /// followed by the user's name — replaces the plain "Eng. name" text.
@@ -156,8 +156,8 @@ class _EngineerHomeScreenState extends ConsumerState<EngineerHomeScreen>
       foregroundColor: Colors.white,
       title: _BmeTitle(username: username),
       actions: [
-        // Log out + delete account
-        AccountMenuButton(strings: AccountMenuStrings.en),
+        // Settings (account info, log out, delete account, ...)
+        SettingsButton(strings: SettingsStrings.en),
       ],
       bottom: TabBar(
         controller: _tabController,

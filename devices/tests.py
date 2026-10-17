@@ -121,3 +121,45 @@ class ManagerOnlyDeviceAdminTests(CareWorldMixin, APITestCase):
         for url in ("/api/clinics/", "/api/device-types/"):
             self.assertEqual(client.get(url).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(client.delete(f"{DEVICES}{self.device_free.pk}/").status_code, 403)
+
+
+class ClinicResponsibleEngineerNameTests(CareWorldMixin, APITestCase):
+    """responsible_engineer_name للعرض فقط، بلا استعلام إضافي لكل عيادة."""
+
+    # count (الترقيم) + العيادات مع JOIN للمهندس المسؤول
+    EXPECTED_QUERIES = 2
+
+    def names(self):
+        response = self.client_for(self.engineer).get("/api/clinics/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return {c["name"]: c["responsible_engineer_name"] for c in results(response)}
+
+    def test_full_name_username_fallback_and_unassigned(self):
+        self.engineer.first_name, self.engineer.last_name = "Omar", "Saleh"
+        self.engineer.save()
+        Clinic.objects.create(name="Named", responsible_engineer=self.engineer)
+        Clinic.objects.create(name="No name", responsible_engineer=self.manager)
+        Clinic.objects.create(name="Unassigned")
+        self.assertEqual(
+            self.names(),
+            {"Named": "Omar Saleh", "No name": self.manager.username, "Unassigned": None},
+        )
+
+    def test_read_only(self):
+        clinic = Clinic.objects.create(name="C", responsible_engineer=self.engineer)
+        response = self.client_for(self.manager).patch(
+            f"/api/clinics/{clinic.pk}/", {"responsible_engineer_name": "X"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["responsible_engineer_name"], self.engineer.username)
+
+    def test_query_count_is_constant(self):
+        Clinic.objects.create(name="C0", responsible_engineer=self.engineer)
+        client = self.client_for(self.engineer)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            client.get("/api/clinics/")
+        for i in range(5):
+            Clinic.objects.create(name=f"C{i + 1}", responsible_engineer=self.manager)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            response = client.get("/api/clinics/")
+        self.assertEqual(response.data["count"], 6)

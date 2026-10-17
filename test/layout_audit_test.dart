@@ -35,6 +35,8 @@ import 'package:axon/features/patient/models/session_model.dart';
 import 'package:axon/features/patient/patient_providers.dart';
 import 'package:axon/features/patient/screens/log_attack_dialog.dart';
 import 'package:axon/features/patient/screens/patient_home_screen.dart';
+import 'package:axon/features/settings/info_pages.dart';
+import 'package:axon/features/settings/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -215,6 +217,8 @@ List<Override> _common(UserRole role, CaseModel c, {bool migraine = true}) => [
       // patient
       myCaseProvider.overrideWith((ref) async => c),
       mySessionsProvider.overrideWith((ref) async => _sessions),
+      // settings
+      appVersionProvider.overrideWith((ref) async => '0.1.4 (5)'),
     ];
 
 /// A screen whose only content is a button that opens a dialog.
@@ -275,6 +279,11 @@ void main() {
     testWidgets('log attack — epilepsy', (t) => _audit(t, 'log attack epilepsy',
         _opener((context, ref) => showLogAttackDialog(context, epilepsy)), _common(UserRole.patient, epilepsy),
         interact: _tapOpen, arabic: true));
+    testWidgets('settings', (t) => _audit(t, 'patient settings',
+        SettingsScreen(strings: SettingsStrings.ar), _common(UserRole.patient, migraine), arabic: true));
+    testWidgets('about us', (t) => _audit(t, 'patient about us',
+        const AboutUsScreen(title: 'من نحن', direction: TextDirection.rtl), _common(UserRole.patient, migraine),
+        arabic: true));
   });
 
   group('doctor', () {
@@ -351,5 +360,10 @@ void main() {
     testWidgets('add device type dialog', (t) => _audit(t, 'add device type dialog',
         _opener((context, ref) => showAddDeviceTypeDialog(context)), _common(UserRole.engineer, migraine),
         interact: _tapOpen));
+    testWidgets('settings', (t) => _audit(t, 'engineer settings',
+        SettingsScreen(strings: SettingsStrings.en), _common(UserRole.engineer, migraine)));
+    testWidgets('privacy policy', (t) => _audit(t, 'engineer privacy policy',
+        const PrivacyPolicyScreen(title: 'Privacy policy', direction: TextDirection.ltr),
+        _common(UserRole.engineer, migraine), arabic: true));
   });
 }

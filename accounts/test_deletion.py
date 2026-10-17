@@ -118,3 +118,13 @@ class AccountDeletionPageTests(APITestCase):
         self.assertIn("حذف الحساب", content)
         self.assertIn("Delete account", content)
         self.assertIn("WhatsApp", content)
+
+
+class PrivacyPolicyPageTests(APITestCase):
+    def test_public_page_in_arabic_and_english(self):
+        response = self.client.get("/privacy/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        content = response.content.decode()
+        self.assertIn("سياسة الخصوصية", content)
+        self.assertIn("Privacy policy", content)
+        self.assertIn("TODO(publisher)", content)

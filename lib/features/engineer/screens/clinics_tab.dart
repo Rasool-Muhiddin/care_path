@@ -143,6 +143,21 @@ class _ClinicTile extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(subtitleParts.join(' • '), style: AppText.tileSubtitle),
                 ],
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.engineering_outlined, size: 14, color: Colors.white54),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        clinic.responsibleEngineerName?.trim().isNotEmpty == true
+                            ? clinic.responsibleEngineerName!.trim()
+                            : 'Not assigned',
+                        style: AppText.tileSubtitle,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

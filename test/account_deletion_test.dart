@@ -4,12 +4,13 @@ import 'package:axon/core/auth/token_storage.dart';
 import 'package:axon/core/auth/user_model.dart';
 import 'package:axon/core/network/api_client.dart';
 import 'package:axon/core/permissions/user_role.dart';
-import 'package:axon/core/widgets/account_menu.dart';
 import 'package:axon/features/chat/data/chat_message_model.dart';
+import 'package:axon/features/settings/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _FakeAuth extends AuthNotifier {
   _FakeAuth(this._status);
@@ -37,10 +38,12 @@ class _FakeRepo extends AuthRepository {
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, UserRole role, _FakeRepo repo) async {
-  final strings = role == UserRole.patient ? AccountMenuStrings.ar : AccountMenuStrings.en;
+  final strings = role == UserRole.patient ? SettingsStrings.ar : SettingsStrings.en;
   final container = ProviderContainer(overrides: [
     authStateProvider.overrideWith(
-      () => _FakeAuth(AuthAuthenticated(UserModel(id: 1, username: 'u', email: '', role: role))),
+      () => _FakeAuth(AuthAuthenticated(
+            UserModel(id: 1, username: 'u', firstName: 'Sara', lastName: 'Ali', email: '', role: role),
+          )),
     ),
     authRepositoryProvider.overrideWithValue(repo),
   ]);
@@ -48,19 +51,31 @@ Future<ProviderContainer> _pump(WidgetTester tester, UserRole role, _FakeRepo re
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
-      home: Scaffold(appBar: AppBar(actions: [AccountMenuButton(strings: strings)])),
+      home: Scaffold(appBar: AppBar(actions: [SettingsButton(strings: strings)])),
     ),
   ));
+  // The account icon opens Settings; "Delete account" is the last entry.
   await tester.tap(find.byIcon(Icons.account_circle_outlined));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(find.byIcon(Icons.delete_forever_outlined), 200);
   await tester.pumpAndSettle();
   return container;
 }
 
 void main() {
-  setUp(() => FlutterSecureStorage.setMockInitialValues({
-        'axon_access_token': 'a',
-        'axon_refresh_token': 'r',
-      }));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({
+      'axon_access_token': 'a',
+      'axon_refresh_token': 'r',
+    });
+    PackageInfo.setMockInitialValues(
+      appName: 'axon',
+      packageName: 'com.example.axon',
+      version: '0.1.4',
+      buildNumber: '5',
+      buildSignature: '',
+    );
+  });
 
   testWidgets('patient: explain -> password -> confirm -> deleted and signed out', (tester) async {
     final repo = _FakeRepo();
@@ -122,6 +137,64 @@ void main() {
     expect(find.text('كلمة المرور غير صحيحة.'), findsOneWidget);
     expect(container.read(authStateProvider), isA<AuthAuthenticated>());
     expect(await TokenStorage.instance.hasTokens, isTrue);
+  });
+
+  testWidgets('settings: account info, sections in order, delete account last and apart from log out',
+      (tester) async {
+    // Tall enough to show the whole screen at once (rows are compared by position).
+    tester.view.physicalSize = const Size(390, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pump(tester, UserRole.engineer, _FakeRepo());
+
+    expect(find.text('Sara Ali'), findsOneWidget);
+    expect(find.text('u'), findsOneWidget);
+    expect(find.text('Engineer'), findsOneWidget);
+    expect(find.text('0.1.4 (5)'), findsOneWidget);
+
+    final order = [
+      'Account', 'Privacy policy', 'About us', 'Medical disclaimer', 'Contact & support',
+      'App version', 'Log out', 'Delete account',
+    ];
+    final ys = [for (final t in order) tester.getTopLeft(find.text(t)).dy];
+    for (var i = 1; i < ys.length; i++) {
+      expect(ys[i], greaterThan(ys[i - 1]), reason: '${order[i]} should be below ${order[i - 1]}');
+    }
+    // Clearly separated: not the next row under "Log out".
+    expect(ys.last - ys[ys.length - 2], greaterThan(80));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: privacy policy, about us and contact open in-app pages', (tester) async {
+    tester.view.physicalSize = const Size(390, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pump(tester, UserRole.patient, _FakeRepo());
+
+    await tester.tap(find.text('سياسة الخصوصية'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('PLACEHOLDER'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('من نحن'));
+    await tester.pumpAndSettle();
+    expect(find.text('Axon'), findsOneWidget);
+    expect(find.textContaining('Developed by Tera'), findsOneWidget);
+    expect(find.text('tera-software1.com'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('التواصل والدعم'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('للدعم والاستفسارات'), findsOneWidget);
+  });
+
+  testWidgets('settings: log out signs out', (tester) async {
+    final container = await _pump(tester, UserRole.doctor, _FakeRepo());
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+    expect(container.read(authStateProvider), isA<AuthUnauthenticated>());
   });
 
   test('a message whose sender account was deleted still parses', () {

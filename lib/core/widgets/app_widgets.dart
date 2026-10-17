@@ -177,3 +177,82 @@ class EmptyView extends StatelessWidget {
     );
   }
 }
+
+/// قطعة واحدة في [GlassSegmentedControl].
+class GlassSegment<T> {
+  const GlassSegment({required this.value, required this.label, this.icon, this.enabled = true});
+  final T value;
+  final String label;
+  final IconData? icon;
+  final bool enabled;
+}
+
+/// مبدّل زجاجي (بنفس شكل مبدّل تبويب الرسائل): بطاقة زجاجية، القطعة
+/// المختارة بخلفية بيضاء شفافة ونص أبيض عريض، وغير المختارة بنص باهت.
+/// يُستخدم بدل ChoiceChip/SegmentedButton اللذين يأخذان ألوان ثيم Material
+/// الفاتح فيصبح النص الأبيض غير مقروء على الخلفية الداكنة.
+/// [onSelected] يُستدعى حتى للقطعة المختارة (مثل "Custom" لإعادة فتح المنتقي).
+class GlassSegmentedControl<T> extends StatelessWidget {
+  const GlassSegmentedControl({
+    super.key,
+    required this.segments,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<GlassSegment<T>> segments;
+  final T selected;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      borderRadius: 14,
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [for (final s in segments) Expanded(child: _segment(s))],
+      ),
+    );
+  }
+
+  Widget _segment(GlassSegment<T> s) {
+    final isSelected = s.value == selected;
+    final color = !s.enabled ? Colors.white24 : (isSelected ? Colors.white : Colors.white60);
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      enabled: s.enabled,
+      child: Material(
+        color: isSelected ? Colors.white.withValues(alpha: 0.18) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: s.enabled ? () => onSelected(s.value) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (s.icon != null) ...[
+                  Icon(s.icon, size: 15, color: color),
+                  const SizedBox(width: 4),
+                ],
+                Flexible(
+                  child: Text(
+                    s.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

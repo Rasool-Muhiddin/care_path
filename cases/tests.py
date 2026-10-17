@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from config.testing import CareWorldMixin, make_user, results
+from devices.models import Clinic, Device
 from treatments.models import TreatmentSession
 
 from .models import AttackEvent, Case, CaseStatus
@@ -343,6 +344,33 @@ class CaseListQueryCountTests(CareWorldMixin, APITestCase):
             response = client.get(CASES)
         self.assertEqual(response.data["count"], 8)
 
+    def test_query_count_is_constant_with_clinic_engineers(self):
+        client = self.client_for(self.engineer)
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            client.get(CASES)
+        for i in range(5):
+            engineer = make_user(f"clinic_engineer_{i}", "engineer")
+            clinic = Clinic.objects.create(name=f"Clinic {i}", responsible_engineer=engineer)
+            device = Device.objects.create(serial_number=f"SN-E{i}", clinic=clinic)
+            patient = make_user(f"engineer_patient_{i}", "patient")
+            Case.objects.create(patient=patient, doctor=self.doctor_a, device=device, diagnosis_type="migraine")
+        with self.assertNumQueries(self.EXPECTED_QUERIES):
+            response = client.get(CASES)
+        self.assertEqual(response.data["count"], 8)
+
+    def test_responsible_engineer_name(self):
+        self.engineer.first_name, self.engineer.last_name = "Omar", "Saleh"
+        self.engineer.save()
+        Clinic.objects.create(name="Assigned", responsible_engineer=self.engineer)
+        self.device_1.clinic = Clinic.objects.get(name="Assigned")
+        self.device_1.save()
+        self.device_2.clinic = Clinic.objects.create(name="No engineer")
+        self.device_2.save()
+        data = {c["id"]: c for c in results(self.client_for(self.engineer).get(CASES))}
+        self.assertEqual(data[self.case_1.pk]["responsible_engineer_name"], "Omar Saleh")
+        self.assertIsNone(data[self.case_2.pk]["responsible_engineer_name"])  # clinic without engineer
+        self.assertIsNone(data[self.orphan_case.pk]["responsible_engineer_name"])  # no device
+
     def test_session_counts_are_still_correct(self):
         TreatmentSession.objects.create(case=self.case_1, session_date=timezone.now())
         Case.objects.filter(pk=self.case_1.pk).update(total_sessions_planned=10)
@@ -454,8 +482,6 @@ class CaseDeviceDetailsTests(CareWorldMixin, APITestCase):
     """ملخص الحالة يعرض رقم الجهاز وعيادته — بدون استعلام إضافي لكل حالة."""
 
     def test_serial_number_and_clinic_name(self):
-        from devices.models import Clinic
-
         clinic = Clinic.objects.create(name="Baghdad Clinic")
         self.device_1.clinic = clinic
         self.device_1.save()

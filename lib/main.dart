@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,14 +12,16 @@ import 'core/router/app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // يقرأ android/app/google-services.json تلقائياً — بدونه هذا الاستدعاء
-  // يفشل، لذا نلفّه بمحاولة حتى يبقى التطبيق يعمل قبل إعداد Firebase.
+  // يقرأ android/app/google-services.json (أو ios/Runner/GoogleService-Info.plist)
+  // تلقائياً — بدونه هذا الاستدعاء يفشل، لذا نلفّه بمحاولة حتى يبقى التطبيق
+  // يعمل قبل إعداد Firebase.
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  } catch (_) {
-    // Firebase غير مُعدّ بعد (google-services.json غير موجود) — الإشعارات
-    // فقط ستكون معطّلة، وبقية التطبيق يعمل بشكل طبيعي.
+  } catch (e) {
+    // Firebase غير مُعدّ بعد (ملف الإعداد غير موجود) — الإشعارات فقط ستكون
+    // معطّلة، وبقية التطبيق يعمل بشكل طبيعي.
+    if (kDebugMode) debugPrint('Firebase init skipped: $e');
   }
   runApp(const ProviderScope(child: AxonApp()));
 }

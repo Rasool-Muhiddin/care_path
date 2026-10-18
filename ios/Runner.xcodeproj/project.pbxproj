@@ -156,6 +156,7 @@
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
+				A7F3C2D10000000000000001 /* Copy GoogleService-Info.plist */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
@@ -197,6 +198,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ar,
 				Base,
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
@@ -235,6 +237,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A7F3C2D10000000000000001 /* Copy GoogleService-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Copy GoogleService-Info.plist";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# GoogleService-Info.plist is not in Git (see .gitignore); CI writes it before the build.\n# Bundle it when present, otherwise build anyway with Firebase disabled at runtime.\nPLIST_SRC=\"${SRCROOT}/Runner/GoogleService-Info.plist\"\nif [ -f \"$PLIST_SRC\" ]; then\n  cp \"$PLIST_SRC\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist\"\nelse\n  echo \"warning: ios/Runner/GoogleService-Info.plist not found - Firebase is disabled in this build.\"\nfi\n";
+		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

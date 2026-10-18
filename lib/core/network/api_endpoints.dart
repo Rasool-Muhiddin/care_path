@@ -2,7 +2,12 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  static const String baseUrl = 'https://axon.tera-software1.com';
+  // يمكن تجاوزه وقت البناء: --dart-define=API_BASE_URL=https://... (بدون /api)
+  // — بدونه (كما في بناء أندرويد الحالي) يُستخدم خادم الإنتاج.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://axon.tera-software1.com',
+  );
   static const String api = '$baseUrl/api';
 
   // accounts

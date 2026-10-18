@@ -13,6 +13,8 @@ class FcmRepository {
     required String token,
     required String platform,
   }) async {
+    // توكن فارغ لا معنى لتسجيله (يحدث على iOS بلا APNs)
+    if (token.trim().isEmpty) return;
     try {
       await _client.raw.post(
         ApiEndpoints.fcmToken,

@@ -1,7 +1,7 @@
 name: axon
 description: تطبيق يربط المريض والطبيب والمهندس حول الأجهزة العلاجية
 publish_to: 'none'
-version: 0.1.5+6
+version: 0.1.6+7
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -57,6 +57,8 @@ flutter:
 flutter_launcher_icons:
      android: true
      ios: true
+     # App Store rejects an iOS 1024 icon with an alpha channel
+     remove_alpha_ios: true
      windows:
        generate: true
      image_path: "assets/images/logo.png"    

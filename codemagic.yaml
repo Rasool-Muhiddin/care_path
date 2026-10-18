@@ -1,0 +1,103 @@
+# Codemagic CI for axon (iOS). See docs/IOS_TESTING.md.
+#
+# There is no "triggering" section, so builds only start manually from the
+# Codemagic UI (Start new build -> workflow "iOS unsigned (Sideloadly)").
+
+workflows:
+  ios-unsigned:
+    name: iOS unsigned (Sideloadly)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - axon_ios # GOOGLE_SERVICE_INFO_PLIST (secure, base64), API_BASE_URL
+      flutter: 3.44.8 # same as local (flutter --version / .metadata revision 058e0af2c2)
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Write GoogleService-Info.plist
+        script: |
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "GoogleService-Info.plist written ($(wc -c < ios/Runner/GoogleService-Info.plist) bytes)"
+          else
+            echo "WARNING: GOOGLE_SERVICE_INFO_PLIST is not set - building without Firebase."
+          fi
+      - name: Flutter pub get
+        script: flutter pub get
+      # No separate "pod install": flutter build ios runs it itself (and also
+      # resolves the Swift Package Manager plugins), using the generated
+      # Flutter/Generated.xcconfig that a standalone pod install depends on.
+      - name: Build iOS (release, no codesign)
+        script: |
+          set -eo pipefail
+          mkdir -p build/logs
+          DEFINES=""
+          if [ -n "$API_BASE_URL" ]; then
+            DEFINES="--dart-define=API_BASE_URL=$API_BASE_URL"
+          else
+            echo "API_BASE_URL not set - using the default production URL baked into the app."
+          fi
+          flutter build ios --release --no-codesign $DEFINES 2>&1 | tee build/logs/flutter_build_ios.log
+      - name: Package unsigned .ipa
+        script: |
+          set -eo pipefail
+          VERSION_LINE=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | tr -d '\r')
+          BUILD_NAME=${VERSION_LINE%%+*}
+          BUILD_NUMBER=${VERSION_LINE##*+}
+          IPA_NAME="axon-${BUILD_NAME}-${BUILD_NUMBER}-unsigned.ipa"
+          OUT_DIR="$CM_BUILD_DIR/build/ios/ipa"
+          rm -rf "$OUT_DIR" && mkdir -p "$OUT_DIR/Payload"
+          cp -R build/ios/iphoneos/Runner.app "$OUT_DIR/Payload/"
+          cd "$OUT_DIR"
+          zip -qry "$IPA_NAME" Payload
+          rm -rf Payload
+          ls -lh "$OUT_DIR"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/logs/*.log
+      - /tmp/xcodebuild_logs/*.log
+
+# ---------------------------------------------------------------------------
+# NOT USABLE YET - needs the paid Apple Developer Program membership.
+# Skeleton for signed builds uploaded to TestFlight / App Store Connect.
+# Before enabling: create an App Store Connect API key, add it in Codemagic
+# (Teams -> Integrations -> Developer Portal) under the name below, register
+# the bundle ID com.appaxon.axon, then uncomment and adjust.
+# ---------------------------------------------------------------------------
+#  ios-appstore:
+#    name: iOS App Store (signed)
+#    instance_type: mac_mini_m2
+#    max_build_duration: 60
+#    integrations:
+#      app_store_connect: axon_asc_key
+#    environment:
+#      groups:
+#        - axon_ios
+#      ios_signing:
+#        distribution_type: app_store
+#        bundle_identifier: com.appaxon.axon
+#      flutter: 3.44.8
+#      xcode: latest
+#      cocoapods: default
+#    scripts:
+#      - name: Write GoogleService-Info.plist
+#        script: echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > ios/Runner/GoogleService-Info.plist
+#      - name: Set up code signing
+#        script: xcode-project use-profiles
+#      - name: Flutter pub get
+#        script: flutter pub get
+#      - name: Build signed .ipa
+#        script: |
+#          flutter build ipa --release \
+#            --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1)) \
+#            --dart-define=API_BASE_URL=$API_BASE_URL \
+#            --dart-define=IOS_PUSH_ENABLED=true \
+#            --export-options-plist=/Users/builder/export_options.plist
+#    artifacts:
+#      - build/ios/ipa/*.ipa
+#      - /tmp/xcodebuild_logs/*.log
+#    publishing:
+#      app_store_connect:
+#        auth: integration
+#        submit_to_testflight: true

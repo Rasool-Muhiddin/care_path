@@ -57,3 +57,8 @@ backups/
 media/
 staticfiles/
 private_media/
+
+# iOS Firebase config: never committed, Codemagic writes it from GOOGLE_SERVICE_INFO_PLIST
+GoogleService-Info.plist
+# Unsigned iOS packages built by CI
+*.ipa

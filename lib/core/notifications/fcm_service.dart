@@ -48,11 +48,18 @@ class FcmService {
 
   FcmRepository get _repository => FcmRepository(_ref!.read(apiClientProvider));
 
-  String get _platform =>
-      defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+  /// نسخ iOS الحالية موقّعة بحساب Apple مجاني (Sideloadly) بلا صلاحية
+  /// APNs، فالإشعارات معطّلة عليها كلياً ولا يُطلب إذنها. بعد الاشتراك
+  /// بالعضوية المدفوعة وإعداد APNs: --dart-define=IOS_PUSH_ENABLED=true
+  static const _iosPushEnabled = bool.fromEnvironment('IOS_PUSH_ENABLED');
+
+  bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
+
+  String get _platform => _isIOS ? 'ios' : 'android';
 
   Future<void> init(WidgetRef ref) async {
     if (_initialized) return;
+    if (_isIOS && !_iosPushEnabled) return;
     _initialized = true;
     _ref = ref;
 
@@ -61,6 +68,7 @@ class FcmService {
       // بالأسفل، تلغيها teardown كلها ولا يبقى اشتراك يتيم.
       _subscriptions.addAll([
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+          if (newToken.isEmpty) return;
           _currentToken = newToken;
           _repository.registerToken(token: newToken, platform: _platform);
         }),
@@ -69,10 +77,13 @@ class FcmService {
       ]);
 
       await FirebaseMessaging.instance.requestPermission();
-      final token = await FirebaseMessaging.instance.getToken();
+      // على iOS يرمي getToken استثناءً ما لم يصل توكن APNs أولاً (إذن
+      // مرفوض أو توقيع بلا صلاحية push) — نتخطّى التسجيل حينها فقط.
+      final hasApns = !_isIOS || await _waitForApnsToken();
+      final token = hasApns ? await FirebaseMessaging.instance.getToken() : null;
       // خرج المستخدم أثناء الانتظار: لا نسجّل توكناً لحساب لم يعد موجوداً
       if (!_initialized) return;
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
         _currentToken = token;
         await _repository.registerToken(token: token, platform: _platform);
       }
@@ -85,9 +96,20 @@ class FcmService {
           _handleNotificationTap(initialMessage);
         }
       }
-    } catch (_) {
-      // غياب google-services.json أو فشل الشبكة لا يجب أن يعطّل تسجيل الدخول
+    } catch (e) {
+      // غياب google-services.json / GoogleService-Info.plist أو فشل الشبكة
+      // لا يجب أن يعطّل تسجيل الدخول
+      if (kDebugMode) debugPrint('FCM init skipped: $e');
     }
+  }
+
+  /// توكن APNs قد يتأخر قليلاً بعد منح الإذن — ننتظره بضع ثوانٍ فقط.
+  Future<bool> _waitForApnsToken() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (await FirebaseMessaging.instance.getAPNSToken() != null) return true;
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    return false;
   }
 
   /// يُستدعى عند تسجيل الخروج — يحذف توكن هذا الجهاز من الخادم حتى لا

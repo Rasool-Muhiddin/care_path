@@ -63,4 +63,6 @@ flutter_launcher_icons:
      remove_alpha_ios: true
      windows:
        generate: true
-     image_path: "assets/images/logo.png"    
+     # المصدر بالدقة الكاملة (غير مضمَّن في التطبيق)؛ assets/images/logo.png
+     # نسخة مصغّرة 512px
+     image_path: "assets/branding/logo_source.png"    

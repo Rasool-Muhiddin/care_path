@@ -10,6 +10,7 @@ import 'core/notifications/fcm_service.dart';
 import 'core/notifications/firebase_web_options.dart';
 import 'core/notifications/global_keys.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/web_fonts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,8 @@ Future<void> main() async {
     // معطّلة، وبقية التطبيق يعمل بشكل طبيعي.
     if (kDebugMode) debugPrint('Firebase init skipped: $e');
   }
+  // الويب: الخط العربي جاهز قبل أول إطار (لا شيء على أندرويد/iOS)
+  await loadWebFonts();
   runApp(const ProviderScope(child: AxonApp()));
 }
 
@@ -51,13 +54,16 @@ class AxonApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'axon',
+      // عنوان تبويب/تطبيق الويب؛ أندرويد يبقى كما كان (وصف المهمة في Recents)
+      title: kIsWeb ? 'Axon' : 'axon',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       // TODO: عدّل الثيم لاحقاً حسب هوية العلامة التجارية
       theme: ThemeData(
         colorSchemeSeed: Colors.teal,
         useMaterial3: true,
+        // null على أندرويد/iOS (خط النظام كما كان)؛ خط مضمَّن على الويب
+        fontFamily: webFontFamily,
       ),
       routerConfig: router,
       // دعم اللغة العربية والاتجاه من اليمين لليسار

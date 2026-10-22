@@ -106,6 +106,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Cache-Control: no-store على ردود /api/ (بيانات طبية؛ نسخة الويب)
+    'config.middleware.ApiNoStoreMiddleware',
 ]
 
 AUTH_USER_MODEL = "accounts.User"

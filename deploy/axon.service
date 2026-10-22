@@ -7,6 +7,10 @@ Requires=postgresql.service
 [Service]
 User=axon
 Group=www-data
+# /etc/axon/firebase-service-account.json is root:axon 640; with Group=www-data
+# alone, push fails silently with PermissionError. (On the server this is also
+# set by the drop-in /etc/systemd/system/axon.service.d/firebase-group.conf.)
+SupplementaryGroups=axon
 WorkingDirectory=/var/www/axon/app
 EnvironmentFile=/etc/axon/axon.env
 RuntimeDirectory=axon

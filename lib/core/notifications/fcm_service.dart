@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,9 @@ import '../auth/auth_state.dart';
 import '../auth/token_storage.dart';
 import '../router/app_router.dart';
 import 'fcm_repository.dart';
+import 'firebase_web_options.dart';
 import 'global_keys.dart';
+import 'web_push.dart';
 
 /// يُستدعى عندما تصل رسالة FCM ونظام التشغيل يشغّل التطبيق بالخلفية/من
 /// جديد لمعالجتها. يجب أن تبقى top-level (وليست method داخل class)
@@ -53,13 +56,22 @@ class FcmService {
   /// بالعضوية المدفوعة وإعداد APNs: --dart-define=IOS_PUSH_ENABLED=true
   static const _iosPushEnabled = bool.fromEnvironment('IOS_PUSH_ENABLED');
 
-  bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
+  /// تطبيق iOS الأصلي فقط. على الويب defaultTargetPlatform يتبع نظام
+  /// المتصفح (iPhone = iOS)، لكن نسخة الويب تستعمل Web Push وليس APNs.
+  bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
-  String get _platform => _isIOS ? 'ios' : 'android';
+  String get _platform => kIsWeb ? 'web' : (_isIOS ? 'ios' : 'android');
+
+  /// نسخة الويب مبنية بإعداد Firebase للويب وتم تهيئته
+  bool get webPushConfigured => kIsWeb && FirebaseWebConfig.isConfigured && Firebase.apps.isNotEmpty;
+
+  /// إذن إشعارات المتصفح الآن (للتنبيه والزر في الواجهة)
+  WebPushPermission get webPermission => webPushPermission();
 
   Future<void> init(WidgetRef ref) async {
     if (_initialized) return;
     if (_isIOS && !_iosPushEnabled) return;
+    if (kIsWeb) return _initWeb(ref);
     _initialized = true;
     _ref = ref;
 
@@ -100,6 +112,50 @@ class FcmService {
       // غياب google-services.json / GoogleService-Info.plist أو فشل الشبكة
       // لا يجب أن يعطّل تسجيل الدخول
       if (kDebugMode) debugPrint('FCM init skipped: $e');
+    }
+  }
+
+  /// الويب: لا يُطلب الإذن هنا أبداً (Safari يرفضه خارج لمسة المستخدم) —
+  /// يُطلب من زر "تفعيل الإشعارات" عبر [enableWebPush]. إن كان ممنوحاً من
+  /// قبل يُسجَّل التوكن مباشرة. الإشعارات تصل للـ service worker، وهو يرسل
+  /// للصفحة المفتوحة (webPushEvents) بدل onMessage/onMessageOpenedApp.
+  Future<void> _initWeb(WidgetRef ref) async {
+    if (!webPushConfigured) return;
+    _initialized = true;
+    _ref = ref;
+    _subscriptions.add(webPushEvents().listen((event) {
+      if (event.clicked) {
+        _openChat(event.type, event.caseId);
+      } else if (event.type == 'chat_message' && event.caseId != null) {
+        _chatMessages.add(event.caseId!);
+      }
+    }));
+    if (!_initialMessageHandled) {
+      _initialMessageHandled = true;
+      final initial = initialWebPushEvent();
+      if (initial != null) _openChat(initial.type, initial.caseId);
+    }
+    if (webPermission == WebPushPermission.granted) await _registerWebToken();
+  }
+
+  /// من زر "تفعيل الإشعارات" فقط. طلب الإذن هو أول ما يحدث (متزامناً داخل
+  /// اللمسة، كما يشترط iOS)، ثم تسجيل توكن الويب في الخادم.
+  Future<WebPushPermission> enableWebPush() async {
+    final permission = await requestWebPushPermission();
+    if (permission == WebPushPermission.granted && _initialized) await _registerWebToken();
+    return permission;
+  }
+
+  Future<void> _registerWebToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken(vapidKey: FirebaseWebConfig.vapidKey);
+      if (!_initialized || token == null || token.isEmpty) return;
+      _currentToken = token;
+      await _repository.registerToken(token: token, platform: _platform);
+    } catch (e) {
+      // service worker غير متاح (مثلاً /firebase-messaging-sw.js لا يُقدَّم) —
+      // التطبيق يعمل بلا إشعارات
+      if (kDebugMode) debugPrint('Web push registration failed: $e');
     }
   }
 
@@ -177,12 +233,13 @@ class FcmService {
   /// عند الضغط على الإشعار (سواء التطبيق بالخلفية أو كان مغلقاً تماماً):
   /// ننتقل مباشرة لشاشة محادثة الحالة المعنية إن كان دور المستخدم يدعمها.
   void _handleNotificationTap(RemoteMessage message) {
+    _openChat('${message.data['type']}', int.tryParse('${message.data['case_id']}'));
+  }
+
+  void _openChat(String type, int? caseId) {
     final ref = _ref;
     if (ref == null) return;
-    if (message.data['type'] != 'chat_message') return;
-
-    final caseId = int.tryParse('${message.data['case_id']}');
-    if (caseId == null) return;
+    if (type != 'chat_message' || caseId == null) return;
 
     final authState = ref.read(authStateProvider);
     if (authState is! AuthAuthenticated) return;

@@ -62,3 +62,6 @@ private_media/
 GoogleService-Info.plist
 # Unsigned iOS packages built by CI
 *.ipa
+
+# Firebase web app config (dart-define-from-file); template: web_firebase.example.json
+web_firebase.json

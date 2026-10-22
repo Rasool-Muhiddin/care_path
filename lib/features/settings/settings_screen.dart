@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/auth/auth_state.dart';
+import '../../core/notifications/fcm_service.dart';
+import '../../core/notifications/web_push.dart';
 import '../../core/permissions/user_role.dart';
 import '../../core/settings/app_info_texts.dart';
 import '../../core/theme/app_theme.dart';
@@ -32,6 +35,11 @@ class SettingsStrings {
     required this.appVersion,
     required this.logout,
     required this.dangerZone,
+    required this.notifications,
+    required this.notificationsOn,
+    required this.notificationsEnable,
+    required this.notificationsDenied,
+    required this.notificationsUnsupported,
   });
 
   /// Strings of the delete-account flow (and the text direction).
@@ -51,6 +59,13 @@ class SettingsStrings {
   final String appVersion;
   final String logout;
   final String dangerZone;
+
+  // إشعارات نسخة الويب (PWA) فقط
+  final String notifications;
+  final String notificationsOn;
+  final String notificationsEnable;
+  final String notificationsDenied;
+  final String notificationsUnsupported;
 
   TextDirection get direction => account.direction;
 
@@ -75,6 +90,11 @@ class SettingsStrings {
     appVersion: 'App version',
     logout: 'Log out',
     dangerZone: 'Danger zone',
+    notifications: 'Notifications',
+    notificationsOn: 'Notifications are on',
+    notificationsEnable: 'Enable notifications',
+    notificationsDenied: 'Notifications are blocked. Turn them on in iPhone Settings → Notifications → Axon.',
+    notificationsUnsupported: 'Add the app to your Home Screen to receive notifications.',
   );
 
   static final ar = SettingsStrings(
@@ -94,6 +114,11 @@ class SettingsStrings {
     appVersion: 'إصدار التطبيق',
     logout: 'تسجيل الخروج',
     dangerZone: 'منطقة الخطر',
+    notifications: 'الإشعارات',
+    notificationsOn: 'الإشعارات مفعّلة',
+    notificationsEnable: 'تفعيل الإشعارات',
+    notificationsDenied: 'الإشعارات محظورة. فعّلها من إعدادات iPhone ← الإشعارات ← Axon.',
+    notificationsUnsupported: 'أضف التطبيق إلى الشاشة الرئيسية لتصلك الإشعارات.',
   );
 }
 
@@ -167,6 +192,12 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // نسخة الويب: الإشعارات تحتاج إذناً بلمسة صريحة من المستخدم
+                if (kIsWeb && FcmService.instance.webPushConfigured) ...[
+                  _WebNotificationsTile(strings: s),
+                  const SizedBox(height: 16),
+                ],
 
                 // b) Privacy policy, c) About us
                 GlassContainer(
@@ -322,4 +353,54 @@ class _TileDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Divider(height: 1, thickness: 1, indent: 16, endIndent: 16, color: Colors.white.withValues(alpha: 0.08));
+}
+
+
+/// حالة إشعارات الويب وزر تفعيلها. طلب الإذن يحدث داخل لمسة الزر نفسها
+/// (FcmService.enableWebPush) — شرط Safari على iPhone.
+class _WebNotificationsTile extends StatefulWidget {
+  const _WebNotificationsTile({required this.strings});
+  final SettingsStrings strings;
+
+  @override
+  State<_WebNotificationsTile> createState() => _WebNotificationsTileState();
+}
+
+class _WebNotificationsTileState extends State<_WebNotificationsTile> {
+  late WebPushPermission _permission = FcmService.instance.webPermission;
+  bool _busy = false;
+
+  Future<void> _enable() async {
+    setState(() => _busy = true);
+    final permission = await FcmService.instance.enableWebPush();
+    if (mounted) {
+      setState(() {
+        _permission = permission;
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings;
+    final (icon, color, text) = switch (_permission) {
+      WebPushPermission.granted => (Icons.notifications_active_outlined, AppAccent.caseC, s.notificationsOn),
+      WebPushPermission.notAsked => (Icons.notifications_off_outlined, _danger, s.notifications),
+      WebPushPermission.denied => (Icons.notifications_off_outlined, _danger, s.notificationsDenied),
+      WebPushPermission.unsupported => (Icons.notifications_off_outlined, _danger, s.notificationsUnsupported),
+    };
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(text, style: AppText.tileTitle),
+        trailing: _permission != WebPushPermission.notAsked
+            ? null
+            : _busy
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : FilledButton(onPressed: _enable, child: Text(s.notificationsEnable)),
+      ),
+    );
+  }
 }

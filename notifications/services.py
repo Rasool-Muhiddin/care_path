@@ -7,6 +7,11 @@ from .models import DeviceToken
 
 logger = logging.getLogger(__name__)
 
+# أيقونة إشعار الويب (من build/web، تُقدَّم تحت /app/) ومدة صلاحيته عند
+# انقطاع الجهاز: رسالة عمرها يوم لم تعد "جديدة".
+WEB_PUSH_ICON = "/app/icons/Icon-192.png"
+WEB_PUSH_TTL_SECONDS = 24 * 60 * 60
+
 
 def send_push_to_users(users, title: str, body: str, data: dict | None = None) -> None:
     """
@@ -37,6 +42,15 @@ def send_push_to_users(users, title: str, body: str, data: dict | None = None) -
     message = messaging.MulticastMessage(
         notification=messaging.Notification(title=title, body=body),
         data={str(k): str(v) for k, v in (data or {}).items()},
+        # يخص توكنات الويب فقط (أندرويد/iOS يتجاهلانه): الـ service worker
+        # (web/firebase-messaging-sw.js) يعرض الإشعار بنفسه من هذه الحقول.
+        # Urgency=high: iOS يؤخّر إشعارات الويب العادية حين يوفّر البطارية.
+        webpush=messaging.WebpushConfig(
+            headers={"Urgency": "high", "TTL": str(WEB_PUSH_TTL_SECONDS)},
+            notification=messaging.WebpushNotification(
+                title=title, body=body, icon=WEB_PUSH_ICON, language="ar", direction="rtl",
+            ),
+        ),
         tokens=tokens,
     )
 

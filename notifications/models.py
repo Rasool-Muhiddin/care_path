@@ -5,6 +5,8 @@ from django.db import models
 class Platform(models.TextChoices):
     ANDROID = "android", "Android"
     IOS = "ios", "iOS"
+    # نسخة الويب (PWA): توكن FCM للمتصفح (Web Push)، يُرسل إليه بنفس المسار
+    WEB = "web", "Web"
 
 
 class DeviceToken(models.Model):

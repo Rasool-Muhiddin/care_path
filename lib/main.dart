@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/auth_state.dart';
 import 'core/notifications/fcm_service.dart';
+import 'core/notifications/firebase_web_options.dart';
 import 'core/notifications/global_keys.dart';
 import 'core/router/app_router.dart';
 
@@ -16,10 +17,13 @@ Future<void> main() async {
   // تلقائياً — بدونه هذا الاستدعاء يفشل، لذا نلفّه بمحاولة حتى يبقى التطبيق
   // يعمل قبل إعداد Firebase.
   try {
-    await Firebase.initializeApp();
-    // على الويب لا معالج خلفية بالـ Dart: الـ service worker يعرض الإشعار
     if (!kIsWeb) {
+      await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } else if (FirebaseWebConfig.isConfigured) {
+      // الويب: الإعداد من --dart-define (firebase_web_options.dart)، ولا
+      // معالج خلفية بالـ Dart — web/firebase-messaging-sw.js يعرض الإشعار
+      await Firebase.initializeApp(options: FirebaseWebConfig.options);
     }
   } catch (e) {
     // Firebase غير مُعدّ بعد (ملف الإعداد غير موجود) — الإشعارات فقط ستكون

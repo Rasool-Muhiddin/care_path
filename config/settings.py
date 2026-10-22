@@ -12,6 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 
+from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -166,6 +167,15 @@ SIMPLE_JWT = {
 # مسموح للجميع في التطوير فقط؛ في الإنتاج تُحدَّد أصول بعينها إن وُجدت واجهة ويب.
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS')
+# نسخة الويب ترسل X-Axon-Client: web (accounts/web_auth.py). الإنتاج نفس
+# الأصل (/app/) فلا CORS؛ هذا للتطوير (flutter run -d chrome على منفذ آخر).
+CORS_ALLOW_HEADERS = (*default_headers, 'x-axon-client')
+
+# كوكي الـ refresh لنسخة الويب فقط (التطبيقات تبقى على الجسم)
+AUTH_REFRESH_COOKIE_NAME = 'axon_refresh'
+AUTH_REFRESH_COOKIE_PATH = '/api/auth/'
+AUTH_REFRESH_COOKIE_SAMESITE = 'Strict'
+AUTH_REFRESH_COOKIE_SECURE = env_bool('AUTH_REFRESH_COOKIE_SECURE', not DEBUG)
 
 
 TEMPLATES = [

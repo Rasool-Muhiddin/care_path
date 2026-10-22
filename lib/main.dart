@@ -17,7 +17,10 @@ Future<void> main() async {
   // يعمل قبل إعداد Firebase.
   try {
     await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    // على الويب لا معالج خلفية بالـ Dart: الـ service worker يعرض الإشعار
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    }
   } catch (e) {
     // Firebase غير مُعدّ بعد (ملف الإعداد غير موجود) — الإشعارات فقط ستكون
     // معطّلة، وبقية التطبيق يعمل بشكل طبيعي.

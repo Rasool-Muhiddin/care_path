@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -17,8 +18,10 @@ final appUpdateRepositoryProvider = Provider<AppUpdateRepository>((ref) {
 ///
 /// أندرويد فقط: التحديث هناك رابط تحميل APK. نسخ iOS الحالية تُثبَّت يدوياً
 /// (Sideloadly) فلا فحص ولا نافذة تحديث عليها إطلاقاً.
+/// الويب (PWA): كل نشر جديد يصل تلقائياً، و Platform من dart:io يرمي
+/// UnsupportedError هناك — فيُفحص kIsWeb أولاً قبل لمس Platform.
 final appUpdateProvider = FutureProvider<AppVersionInfo?>((ref) async {
-  if (!Platform.isAndroid) return null;
+  if (kIsWeb || !Platform.isAndroid) return null;
   final latest = await ref
       .read(appUpdateRepositoryProvider)
       .fetchLatest(platform: 'android');

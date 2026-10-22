@@ -66,6 +66,20 @@ class AuthNotifier extends Notifier<AuthStatus> {
 
   Future<void> _tryRestoreSession() async {
     state = const AuthLoading();
+    // الويب: بعد إعادة تحميل الصفحة يضيع access (بالذاكرة فقط) — نستعيده
+    // بصمت من كوكي الـ refresh قبل أي شيء.
+    if (TokenStorage.usesRefreshCookie && !await TokenStorage.instance.hasTokens) {
+      try {
+        if (!await ref.read(apiClientProvider).restoreWebSession()) {
+          state = const AuthUnauthenticated();
+          return;
+        }
+      } on ApiException catch (e) {
+        // لا نعرف إن كانت هناك جلسة (الكوكي لا يُقرأ من Dart)؛ نعرض إعادة المحاولة
+        state = AuthOffline(e.message);
+        return;
+      }
+    }
     final hasTokens = await TokenStorage.instance.hasTokens;
     if (!hasTokens) {
       state = const AuthUnauthenticated();

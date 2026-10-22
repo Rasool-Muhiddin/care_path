@@ -32,10 +32,16 @@ class AuthRepository {
         ApiEndpoints.login,
         data: {'username': username, 'password': password},
       );
-      await TokenStorage.instance.saveTokens(
-        accessToken: response.data['access'] as String,
-        refreshToken: response.data['refresh'] as String,
-      );
+      final access = response.data['access'] as String;
+      if (TokenStorage.usesRefreshCookie) {
+        // الويب: الـ refresh وصل في كوكي HttpOnly وليس في الجسم
+        await TokenStorage.instance.updateAccessToken(access);
+      } else {
+        await TokenStorage.instance.saveTokens(
+          accessToken: access,
+          refreshToken: response.data['refresh'] as String,
+        );
+      }
       return fetchCurrentUser();
     } on DioException catch (e) {
       throw _client.mapError(e);
@@ -110,14 +116,15 @@ class AuthRepository {
   /// Dio مستقل بلا interceptor: لا نريد محاولة تجديد إن رُفض الطلب، ولا
   /// نؤخّر الخروج أكثر من 5 ثوانٍ. بلا شبكة يُمسح محلياً فقط ويبقى الـ
   /// refresh صالحاً في الخادم إلى أن تنتهي مدته.
+  /// الويب: بلا جسم — الخادم يُبطل refresh الكوكي ويمسح الكوكي نفسه.
   Future<void> logout() async {
     final refreshToken = await TokenStorage.instance.refreshToken;
-    if (refreshToken != null) {
+    if (refreshToken != null || TokenStorage.usesRefreshCookie) {
       try {
-        await Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        )).post(ApiEndpoints.logout, data: {'refresh': refreshToken});
+        await _client.bareDio(timeout: const Duration(seconds: 5)).post(
+              ApiEndpoints.logout,
+              data: refreshToken == null ? null : {'refresh': refreshToken},
+            );
       } catch (_) {
         // الخروج يكتمل محلياً على أي حال
       }

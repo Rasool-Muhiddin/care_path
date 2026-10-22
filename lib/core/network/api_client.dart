@@ -24,6 +24,7 @@ class ApiClient {
         baseUrl: ApiEndpoints.api,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
+        headers: _clientHeaders,
       ),
     );
     _dio.interceptors.add(_authInterceptor());
@@ -33,6 +34,20 @@ class ApiClient {
   final OnSessionExpired onSessionExpired;
 
   Dio get raw => _dio;
+
+  /// نسخة الويب تُعرّف نفسها للخادم فيضع الـ refresh في كوكي HttpOnly
+  /// (accounts/web_auth.py). التطبيقات لا ترسله فيبقى الـ refresh في الجسم.
+  static Map<String, String> get _clientHeaders =>
+      TokenStorage.usesRefreshCookie ? const {'X-Axon-Client': 'web'} : const {};
+
+  /// Dio بلا interceptor لطلبات التجديد والخروج: لا محاولة تجديد إن رُفض
+  /// الطلب نفسه. يشارك الـ adapter مع [raw] (وفي الاختبارات adapter وهمياً).
+  Dio bareDio({Duration? timeout}) => Dio(BaseOptions(
+        connectTimeout: timeout,
+        receiveTimeout: timeout,
+        headers: _clientHeaders,
+      ))
+        ..httpClientAdapter = _dio.httpClientAdapter;
 
   /// أكبر صفحة يقبلها الخادم (config.drf.DefaultPagination.max_page_size)
   static const maxPageSize = 200;
@@ -113,30 +128,14 @@ class ApiClient {
   /// نفسه؛ أما انقطاع الشبكة أو تعطل الخادم فلا يسجّل خروج المستخدم.
   Future<String?> _doRefresh() async {
     final refreshToken = await TokenStorage.instance.refreshToken;
-    if (refreshToken == null) {
+    // على الويب الـ refresh في كوكي لا نراه؛ الخادم يرد 401 إن لم يوجد
+    if (refreshToken == null && !TokenStorage.usesRefreshCookie) {
       await TokenStorage.instance.clear();
       onSessionExpired();
       return null;
     }
     try {
-      final response = await Dio().post(
-        ApiEndpoints.refresh,
-        data: {'refresh': refreshToken},
-      );
-      final newAccess = response.data['access'] as String;
-      // ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: الخادم يرجع refresh
-      // جديداً ويُبطل القديم، فيجب حفظه فوراً. التجديد يجري مرة واحدة فقط
-      // حتى لو فشلت عدة طلبات معاً (_refreshing)، فلا يُستعمل refresh مُبطل.
-      final newRefresh = response.data['refresh'] as String?;
-      if (newRefresh != null) {
-        await TokenStorage.instance.saveTokens(
-          accessToken: newAccess,
-          refreshToken: newRefresh,
-        );
-      } else {
-        await TokenStorage.instance.updateAccessToken(newAccess);
-      }
-      return newAccess;
+      return await _requestRefresh(refreshToken);
     } on DioException catch (e) {
       // 401 فقط = الخادم رفض الـ refresh token (منتهٍ/غير صالح). أي شيء
       // آخر (شبكة، مهلة، 5xx) فشل مؤقت لا يُنهي الجلسة.
@@ -147,6 +146,44 @@ class ApiClient {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// طلب التجديد نفسه: [refreshToken] في الجسم للتطبيقات، و null على الويب
+  /// (المتصفح يرسل الكوكي تلقائياً لنفس الأصل). يحفظ الناتج ويرجع access.
+  Future<String> _requestRefresh(String? refreshToken) async {
+    final response = await bareDio().post(
+      ApiEndpoints.refresh,
+      data: refreshToken == null ? null : {'refresh': refreshToken},
+    );
+    final newAccess = response.data['access'] as String;
+    // ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: الخادم يرجع refresh
+    // جديداً ويُبطل القديم، فيجب حفظه فوراً. التجديد يجري مرة واحدة فقط
+    // حتى لو فشلت عدة طلبات معاً (_refreshing)، فلا يُستعمل refresh مُبطل.
+    // على الويب الجديد يصل في الكوكي، لا في الجسم.
+    final newRefresh = response.data['refresh'] as String?;
+    if (newRefresh != null) {
+      await TokenStorage.instance.saveTokens(
+        accessToken: newAccess,
+        refreshToken: newRefresh,
+      );
+    } else {
+      await TokenStorage.instance.updateAccessToken(newAccess);
+    }
+    return newAccess;
+  }
+
+  /// الويب فقط: بعد إعادة تحميل الصفحة لا access بالذاكرة، فنطلب واحداً
+  /// بكوكي الـ refresh. true = استُعيدت الجلسة، false = لا جلسة على هذا
+  /// المتصفح (401). يرمي [ApiException] عند فشل الشبكة أو الخادم.
+  /// لا يستدعي [onSessionExpired]: لا جلسة هنا أصلاً لإنهائها.
+  Future<bool> restoreWebSession() async {
+    try {
+      await _requestRefresh(null);
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) return false;
+      throw mapError(e);
     }
   }
 

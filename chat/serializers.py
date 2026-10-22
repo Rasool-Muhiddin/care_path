@@ -6,7 +6,7 @@ from cases.models import Case
 
 from .models import ChatMessage, InquiryType
 from .permissions import engineer_can_reply, responsible_engineer_of
-from .voice import validate_voice_note
+from .voice import prepare_voice_note
 
 # معاينة الرسالة الصوتية في صندوق الوارد (لا نص لها)
 VOICE_PREVIEW = '🎤 رسالة صوتية'
@@ -87,7 +87,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         if bool(text) == bool(audio):
             raise serializers.ValidationError('الرسالة إما نص أو رسالة صوتية (واحد منهما فقط).')
         if audio:
-            attrs['duration_seconds'] = validate_voice_note(audio)
+            # يُخزَّن الملف المحوَّل (AAC m4a موحّد)، لا ما رُفع كما هو
+            attrs['audio'], attrs['duration_seconds'] = prepare_voice_note(audio)
         return attrs
 
 def _display_name(user):

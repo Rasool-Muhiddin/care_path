@@ -6,3 +6,4 @@ class ChatConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401  حذف الملفات الصوتية مع رسائلها
+        from . import checks  # noqa: F401  تحذير إن غاب ffmpeg (تحويل الصوت)

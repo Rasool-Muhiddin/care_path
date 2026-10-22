@@ -39,6 +39,8 @@ dependencies:
   record: ^7.1.2
   just_audio: ^0.10.6
   path_provider: ^2.1.6
+  # نسخة الويب (PWA): blob التسجيل وعنصر <audio> (voice_platform_web.dart)
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

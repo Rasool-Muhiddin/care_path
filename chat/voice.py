@@ -4,23 +4,40 @@
 - التخزين في settings.VOICE_NOTES_ROOT (خارج MEDIA_ROOT) بلا رابط عام؛ الملف
   يُقدَّم فقط عبر VoiceNoteView بعد فحص صلاحية قراءة الرسالة.
 - اسم الملف عشوائي (لا يُشتق من الحالة أو المرسل أو الوقت الدقيق).
-- المقبول: AAC داخل حاوية MP4 (.m4a) فقط. المدة تُقرأ من الملف نفسه ولا
-  نثق بما يرسله التطبيق.
+- المخزَّن دائماً: AAC أحادي داخل m4a عادي (غير مجزّأ). كل رفع يُحوَّل بـ
+  ffmpeg (prepare_voice_note) فيُشغَّل كل ملف على كل جهاز: تطبيقات
+  أندرويد/iOS (m4a)، Safari على iPhone (MP4 مجزّأ مدته في الترويسة 0)،
+  و Chrome (WebM/Opus). المدة تُقرأ من الملف المحوَّل ولا نثق بما يرسله
+  التطبيق.
+- بلا ffmpeg على الخادم (settings.FFMPEG_BINARY): يُقبل AAC m4a العادي
+  فقط كما كان قبل نسخة الويب، فلا تتعطل التطبيقات أثناء النشر.
 """
 
+import logging
 import secrets
+import shutil
 import struct
+import subprocess
+import tempfile
+from pathlib import Path
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
 from django.utils.functional import cached_property
 from rest_framework import serializers
 
+logger = logging.getLogger(__name__)
+
 ALLOWED_EXTENSIONS = ('.m4a',)
 # ما يرسله التطبيق (audio/mp4) وما ترسله مكتبات أخرى لنفس الملف
 ALLOWED_CONTENT_TYPES = ('audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac')
 CONTENT_TYPE = 'audio/mp4'
+
+# مع ffmpeg: يُقبل أيضاً ما يسجّله المتصفح (MediaRecorder)
+TRANSCODE_EXTENSIONS = ('.m4a', '.mp4', '.webm')
+TRANSCODE_CONTENT_TYPES = (*ALLOWED_CONTENT_TYPES, 'audio/webm')
 
 
 class VoiceNoteStorage(FileSystemStorage):
@@ -139,29 +156,70 @@ def aac_duration_seconds(data: bytes) -> float:
     raise InvalidVoiceNote('no audio track')
 
 
-def validate_voice_note(upload) -> int:
-    """يتحقق من الملف المرفوع ويرجع مدته بالثواني (عدد صحيح ≥ 1).
+def ffmpeg_path():
+    """مسار ffmpeg إن كان التحويل مفعّلاً ومتاحاً، وإلا None."""
+    binary = settings.FFMPEG_BINARY
+    return shutil.which(binary) if binary else None
 
-    الترتيب: الحجم أولاً (قبل قراءة الملف في الذاكرة)، ثم الامتداد والنوع،
-    ثم محتوى الملف نفسه (حاوية MP4 بمسار AAC) والمدة المقروءة منه.
-    """
+
+def _check_size(upload):
     if upload.size > settings.VOICE_NOTE_MAX_BYTES:
         raise serializers.ValidationError(
             f'حجم الرسالة الصوتية أكبر من الحد المسموح ({settings.VOICE_NOTE_MAX_BYTES // (1024 * 1024)}MB).'
         )
+
+
+def _check_type(upload, extensions, content_types):
     name = (upload.name or '').lower()
     content_type = (getattr(upload, 'content_type', '') or '').split(';')[0].strip().lower()
-    if not name.endswith(ALLOWED_EXTENSIONS) or content_type not in ALLOWED_CONTENT_TYPES:
+    if not name.endswith(extensions) or content_type not in content_types:
         raise serializers.ValidationError('صيغة الرسالة الصوتية غير مدعومة (المسموح: AAC بصيغة m4a).')
 
+
+def _read(upload) -> bytes:
     upload.seek(0)
     data = upload.read()
     upload.seek(0)
-    try:
-        seconds = aac_duration_seconds(data)
-    except (InvalidVoiceNote, struct.error, IndexError):
-        raise serializers.ValidationError('ملف الرسالة الصوتية غير صالح (المسموح: AAC بصيغة m4a).')
+    return data
 
+
+def _demuxer_for(data: bytes):
+    """الحاوية من أول البايتات (لا من الاسم): MP4 أو WebM فقط. يُمرَّر
+    لـ ffmpeg صراحةً بـ -f فلا يجرّب صيغاً أخرى على ملف من المستخدم."""
+    if data[4:8] == b'ftyp':
+        return 'mov'
+    if data[:4] == b'\x1a\x45\xdf\xa3':
+        return 'matroska'
+    return None
+
+
+def transcode_to_m4a(data: bytes, demuxer: str, ffmpeg: str) -> bytes:
+    """AAC-LC أحادي 64kbps في m4a عادي (moov في البداية: +faststart).
+    يُقطع عند الحد + ثانية، فالأطول منه يُرفض بعد القياس دون معالجة كاملة."""
+    with tempfile.TemporaryDirectory(prefix='axon-voice-') as tmp:
+        source, target = Path(tmp) / 'in', Path(tmp) / 'out.m4a'
+        source.write_bytes(data)
+        command = [
+            ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error',
+            '-protocol_whitelist', 'file',
+            '-f', demuxer, '-i', str(source),
+            '-map', '0:a:0', '-vn', '-sn', '-dn', '-map_metadata', '-1',
+            '-ac', '1', '-c:a', 'aac', '-b:a', '64k',
+            '-t', str(settings.VOICE_NOTE_MAX_SECONDS + 1),
+            '-movflags', '+faststart', '-f', 'ipod', str(target),
+        ]
+        try:
+            result = subprocess.run(
+                command, capture_output=True, timeout=settings.VOICE_TRANSCODE_TIMEOUT_SECONDS
+            )
+        except subprocess.TimeoutExpired:
+            raise InvalidVoiceNote('ffmpeg timed out')
+        if result.returncode != 0 or not target.exists():
+            raise InvalidVoiceNote(result.stderr.decode(errors='replace')[-500:])
+        return target.read_bytes()
+
+
+def _checked_seconds(seconds: float) -> int:
     if seconds <= 0:
         raise serializers.ValidationError('الرسالة الصوتية فارغة.')
     # هامش نصف ثانية: التطبيق يوقف التسجيل عند الحد بالضبط، والترميز قد يزيد إطاراً
@@ -170,3 +228,49 @@ def validate_voice_note(upload) -> int:
             f'مدة الرسالة الصوتية أطول من الحد المسموح ({settings.VOICE_NOTE_MAX_SECONDS} ثانية).'
         )
     return min(max(1, round(seconds)), settings.VOICE_NOTE_MAX_SECONDS)
+
+_INVALID = 'ملف الرسالة الصوتية غير صالح (المسموح: AAC بصيغة m4a).'
+
+
+def _parsed_seconds(data: bytes) -> float:
+    try:
+        return aac_duration_seconds(data)
+    except (InvalidVoiceNote, struct.error, IndexError):
+        raise serializers.ValidationError(_INVALID)
+
+
+def validate_voice_note(upload) -> int:
+    """بلا ffmpeg: يتحقق من m4a عادي ويرجع مدته بالثواني (عدد صحيح ≥ 1).
+
+    الترتيب: الحجم أولاً (قبل قراءة الملف في الذاكرة)، ثم الامتداد والنوع،
+    ثم محتوى الملف نفسه (حاوية MP4 بمسار AAC) والمدة المقروءة منه.
+    """
+    _check_size(upload)
+    _check_type(upload, ALLOWED_EXTENSIONS, ALLOWED_CONTENT_TYPES)
+    return _checked_seconds(_parsed_seconds(_read(upload)))
+
+
+def prepare_voice_note(upload):
+    """يرجع (الملف الذي يُخزَّن، المدة بالثواني).
+
+    مع ffmpeg: أي MP4/WebM صوتي يُحوَّل إلى AAC m4a، والمدة من الناتج
+    (تسجيل Safari المجزّأ مدته في الترويسة 0 فيُرفض لو قُرئ كما هو).
+    بلا ffmpeg: المسار القديم (m4a عادي فقط، يُخزَّن كما رُفع).
+    """
+    ffmpeg = ffmpeg_path()
+    if ffmpeg is None:
+        return upload, validate_voice_note(upload)
+
+    _check_size(upload)
+    _check_type(upload, TRANSCODE_EXTENSIONS, TRANSCODE_CONTENT_TYPES)
+    data = _read(upload)
+    demuxer = _demuxer_for(data)
+    if demuxer is None:
+        raise serializers.ValidationError(_INVALID)
+    try:
+        converted = transcode_to_m4a(data, demuxer, ffmpeg)
+    except InvalidVoiceNote as e:
+        logger.warning('تعذّر تحويل رسالة صوتية (%s، %s بايت): %s', demuxer, len(data), e)
+        raise serializers.ValidationError(_INVALID)
+    seconds = _checked_seconds(_parsed_seconds(converted))
+    return ContentFile(converted, name='voice.m4a'), seconds

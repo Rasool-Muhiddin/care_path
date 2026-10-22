@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../core/widgets/glass_container.dart';
 import '../data/chat_message_model.dart';
 import '../data/chat_repository.dart';
-import '../data/voice_cache.dart';
+import '../data/voice_platform.dart';
+import '../data/voice_player.dart';
 
 /// أقصى مدة للرسالة الصوتية — تطابق VOICE_NOTE_MAX_SECONDS في الخادم.
 const voiceNoteMaxDuration = Duration(minutes: 2);
@@ -27,7 +25,8 @@ enum VoiceRecorderStatus { idle, recording, recorded }
 enum VoiceStartResult { started, permissionDenied, failed }
 
 /// تسجيل رسالة صوتية بالضغط للبدء/الإيقاف (أوثق من الضغط المطوّل مع
-/// التمرير ولوحة المفاتيح). AAC أحادي بـ 64kbps في ملف m4a: دقيقتان ≈ 1MB.
+/// التمرير ولوحة المفاتيح). الصيغة والملف حسب المنصة (voice_platform):
+/// AAC m4a على أندرويد/iOS، و blob بالذاكرة على الويب.
 /// يتوقف تلقائياً عند [voiceNoteMaxDuration] ويبقى الملف جاهزاً للإرسال.
 class VoiceRecorderController extends ChangeNotifier {
   // يُنشأ عند أول تسجيل فقط: AudioRecorder يحجز مسجّلاً في المنصة فور إنشائه،
@@ -56,12 +55,8 @@ class VoiceRecorderController extends ChangeNotifier {
     try {
       // أول تسجيل: نظام التشغيل يطلب إذن الميكروفون هنا (لا عند فتح التطبيق)
       if (!await _recorder.hasPermission()) return VoiceStartResult.permissionDenied;
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, numChannels: 1),
-        path: path,
-      );
+      final path = await newVoiceRecordingPath();
+      await _recorder.start(await voiceRecordConfig(_recorder), path: path);
       if (_disposed) {
         await _recorder.cancel();
         return VoiceStartResult.failed;
@@ -87,7 +82,7 @@ class VoiceRecorderController extends ChangeNotifier {
     }
   }
 
-  /// يوقف التسجيل ويبقي الملف للإرسال (من زر الإرسال أو عند بلوغ الحد).
+  /// يوقف التسجيل ويبقي الملف للإرسال (على الويب: [path] يصبح blob URL) (من زر الإرسال أو عند بلوغ الحد).
   Future<void> stop() {
     if (_status != VoiceRecorderStatus.recording) return Future.value();
     return _stopping ??= _doStop().whenComplete(() => _stopping = null);
@@ -124,11 +119,7 @@ class VoiceRecorderController extends ChangeNotifier {
   }
 
   static void _deleteFile(String? path) {
-    if (path == null) return;
-    final file = File(path);
-    file.exists().then((exists) {
-      if (exists) file.delete().ignore();
-    }).ignore();
+    if (path != null) deleteVoiceRecording(path);
   }
 
   @override
@@ -147,42 +138,38 @@ class VoiceRecorderController extends ChangeNotifier {
 
 /// مشغّل واحد لكل شاشة المحادثة: تشغيل رسالة يوقف أي رسالة أخرى.
 /// الملف يُحمَّل عبر endpoint مصادَق (ChatRepository.downloadVoice) ويُحفظ
-/// في VoiceCache، ثم يُشغَّل محلياً.
+/// في VoiceCache (ملف أو blob حسب المنصة)، ثم يُشغَّل محلياً.
 class VoicePlaybackController extends ChangeNotifier {
-  VoicePlaybackController(this._repo) {
-    _subscriptions
-      ..add(_player.playerStateStream.listen((state) {
-        if (state.processingState == ProcessingState.completed) {
-          // انتهت الرسالة: ترجع للبداية متوقفة
-          _player.pause();
-          _player.seek(Duration.zero);
-        }
-        _notify();
-      }))
-      ..add(_player.positionStream.listen((_) => _notify()));
+  VoicePlaybackController(
+    ChatRepository repo, {
+    @visibleForTesting VoicePlayer? player,
+    @visibleForTesting Future<String> Function(ChatMessageModel message)? sourceFor,
+  })  : _player = player ?? createVoicePlayer(),
+        _sourceFor = sourceFor ?? ((m) => VoiceCache.sourceFor(m.id, m.audioUrl!, repo)) {
+    _subscription = _player.changes.listen((_) => _notify());
   }
 
-  final ChatRepository _repo;
-  final _player = AudioPlayer();
-  final _subscriptions = <StreamSubscription<dynamic>>[];
+  final VoicePlayer _player;
+  final Future<String> Function(ChatMessageModel message) _sourceFor;
+  late final StreamSubscription<void> _subscription;
   int? _currentId;
   int? _loadingId;
   bool _disposed = false;
 
   int? get loadingId => _loadingId;
   bool isCurrent(int messageId) => _currentId == messageId;
-  bool isPlaying(int messageId) =>
-      _currentId == messageId &&
-      _player.playing &&
-      _player.processingState != ProcessingState.completed;
+  bool isPlaying(int messageId) => _currentId == messageId && _player.playing && !_player.completed;
   Duration positionOf(int messageId) => _currentId == messageId ? _player.position : Duration.zero;
   Duration? durationOf(int messageId) => _currentId == messageId ? _player.duration : null;
 
   /// تشغيل/إيقاف مؤقت. يرمي الاستثناء عند فشل التحميل أو التشغيل.
+  ///
+  /// يُستدعى من لمسة المستخدم: ما قبل أول await يجري داخل اللمسة نفسها، وهذا
+  /// ما يحتاجه Safari على iPhone ليسمح بالتشغيل (unlock و play المتزامنان).
   Future<void> toggle(ChatMessageModel message) async {
+    _player.unlock();
     if (_currentId == message.id) {
-      // play() لا يكتمل إلا عند التوقف، فلا ننتظره
-      _player.playing ? await _player.pause() : unawaited(_player.play());
+      _player.playing ? await _player.pause() : _player.play();
       return;
     }
     _loadingId = message.id;
@@ -190,13 +177,12 @@ class VoicePlaybackController extends ChangeNotifier {
     try {
       await _player.stop();
       _currentId = null;
-      final file = await VoiceCache.fileFor(message.id);
-      if (!await file.exists()) await _repo.downloadVoice(message.audioUrl!, file.path);
+      final source = await _sourceFor(message);
       // ضغط المستخدم رسالة أخرى أثناء التحميل، أو أُغلقت الشاشة
       if (_loadingId != message.id || _disposed) return;
-      await _player.setFilePath(file.path);
+      await _player.setSource(source);
       _currentId = message.id;
-      unawaited(_player.play());
+      _player.play();
     } finally {
       if (_loadingId == message.id) _loadingId = null;
       _notify();
@@ -221,9 +207,7 @@ class VoicePlaybackController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    for (final subscription in _subscriptions) {
-      subscription.cancel();
-    }
+    _subscription.cancel();
     _player.dispose();
     super.dispose();
   }

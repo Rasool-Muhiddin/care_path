@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
@@ -8,6 +6,7 @@ import '../../../core/auth/auth_state.dart'; // فيه تعريف apiClientProvi
 import '../../doctor/models/case_model.dart';
 import 'chat_message_model.dart';
 import 'engineer_conversation_model.dart';
+import 'voice_platform.dart';
 
 /// صفحة رسائل من الخادم. [caseStatus] null إن لم يرسل الخادم الـ header.
 class ChatPage {
@@ -65,19 +64,16 @@ class ChatRepository {
     }
   }
 
-  /// رسالة صوتية: ملف m4a (AAC) multipart على نفس endpoint النص، فتمر
-  /// بنفس قواعد الإرسال في الخادم. المدة يقرؤها الخادم من الملف نفسه.
-  Future<ChatMessageModel> sendVoice(int caseId, InquiryType inquiryType, String filePath) async {
+  /// رسالة صوتية: multipart على نفس endpoint النص، فتمر بنفس قواعد الإرسال
+  /// في الخادم. [recording]: مسار ملف m4a (أندرويد/iOS) أو blob URL (ويب).
+  /// الخادم يحوّل كل تسجيل إلى AAC m4a ويقرأ المدة من الملف نفسه.
+  Future<ChatMessageModel> sendVoice(int caseId, InquiryType inquiryType, String recording) async {
     try {
       final response = await _apiClient.raw.post(
         ApiEndpoints.caseMessages(caseId),
         data: FormData.fromMap({
           'inquiry_type': inquiryType.apiValue,
-          'audio': await MultipartFile.fromFile(
-            filePath,
-            filename: 'voice.m4a',
-            contentType: DioMediaType('audio', 'mp4'),
-          ),
+          'audio': await voiceUploadFile(recording),
         }),
         // رفع حتى دقيقتين من الصوت على شبكة ضعيفة
         options: Options(sendTimeout: const Duration(seconds: 60)),
@@ -89,17 +85,14 @@ class ChatRepository {
   }
 
   /// يحمّل ملف الرسالة الصوتية بتوكن الدخول (عبر الـ interceptor، ومنه
-  /// تجديد التوكن عند 401) ويكتبه في [savePath].
-  Future<void> downloadVoice(String audioUrl, String savePath) async {
+  /// تجديد التوكن عند 401). الحفظ في VoiceCache حسب المنصة.
+  Future<List<int>> downloadVoice(String audioUrl) async {
     try {
       final response = await _apiClient.raw.get<List<int>>(
         '${ApiEndpoints.baseUrl}$audioUrl',
         options: Options(responseType: ResponseType.bytes, receiveTimeout: const Duration(seconds: 60)),
       );
-      // ملف مؤقت ثم إعادة تسمية: لا يبقى ملف ناقص في الـ cache إن انقطع التحميل
-      final partial = File('$savePath.part');
-      await partial.writeAsBytes(response.data!, flush: true);
-      await partial.rename(savePath);
+      return response.data!;
     } on DioException catch (e) {
       throw _apiClient.mapError(e);
     }

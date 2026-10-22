@@ -266,6 +266,11 @@ VOICE_NOTES_X_ACCEL_PREFIX = os.environ.get('VOICE_NOTES_X_ACCEL_PREFIX', '')
 VOICE_NOTE_MAX_SECONDS = 120
 # AAC أحادي بـ 64kbps: دقيقتان ≈ 1MB. الحد أعلى بهامش لأي معدّل ترميز أعلى.
 VOICE_NOTE_MAX_BYTES = 5 * 1024 * 1024
+# كل رسالة صوتية تُحوَّل بـ ffmpeg إلى AAC m4a واحد الصيغة (chat/voice.py) —
+# يقبل بذلك تسجيلات Safari (MP4 مجزّأ) و Chrome (WebM/Opus) من نسخة الويب.
+# اسم/مسار البرنامج؛ فارغ = بلا تحويل (يُقبل AAC m4a العادي فقط، كما قبل).
+FFMPEG_BINARY = os.environ.get('FFMPEG_BINARY', 'ffmpeg')
+VOICE_TRANSCODE_TIMEOUT_SECONDS = 30
 
 # مسار ملف Firebase Admin SDK (Service Account JSON) — خارج Git دائماً.
 # إشعارات FCM تُعطَّل بصمت طالما هذا المتغيّر غير مضبوط.

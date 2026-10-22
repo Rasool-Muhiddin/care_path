@@ -66,7 +66,11 @@ class VoiceStorageMixin:
         super().setUp()
         self.voice_root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.voice_root, ignore_errors=True)
-        override = override_settings(VOICE_NOTES_ROOT=self.voice_root, VOICE_NOTES_X_ACCEL_PREFIX="")
+        # ملفات m4a الاصطناعية هنا ليست صوتاً حقيقياً: تُختبر بمسار "بلا ffmpeg"؛
+        # التحويل الحقيقي في test_voice_transcode.py
+        override = override_settings(
+            VOICE_NOTES_ROOT=self.voice_root, VOICE_NOTES_X_ACCEL_PREFIX="", FFMPEG_BINARY=""
+        )
         override.enable()
         self.addCleanup(override.disable)
 

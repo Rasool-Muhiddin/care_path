@@ -12,6 +12,9 @@ class WebPushEvent {
 
 WebPushPermission webPushPermission() => WebPushPermission.unsupported;
 
+/// هل يعمل التطبيق مُثبَّتاً من "إضافة إلى الشاشة الرئيسية" (وليس تبويب متصفح)؟
+bool isInstalledWebApp() => false;
+
 Future<WebPushPermission> requestWebPushPermission() async => WebPushPermission.unsupported;
 
 Stream<WebPushEvent> webPushEvents() => const Stream.empty();

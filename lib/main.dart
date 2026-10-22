@@ -9,6 +9,7 @@ import 'core/auth/auth_state.dart';
 import 'core/notifications/fcm_service.dart';
 import 'core/notifications/firebase_web_options.dart';
 import 'core/notifications/global_keys.dart';
+import 'core/pwa/pwa_onboarding.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/web_fonts.dart';
 
@@ -66,6 +67,9 @@ class AxonApp extends ConsumerWidget {
         fontFamily: webFontFamily,
       ),
       routerConfig: router,
+      // نسخة الويب على iPhone: شرح التثبيت وتنبيه/طلب الإشعارات. أندرويد/iOS
+      // الأصليان: يرجع التطبيق كما هو (pwa_onboarding.dart)
+      builder: (context, child) => PwaOnboardingGate(child: child ?? const SizedBox.shrink()),
       // دعم اللغة العربية والاتجاه من اليمين لليسار
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],

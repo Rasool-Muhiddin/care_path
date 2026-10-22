@@ -20,6 +20,13 @@ WebPushPermission _fromJs(String value) => switch (value) {
       _ => WebPushPermission.notAsked,
     };
 
+/// display-mode: standalone (المعيار) أو navigator.standalone (Safari على iOS)
+bool isInstalledWebApp() {
+  if (web.window.matchMedia('(display-mode: standalone)').matches) return true;
+  final standalone = web.window.navigator.getProperty<JSAny?>('standalone'.toJS);
+  return standalone.dartify() == true;
+}
+
 WebPushPermission webPushPermission() =>
     _supported ? _fromJs(web.Notification.permission) : WebPushPermission.unsupported;
 

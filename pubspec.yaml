@@ -65,4 +65,12 @@ flutter_launcher_icons:
        generate: true
      # المصدر بالدقة الكاملة (غير مضمَّن في التطبيق)؛ assets/images/logo.png
      # نسخة مصغّرة 512px
-     image_path: "assets/branding/logo_source.png"    
+     image_path: "assets/branding/logo_source.png"
+     # أندرويد 8+: أيقونة متكيّفة — خلفية سوداء كخلفية الشعار، والشعار
+     # (أسود مُزال) داخل دائرة الأمان 66dp من 108dp. monochrome لأيقونات
+     # أندرويد 13 الملوّنة بثيم النظام.
+     adaptive_icon_background: "#000000"
+     adaptive_icon_foreground: "assets/branding/adaptive_foreground.png"
+     adaptive_icon_monochrome: "assets/branding/adaptive_monochrome.png"
+     # الحشوة موجودة في الصورتين أصلاً — بلا inset إضافي (الافتراضي 16%)
+     adaptive_icon_foreground_inset: 0    

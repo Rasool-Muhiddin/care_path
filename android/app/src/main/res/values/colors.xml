@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- لون أيقونة الإشعار ودائرتها في درج الإشعارات (ذهبي الشعار) -->
+    <color name="notification_accent">#D4AF00</color>
+    <color name="ic_launcher_background">#000000</color>
+</resources>

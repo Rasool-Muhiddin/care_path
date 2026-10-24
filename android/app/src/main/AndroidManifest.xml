@@ -9,7 +9,7 @@
          لا يُنقل مع النسخة الاحتياطية — استعادة الملف على جهاز جديد تجعل
          قراءته ترمي استثناءً (توصية الحزمة نفسها) -->
     <application
-        android:label="axon"
+        android:label="Axon"
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -36,6 +36,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- أيقونة شريط الحالة لإشعارات FCM: صورة بيضاء على خلفية شفافة
+             (drawable-*/ic_stat_notification.png، من assets/branding/logo_source.png).
+             بدونها يعرض أندرويد أيقونة التطبيق كمربع أبيض. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

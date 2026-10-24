@@ -55,8 +55,8 @@ class AxonApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      // عنوان تبويب/تطبيق الويب؛ أندرويد يبقى كما كان (وصف المهمة في Recents)
-      title: kIsWeb ? 'Axon' : 'axon',
+      // عنوان تبويب الويب ووصف المهمة في Recents على أندرويد
+      title: 'Axon',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       // TODO: عدّل الثيم لاحقاً حسب هوية العلامة التجارية

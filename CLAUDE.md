@@ -5,7 +5,7 @@
 Never push, deploy, or run commands against the production server or database unless the user asks. The user pushes and deploys.
 
 ### Releasing an update
-- **iPhone (web app, https://axon.tera-software1.com/app/):** on the PC run `bash tool/build_web.sh` (needs `web_firebase.json`, otherwise the build has no push), then `scp build/axon-web.tar.gz` to the server. Next do step **B5** (new release folder, swap the `web` symlink) and the **first block of part C** in `DEPLOY_AND_TEST_CHECKLIST.md`; see **E4**. No nginx change or restart is needed. Users get the new version the next time they open the app.
+- **iPhone (web app, https://axon.tera-software1.com/app/):** on the PC run `bash tool/build_web.sh` (needs `web_firebase.json`, otherwise the build has no push), then `scp build/axon-web.tar.gz` to the server. Next do step **B5** (new release folder, swap the `web` symlink) and the **first block of part C** in `DEPLOY_AND_TEST_CHECKLIST.md`; see **E4**. No nginx change or restart is needed. An open app checks `version.json` on start, on return to the foreground and every 30 min, and shows an "Update" banner when the server has a newer build. `build_web.sh` stamps every build with a new number, so this works without bumping `pubspec.yaml`.
 - **Android (native APK):** there's no runbook in the repo, so this is the procedure:
   1. Bump `version:` in `pubspec.yaml`. The number after `+` is the versionCode and must be higher than the last published one.
   2. Run `flutter build apk --release`. It needs `android/key.properties`; the build stops without it. The output is `build/app/outputs/flutter-apk/app-release.apk`.

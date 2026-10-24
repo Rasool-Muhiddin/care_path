@@ -7,12 +7,17 @@
 # - --no-web-resources-cdn    : CanvasKit is served from our own server, not gstatic
 # - web_firebase.json         : Firebase web config for push (optional; see
 #                               web_firebase.example.json). Without it: no push.
+# - AXON_WEB_BUILD            : unique build number (unix time), compiled in and
+#                               written to version.json as "axon_build". The app
+#                               compares the two and offers "Update" when the
+#                               server has a newer build (web_update_provider.dart).
 set -euo pipefail
 # Git Bash (Windows) would otherwise rewrite "/app/" into "C:/Program Files/Git/app/"
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 
-defines=()
+BUILD_ID=$(date -u +%s)
+defines=(--dart-define=AXON_WEB_BUILD="$BUILD_ID")
 if [[ -f web_firebase.json ]]; then
   defines+=(--dart-define-from-file=web_firebase.json)
 else
@@ -31,6 +36,10 @@ flutter build web --release \
 rm -f build/web/canvaskit/skwasm* build/web/canvaskit/wimp* build/web/canvaskit/*.symbols \
       build/web/canvaskit/chromium/*.symbols
 rm -rf build/web/canvaskit/experimental_webparagraph
+
+# Same number the app was compiled with (see AXON_WEB_BUILD above)
+sed -i "s/}[[:space:]]*\$/,\"axon_build\":\"$BUILD_ID\"}/" build/web/version.json
+grep -q "\"axon_build\":\"$BUILD_ID\"" build/web/version.json || { echo "version.json not stamped" >&2; exit 1; }
 
 tar -czf build/axon-web.tar.gz -C build web
 echo "Built build/web and build/axon-web.tar.gz"

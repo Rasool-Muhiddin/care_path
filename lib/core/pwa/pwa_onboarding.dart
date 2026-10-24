@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_state.dart';
 import '../notifications/web_push.dart';
 import '../permissions/user_role.dart';
+import '../update/web_update.dart';
+import '../update/web_update_provider.dart';
 import 'pwa_status.dart';
 
 /// نصوص الإشعارات: عربي للمريض، إنجليزي للطبيب/المهندس (نفس تقسيم
@@ -22,6 +24,8 @@ class PwaNotificationStrings {
     required this.bannerHow,
     required this.bannerOldIos,
     required this.bannerUnsupported,
+    required this.updateAvailable,
+    required this.update,
   });
 
   final TextDirection direction;
@@ -37,6 +41,10 @@ class PwaNotificationStrings {
   final String bannerOldIos;
   final String bannerUnsupported;
 
+  // تنبيه "يتوفر إصدار جديد" (web_update_provider.dart)
+  final String updateAvailable;
+  final String update;
+
   static const ar = PwaNotificationStrings(
     direction: TextDirection.rtl,
     promptTitle: 'فعّل الإشعارات',
@@ -50,6 +58,8 @@ class PwaNotificationStrings {
     bannerHow: 'كيف؟',
     bannerOldIos: 'جهازك لا يدعم إشعارات التطبيق (يتطلب iOS 16.4 أو أحدث).',
     bannerUnsupported: 'هذا المتصفح لا يدعم الإشعارات.',
+    updateAvailable: 'يتوفر إصدار جديد من التطبيق.',
+    update: 'تحديث',
   );
 
   static const en = PwaNotificationStrings(
@@ -65,6 +75,8 @@ class PwaNotificationStrings {
     bannerHow: 'How?',
     bannerOldIos: 'This iPhone does not support app notifications (iOS 16.4 or later is required).',
     bannerUnsupported: 'This browser does not support notifications.',
+    updateAvailable: 'A new version is available.',
+    update: 'Update',
   );
 }
 
@@ -88,6 +100,12 @@ class _PwaOnboardingGateState extends ConsumerState<PwaOnboardingGate> {
   bool _showInstallGuide = false;
   bool _promptDismissed = false;
   bool _enabling = false;
+  bool _updating = false;
+
+  Future<void> _update() async {
+    setState(() => _updating = true);
+    await reloadToNewWebVersion();
+  }
 
   Future<void> _enable() async {
     setState(() => _enabling = true);
@@ -112,23 +130,32 @@ class _PwaOnboardingGateState extends ConsumerState<PwaOnboardingGate> {
     final showBanner = user != null && pwa.notificationsOff;
     final showPrompt = showBanner && !_promptDismissed && pwa.permission == WebPushPermission.notAsked;
     final showGuide = (pwa.needsInstall && !_installDismissed) || _showInstallGuide;
+    // بلا تسجيل دخول أيضاً: لا داعي لبقاء شاشة الدخول قديمة
+    final showUpdate = ref.watch(webUpdateProvider);
 
     return Stack(
       children: [
         Column(
           children: [
+            if (showUpdate)
+              _UpdateBanner(strings: strings, busy: _updating, onUpdate: _update),
             if (showBanner)
-              _NotificationsBanner(
-                status: pwa,
-                strings: strings,
-                busy: _enabling,
-                onEnable: _enable,
-                onHowToInstall: () => setState(() => _showInstallGuide = true),
+              // التنبيه الأول أخذ مسافة شريط الحالة (SafeArea) بالفعل
+              MediaQuery.removePadding(
+                context: context,
+                removeTop: showUpdate,
+                child: _NotificationsBanner(
+                  status: pwa,
+                  strings: strings,
+                  busy: _enabling,
+                  onEnable: _enable,
+                  onHowToInstall: () => setState(() => _showInstallGuide = true),
+                ),
               ),
             Expanded(
               child: MediaQuery.removePadding(
                 context: context,
-                removeTop: showBanner,
+                removeTop: showBanner || showUpdate,
                 child: widget.child,
               ),
             ),
@@ -211,6 +238,57 @@ class _NotificationsBanner extends StatelessWidget {
                           style: TextButton.styleFrom(foregroundColor: Colors.white),
                           child: Text(action, style: const TextStyle(fontWeight: FontWeight.w700)),
                         ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "يتوفر إصدار جديد — تحديث": غير حاجب، فوق كل الشاشات. الضغط يفعّل
+/// الـ service worker الجديد ويعيد تحميل الصفحة (reloadToNewWebVersion).
+class _UpdateBanner extends StatelessWidget {
+  const _UpdateBanner({required this.strings, required this.busy, required this.onUpdate});
+  final PwaNotificationStrings strings;
+  final bool busy;
+  final VoidCallback onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: strings.direction,
+      child: Material(
+        color: _teal,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 6, 6, 6),
+            child: Row(
+              children: [
+                const Icon(Icons.system_update_outlined, color: _navy, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    strings.updateAvailable,
+                    style: const TextStyle(color: _navy, fontSize: 13, height: 1.35, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                busy
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _navy),
+                        ),
+                      )
+                    : TextButton(
+                        onPressed: onUpdate,
+                        style: TextButton.styleFrom(foregroundColor: _navy),
+                        child: Text(strings.update, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ),
               ],
             ),
           ),

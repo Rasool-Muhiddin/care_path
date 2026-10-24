@@ -1,9 +1,11 @@
 import 'package:axon/core/attacks/attack_models.dart';
 import 'package:axon/core/attacks/attack_repository.dart';
+import 'package:axon/core/attacks/attack_stats.dart';
 import 'package:axon/core/time/baghdad_time.dart';
 import 'package:axon/features/attack_stats/attack_statistics_screen.dart';
 import 'package:axon/features/doctor/models/case_model.dart';
 import 'package:axon/features/patient/models/session_model.dart';
+import 'package:axon/core/widgets/sessions_vs_attacks_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +71,7 @@ Widget _app(Widget child) => ProviderScope(
     );
 
 void main() {
-  testWidgets('statistics screen defaults to the last 3 months and has no baseline or lists', (tester) async {
+  testWidgets('statistics screen defaults to the last 3 months and has no lists', (tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -85,12 +87,66 @@ void main() {
     expect(find.text('Sessions vs attacks'), findsOneWidget);
     expect(find.text('1 of 2 attacks'), findsOneWidget);
     expect(find.text('6.0 / 10'), findsOneWidget);
-    expect(find.textContaining('Baseline'), findsNothing);
     expect(find.text('Attack log'), findsNothing);
+    // Baseline 8 / month, shown per selected period (weekly = 8 × 12 / 52).
+    expect(find.text('Baseline (before treatment): 1.85 / week'), findsOneWidget);
+    await tester.tap(find.text('Monthly'));
+    await tester.pumpAndSettle();
+    expect(find.text('Baseline (before treatment): 8 / month'), findsOneWidget);
 
     await tester.tap(find.text('All time'));
     await tester.pumpAndSettle();
     expect(find.text('1 of 3 attacks'), findsOneWidget);
+    await tester.tap(find.text('Yearly'));
+    await tester.pumpAndSettle();
+    expect(find.text('Baseline (before treatment): 96 / year'), findsOneWidget);
+  });
+
+  test('baseline converts the monthly rate per period and is hidden when unknown', () {
+    expect(SessionsVsAttacksChart.baselineFor(4, StatsGranularity.weekly), closeTo(0.923, 0.001));
+    expect(SessionsVsAttacksChart.baselineFor(4, StatsGranularity.monthly), 4);
+    expect(SessionsVsAttacksChart.baselineFor(4, StatsGranularity.yearly), 48);
+    expect(SessionsVsAttacksChart.baselineFor(null, StatsGranularity.monthly), isNull);
+    expect(SessionsVsAttacksChart.baselineFor(0, StatsGranularity.monthly), isNull);
+  });
+
+  test('monthly/weekly axis labels put the year on a second line only when it changes', () {
+    final analysis = AttackAnalysis(
+      caseCreatedAt: DateTime.utc(2025, 11, 1),
+      sessions: const [],
+      attacks: const [],
+      confirmations: const [],
+      today: DateTime.utc(2026, 3, 15),
+    );
+    final months = analysis.periods(DateTime.utc(2025, 11, 1), DateTime.utc(2026, 3, 16), StatsGranularity.monthly);
+    expect(
+      [for (var i = 0; i < months.length; i++) SessionsVsAttacksChart.periodLabel(months, i, StatsGranularity.monthly)],
+      ['Nov\n2025', 'Dec', 'Jan\n2026', 'Feb', 'Mar'],
+    );
+    final weeks = analysis.periods(DateTime.utc(2025, 12, 20), DateTime.utc(2026, 1, 10), StatsGranularity.weekly);
+    final weekLabels = [
+      for (var i = 0; i < weeks.length; i++) SessionsVsAttacksChart.periodLabel(weeks, i, StatsGranularity.weekly),
+    ];
+    expect(weekLabels.first, endsWith('\n2025'));
+    expect(weekLabels.where((l) => l.contains('\n2026')), hasLength(1));
+  });
+
+  testWidgets('no baseline line or legend when the case has no before-treatment count', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SessionsVsAttacksChart(
+          periods: AttackAnalysis(
+            caseCreatedAt: DateTime.utc(2026, 1, 1),
+            sessions: const [],
+            attacks: const [],
+            confirmations: const [],
+            today: DateTime.utc(2026, 3, 15),
+          ).periods(DateTime.utc(2026, 1, 1), DateTime.utc(2026, 3, 16), StatsGranularity.monthly),
+          granularity: StatsGranularity.monthly,
+        ),
+      ),
+    ));
+    expect(find.textContaining('Baseline'), findsNothing);
   });
 
   testWidgets('statistics screen lays out at phone size without overflow', (tester) async {

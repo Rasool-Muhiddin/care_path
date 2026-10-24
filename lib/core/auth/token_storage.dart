@@ -38,11 +38,25 @@ class TokenStorage {
   }
 
   Future<String?> get accessToken async =>
-      usesRefreshCookie ? _memoryAccessToken : await _storage.read(key: _accessKey);
+      usesRefreshCookie ? _memoryAccessToken : await _read(_accessKey);
 
   /// دائماً null على الويب (الـ refresh في كوكي HttpOnly)
   Future<String?> get refreshToken async =>
-      usesRefreshCookie ? null : await _storage.read(key: _refreshKey);
+      usesRefreshCookie ? null : await _read(_refreshKey);
+
+  /// تخزين تالف (مثلاً مستعاد من نسخة احتياطية بلا مفتاح Keystore الأصلي)
+  /// يرمي عند القراءة — نمسحه ونعامله كجلسة غير موجودة بدل أن تعلق شاشة
+  /// البداية على استثناء.
+  Future<String?> _read(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      try {
+        await _storage.deleteAll();
+      } catch (_) {}
+      return null;
+    }
+  }
 
   Future<void> updateAccessToken(String accessToken) async {
     if (usesRefreshCookie) {

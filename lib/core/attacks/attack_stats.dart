@@ -8,8 +8,8 @@ import 'attack_models.dart';
 /// day boundary as the session calendar and the backend.
 ///
 /// Everything is computed for a selected day range (see [AttackAnalysis.summarize]
-/// and [AttackAnalysis.periods]); the before-treatment baseline the doctor
-/// entered is shown in the case summary, not here.
+/// and [AttackAnalysis.periods]). The before-treatment baseline the doctor
+/// entered (Case.monthly_episode_count) is drawn by SessionsVsAttacksChart.
 
 enum StatsGranularity { weekly, monthly, yearly }
 

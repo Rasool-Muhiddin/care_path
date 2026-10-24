@@ -5,19 +5,39 @@ import '../../core/settings/app_info_texts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
 
-/// In-app privacy policy (placeholder text from [AppInfoTexts]).
+/// In-app privacy policy from [AppInfoTexts] — Arabic (RTL) for the
+/// patient, English (LTR) for doctor/engineer, following [direction].
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key, required this.title, required this.direction});
   final String title;
   final TextDirection direction;
 
   @override
-  Widget build(BuildContext context) => _InfoPage(
-        title: title,
-        direction: direction,
-        children: const [_ArabicBody(AppInfoTexts.privacyPolicyAr)],
-      );
+  Widget build(BuildContext context) {
+    final arabic = direction == TextDirection.rtl;
+    final sections = arabic ? AppInfoTexts.privacyPolicyAr : AppInfoTexts.privacyPolicyEn;
+    return _InfoPage(
+      title: title,
+      direction: direction,
+      children: [
+        Text(
+          arabic ? AppInfoTexts.privacyLastUpdatedAr : AppInfoTexts.privacyLastUpdatedEn,
+          style: const TextStyle(color: Colors.white60, fontSize: 12.5),
+        ),
+        const SizedBox(height: 10),
+        Text(arabic ? AppInfoTexts.privacyIntroAr : AppInfoTexts.privacyIntroEn, style: _bodyStyle),
+        for (final section in sections) ...[
+          const SizedBox(height: 18),
+          Text(section.title, style: AppText.tileTitle.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(section.body, style: _bodyStyle),
+        ],
+      ],
+    );
+  }
 }
+
+const _bodyStyle = TextStyle(color: Colors.white, fontSize: 14, height: 1.7);
 
 /// App name, short description, publisher and "Developed by Tera".
 class AboutUsScreen extends StatelessWidget {
@@ -120,9 +140,5 @@ class _ArabicBody extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        textDirection: TextDirection.rtl,
-        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.7),
-      );
+  Widget build(BuildContext context) => Text(text, textDirection: TextDirection.rtl, style: _bodyStyle);
 }

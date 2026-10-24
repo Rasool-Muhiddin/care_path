@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axon/core/auth/auth_repository.dart';
 import 'package:axon/core/auth/auth_state.dart';
 import 'package:axon/core/auth/token_storage.dart';
@@ -20,10 +22,28 @@ class _FakeAuth extends AuthNotifier {
 }
 
 class _FakeRepo extends AuthRepository {
-  _FakeRepo({this.blocked, this.wrongPassword = false}) : super(ApiClient(onSessionExpired: () {}));
+  _FakeRepo({this.blocked, this.wrongPassword = false, this.logoutGate}) : super(ApiClient(onSessionExpired: () {}));
   final AccountDeletionBlocked? blocked;
   final bool wrongPassword;
   String? deletedWith;
+
+  /// Holds the server logout request open until completed (slow network).
+  final Completer<void>? logoutGate;
+  var loginStartedAfterLogout = false;
+  var _loggedOut = false;
+
+  @override
+  Future<void> logout() async {
+    await logoutGate?.future;
+    await TokenStorage.instance.clear();
+    _loggedOut = true;
+  }
+
+  @override
+  Future<UserModel> login({required String username, required String password}) async {
+    loginStartedAfterLogout = _loggedOut;
+    return UserModel(id: 2, username: username, firstName: '', lastName: '', email: '', role: UserRole.doctor);
+  }
 
   @override
   Future<void> checkAccountDeletion() async {
@@ -173,7 +193,10 @@ void main() {
 
     await tester.tap(find.text('سياسة الخصوصية'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('PLACEHOLDER'), findsOneWidget);
+    expect(find.textContaining('آخر تحديث:'), findsOneWidget);
+    expect(find.text('6. لا بيع ولا إعلانات'), findsOneWidget);
+    expect(find.textContaining('PLACEHOLDER'), findsNothing);
+    expect(find.textContaining('Tera'), findsNothing);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
@@ -195,6 +218,25 @@ void main() {
     await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
     expect(container.read(authStateProvider), isA<AuthUnauthenticated>());
+  });
+
+  testWidgets('log out switches to signed-out at once; server cleanup runs in the background', (tester) async {
+    final gate = Completer<void>();
+    final repo = _FakeRepo(logoutGate: gate);
+    final container = await _pump(tester, UserRole.doctor, repo);
+    await tester.tap(find.text('Log out'));
+    await tester.pump();
+    // The server request is still pending, but the session is already gone from the UI's view.
+    expect(container.read(authStateProvider), isA<AuthUnauthenticated>());
+
+    // A new login waits for the old cleanup, so it can't wipe the new tokens.
+    final login = container.read(authStateProvider.notifier).login(username: 'd', password: 'pw');
+    await tester.pump();
+    expect(container.read(authStateProvider), isA<AuthLoading>());
+    gate.complete();
+    await tester.runAsync(() => login);
+    expect(repo.loginStartedAfterLogout, isTrue);
+    expect(container.read(authStateProvider), isA<AuthAuthenticated>());
   });
 
   test('a message whose sender account was deleted still parses', () {

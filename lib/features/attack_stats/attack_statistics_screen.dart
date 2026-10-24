@@ -256,7 +256,11 @@ class _AttackStatisticsScreenState extends ConsumerState<AttackStatisticsScreen>
         const SizedBox(height: 10),
         GlassContainer(
           padding: const EdgeInsets.all(12),
-          child: SessionsVsAttacksChart(periods: periods, granularity: granularity),
+          child: SessionsVsAttacksChart(
+            periods: periods,
+            granularity: granularity,
+            baselinePerMonth: c.monthlyEpisodeCount,
+          ),
         ),
       ],
     );

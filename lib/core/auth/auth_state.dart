@@ -109,6 +109,9 @@ class AuthNotifier extends Notifier<AuthStatus> {
 
   Future<void> login({required String username, required String password}) async {
     state = const AuthLoading();
+    // خروج سابق ما زال ينظّف بالخلفية: ننتظره حتى لا يمسح التوكنات الجديدة
+    // (مقيَّد بمهلتي الطلبين، 5 ثوانٍ لكل منهما)
+    await _pendingLogout;
     try {
       final user = await ref.read(authRepositoryProvider).login(
             username: username,
@@ -120,15 +123,34 @@ class AuthNotifier extends Notifier<AuthStatus> {
     }
   }
 
-  Future<void> logout() async {
-    // حذف توكن FCM من الخادم قبل مسح JWT، وإلا يُرسل طلب الحذف بلا
-    // مصادقة فيُرفض، ويستمر الجهاز باستقبال إشعارات الحساب بعد الخروج.
-    await FcmService.instance.teardown();
-    await ref.read(authRepositoryProvider).logout();
+  /// تنظيف الخادم لخروج جارٍ (null إن لم يوجد)
+  Future<void>? _pendingLogout;
+
+  /// الواجهة تنتقل لشاشة الدخول فوراً (الـ router يستبدل كل المكدّس، فلا
+  /// رجوع لشاشات الحساب)، وطلبات الخادم تكمل بالخلفية. الـ Future يكتمل
+  /// بعد انتهائها — لا داعي لانتظاره من الواجهة.
+  Future<void> logout() {
+    final pending = _pendingLogout;
+    // مسار انتهاء الجلسة قد يستدعيها مجدداً أثناء التنظيف
+    if (pending != null) return pending;
+
+    // teardown تُصفّر حالة FCM متزامناً ثم ترسل حذف التوكن بالخلفية؛ يجب أن
+    // تبدأ قبل مسح JWT وإلا يُرسل الطلب بلا مصادقة فيُرفض، ويستمر الجهاز
+    // باستقبال إشعارات الحساب بعد الخروج. ولأنها تُستدعى قبل تغيير الحالة،
+    // يصبح استدعاء main.dart لها عند AuthUnauthenticated بلا أثر.
+    final fcm = FcmService.instance.teardown();
     state = const AuthUnauthenticated();
     // الرسائل الصوتية المحمّلة مراسلات طبية: لا تبقى على الجهاز بعد الخروج.
-    // في الخلفية: التنظيف لا يؤخر الخروج.
     unawaited(VoiceCache.clear());
+
+    return _pendingLogout = () async {
+      try {
+        await fcm;
+      } catch (_) {}
+      // يُبطل الـ refresh في الخادم ثم يمسح التوكنات محلياً (مهلة 5 ثوانٍ)
+      await ref.read(authRepositoryProvider).logout();
+    }()
+        .whenComplete(() => _pendingLogout = null);
   }
 
   /// الخروج بعد نجاح حذف الحساب (AuthRepository.deleteAccount). الخادم حذف

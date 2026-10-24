@@ -5,9 +5,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- الرسائل الصوتية في المحادثة؛ يُطلب الإذن عند أول تسجيل فقط -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- allowBackup=false: flutter_secure_storage يشفّر التوكنات بمفتاح Keystore
+         لا يُنقل مع النسخة الاحتياطية — استعادة الملف على جهاز جديد تجعل
+         قراءته ترمي استثناءً (توصية الحزمة نفسها) -->
     <application
         android:label="axon"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

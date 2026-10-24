@@ -265,11 +265,10 @@ class SettingsScreen extends ConsumerWidget {
                         icon: Icons.logout,
                         title: s.logout,
                         showChevron: false,
-                        onTap: () {
-                          final auth = ref.read(authStateProvider.notifier);
-                          Navigator.of(context).pop();
-                          auth.logout();
-                        },
+                        // بلا pop: الرجوع للرئيسية أولاً كان يُظهرها لحظة قبل
+                        // الخروج. الـ router ينتقل لـ /login ويزيل هذه الشاشة
+                        // مع كل المكدّس، وطلبات الخادم تكمل بالخلفية.
+                        onTap: () => ref.read(authStateProvider.notifier).logout(),
                       ),
                     ],
                   ),

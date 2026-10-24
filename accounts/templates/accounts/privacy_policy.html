@@ -20,60 +20,117 @@
     ol, ul { padding-inline-start: 22px; margin: 6px 0; }
     a { color: var(--accent); }
     .contact { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
-    .placeholder { display: inline-block; margin: 0 0 8px; padding: 2px 10px; border-radius: 8px; background: #fde68a; color: #78350f; font-size: .85rem; font-weight: 600; }
     .contact a { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; text-decoration: none; }
   </style>
 </head>
 <body>
 <main>
-  <!-- TODO(publisher): نص مؤقت. استبدل هذه الصفحة بسياسة الخصوصية النهائية المعتمدة من الجهة الناشرة
-       (وحدّث النص المقابل داخل التطبيق في lib/core/settings/app_info_texts.dart). -->
+  <!-- نفس نص السياسة داخل التطبيق (lib/core/settings/app_info_texts.dart) — عدّلهما معاً.
+       لا يُذكر اسم أي جهة ناشرة أو مطوّرة في السياسة. -->
   <!-- العربية -->
   <section lang="ar" dir="rtl">
-    <p class="placeholder">نص مؤقت — PLACEHOLDER</p>
     <h1>سياسة الخصوصية لتطبيق Axon</h1>
-    <p class="muted">سياسة الخصوصية النهائية قيد الإعداد، وسيُستبدل هذا النص بها قبل النشر.</p>
-
-    <h2>البيانات التي نجمعها</h2>
+    <p class="muted">آخر تحديث: 24 تشرين الأول 2026</p>
+    <p>توضّح هذه السياسة ما هي البيانات التي يجمعها تطبيق Axon، ولماذا، ومن يستطيع رؤيتها، وكيف تُحمى، وكيف يمكنك حذفها. باستخدامك التطبيق فإنك توافق على ما ورد فيها.</p>
+    <h2>1. البيانات التي نجمعها</h2>
     <ul>
-      <li>بيانات الحساب: الاسم، اسم المستخدم، رقم الهاتف، ونوع الحساب (مريض، طبيب، مهندس).</li>
-      <li>بيانات العلاج: الحالة المرضية، الجلسات، النوبات المسجّلة وتأكيداتها.</li>
-      <li>المحادثات بين المريض والطبيب وفريق المهندسين.</li>
-      <li>رمز الإشعارات الخاص بجهازك لإرسال التنبيهات.</li>
+      <li>بيانات الحساب: الاسم الكامل، اسم المستخدم، رقم الهاتف، نوع الحساب (مريض، طبيب، مهندس)، والتخصص للأطباء. كلمة المرور تُحفظ مشفّرة (hash) ولا يمكن لأحد قراءتها.</li>
+      <li>البيانات الصحية: الحالة المرضية (مثل الصرع أو الشقيقة ونوعها)، عدد النوبات الشهري ومدتها قبل العلاج، الأعراض، الأدوية الحالية، التقييم الأولي وخطة العلاج، إعدادات الجهاز العلاجي، الجلسات العلاجية، وسجلات النوبات (الوقت، المدة، الشدة، وهل أُخذ دواء) وتأكيداتك بعدم وجود نوبات غير مسجّلة.</li>
+      <li>المحادثات: الرسائل النصية والصوتية بينك وبين طبيبك والفريق الفني. لا يُستخدم الميكروفون إلا أثناء تسجيلك رسالة صوتية بنفسك.</li>
+      <li>بيانات الجهاز: رمز الإشعارات الخاص بجهازك ونوع المنصّة (أندرويد، iPhone، متصفح)، ورقم إصدار التطبيق لفحص التحديثات، إضافةً إلى سجلات تقنية عادية لدى الخادم (مثل عنوان IP ووقت الطلب) لأغراض الأمان وحل المشكلات.</li>
+      <li>لا نجمع موقعك الجغرافي، ولا جهات الاتصال، ولا الصور، ولا معرّفات إعلانية، ولا نستخدم أدوات تتبّع أو تحليلات إعلانية.</li>
     </ul>
-
-    <h2>كيف نستخدمها</h2>
-    <p>نستخدم هذه البيانات فقط لإدارة العلاج والتواصل حوله. لا تُباع البيانات ولا تُشارك مع جهات إعلانية.</p>
-
-    <h2>حذف الحساب</h2>
-    <p>يمكنك حذف حسابك وبياناتك في أي وقت من داخل التطبيق: الإعدادات ← حذف الحساب. التفاصيل في <a href="/account-deletion/">صفحة حذف الحساب</a>.</p>
-
-    <h2>الجهة الناشرة والتواصل</h2>
-    <p>[يُحدَّد لاحقاً]</p>
+    <h2>2. لماذا نجمعها وكيف نستخدمها</h2>
+    <ul>
+      <li>لمتابعة علاجك: عرض الجلسات والنوبات ومقارنتها بالوضع قبل العلاج ليتمكن طبيبك من تقييم التقدّم.</li>
+      <li>للتواصل: إيصال الرسائل بينك وبين طبيبك والفريق الفني، وإرسال إشعار عند وصول رسالة جديدة أو للتذكير بتسجيل النوبات.</li>
+      <li>لتشغيل الجهاز العلاجي ودعمه فنياً.</li>
+      <li>لحماية حسابك والخدمة ومنع إساءة الاستخدام.</li>
+    </ul>
+    <p>لا نستخدم بياناتك لأي غرض آخر.</p>
+    <h2>3. من يستطيع رؤية بياناتك</h2>
+    <ul>
+      <li>أنت (المريض): ترى بيانات حالتك وجلساتك ونوباتك ومحادثاتك.</li>
+      <li>طبيبك المعالج المرتبط بحالتك: يرى بيانات الحالة والجلسات والنوبات ومحادثات الحالة.</li>
+      <li>فريق الدعم الفني: يرى ما يلزم لإعداد الجهاز العلاجي ومتابعته والرد على استفساراتك، وبالقدر اللازم لذلك فقط.</li>
+      <li>مزوّدو الخدمة التقنية: نعتمد على خدمة استضافة لتشغيل الخادم، وعلى خدمة Firebase Cloud Messaging لإيصال الإشعارات. نص الإشعار عام (مثل &quot;لديك رسالة جديدة&quot;) ولا يحتوي على أي معلومة طبية.</li>
+      <li>لا يرى المرضى الآخرون بياناتك إطلاقاً. وقد نكشف البيانات فقط إذا ألزمنا القانون بذلك.</li>
+    </ul>
+    <h2>4. كيف تُخزَّن بياناتك وتُحمى</h2>
+    <ul>
+      <li>تُحفظ البيانات على خادم مؤمَّن، وكل الاتصال بين التطبيق والخادم مشفّر (HTTPS).</li>
+      <li>الوصول إلى البيانات محدود حسب نوع الحساب: كل مستخدم يرى فقط ما يخصّه.</li>
+      <li>رموز تسجيل الدخول تُحفظ في التخزين الآمن لجهازك، وفي نسخة الويب تُحفظ في كوكي محمي لا تستطيع الصفحة قراءته.</li>
+      <li>الرسائل الصوتية التي تُحمَّل على جهازك تُحذف منه عند تسجيل الخروج.</li>
+      <li>تُؤخذ نسخة احتياطية يومية من قاعدة البيانات لحمايتها من الفقدان.</li>
+    </ul>
+    <h2>5. مدة الاحتفاظ وحذف الحساب</h2>
+    <ul>
+      <li>نحتفظ ببياناتك طوال فترة وجود حسابك.</li>
+      <li>يمكنك حذف حسابك وبياناتك في أي وقت من داخل التطبيق: الإعدادات ← حذف الحساب.</li>
+      <li>عند حذف حساب المريض تُحذف نهائياً كل بياناته: الحساب، الحالة، الجلسات، النوبات، التأكيدات، والرسائل التي أرسلها، وتُلغى جلسات الدخول ورموز الإشعارات.</li>
+      <li>عند حذف حساب طبيب أو مهندس يُحذف الحساب، وتبقى سجلات الحالات الطبية ورسائل المحادثة الخاصة بالمرضى (دون اسم صاحب الحساب المحذوف) لأنها جزء من ملفاتهم العلاجية.</li>
+      <li>تبقى نسخ من البيانات المحذوفة في النسخ الاحتياطية مدة أقصاها 14 يوماً، ثم تُحذف تلقائياً.</li>
+      <li>يمكنك أيضاً طلب حذف حسابك أو الاطلاع على بياناتك أو تصحيحها عبر صفحة &quot;التواصل والدعم&quot; في التطبيق أو بسؤال طبيبك المعالج.</li>
+    </ul>
+    <h2>6. لا بيع ولا إعلانات</h2>
+    <p>لا نبيع بياناتك، ولا نؤجّرها، ولا نشاركها مع أي جهة لأغراض إعلانية أو تسويقية، ولا يعرض التطبيق إعلانات.</p>
+    <h2>7. التعديلات على هذه السياسة</h2>
+    <p>قد نحدّث هذه السياسة عند تغيّر التطبيق أو المتطلبات القانونية. يُعرض تاريخ آخر تحديث في أعلى الصفحة، وعند وجود تغيير جوهري سنُعلمك داخل التطبيق. استمرارك في استخدام التطبيق بعد التحديث يعني موافقتك على السياسة المحدَّثة.</p>
+    <p class="muted">تفاصيل حذف الحساب في <a href="/account-deletion/">صفحة حذف الحساب</a>.</p>
   </section>
 
   <!-- English -->
   <section lang="en" dir="ltr">
-    <p class="placeholder">Placeholder text</p>
     <h1>Axon privacy policy</h1>
-    <p class="muted">The final privacy policy is being prepared and will replace this text before release.</p>
-
-    <h2>Data we collect</h2>
+    <p class="muted">Last updated: 24 October 2026</p>
+    <p>This policy explains what data the Axon app collects, why, who can see it, how it is protected and how you can delete it. By using the app you agree to this policy.</p>
+    <h2>1. Data we collect</h2>
     <ul>
-      <li>Account data: name, username, phone number and account type (patient, doctor, engineer).</li>
-      <li>Treatment data: the case, treatment sessions, logged attacks and their confirmations.</li>
-      <li>Chat messages between the patient, the doctor and the engineering team.</li>
-      <li>Your device's notification token, to send notifications.</li>
+      <li>Account data: full name, username, phone number, account type (patient, doctor, engineer) and, for doctors, specialty. Passwords are stored hashed and cannot be read by anyone.</li>
+      <li>Health data: the medical case (e.g. epilepsy or migraine and its type), the monthly number and duration of attacks before treatment, symptoms, current medications, initial evaluation and treatment plan, treatment device settings, treatment sessions, and attack records (time, duration, severity, whether medication was taken) together with the patient&#x27;s confirmations that no attacks went unlogged.</li>
+      <li>Chat: text and voice messages between the patient, the doctor and the technical team. The microphone is used only while you record a voice message yourself.</li>
+      <li>Device data: your device&#x27;s notification token and platform (Android, iPhone, browser), the app version for update checks, and standard server logs (such as IP address and request time) for security and troubleshooting.</li>
+      <li>We do not collect your location, contacts, photos or advertising identifiers, and we use no advertising trackers or analytics.</li>
     </ul>
-
-    <h2>How we use it</h2>
-    <p>This data is used only for treatment management and communication about it. It is not sold or shared with advertisers.</p>
-
-    <h2>Deleting your account</h2>
-    <p>You can delete your account and data at any time in the app: Settings → Delete account. See the <a href="/account-deletion/">account deletion page</a> for details.</p>
-
-    <h2>Publisher and contact</h2>
-    <p>[To be confirmed]</p>
+    <h2>2. Why we collect it and how we use it</h2>
+    <ul>
+      <li>To manage treatment: showing sessions and attacks and comparing them with the situation before treatment so the doctor can assess progress.</li>
+      <li>To communicate: delivering messages between the patient, the doctor and the technical team, and sending a notification for a new message or a reminder to log attacks.</li>
+      <li>To set up and support the treatment device.</li>
+      <li>To protect accounts and the service and prevent misuse.</li>
+    </ul>
+    <p>Your data is not used for any other purpose.</p>
+    <h2>3. Who can see your data</h2>
+    <ul>
+      <li>The patient sees their own case, sessions, attacks and chats.</li>
+      <li>The treating doctor linked to the case sees the case data, sessions, attacks and case chats.</li>
+      <li>The technical support team sees what is needed to set up and maintain the treatment device and answer questions, and only to that extent.</li>
+      <li>Technical service providers: a hosting service runs the server, and Firebase Cloud Messaging delivers notifications. Notification text is generic (e.g. &quot;You have a new message&quot;) and contains no medical information.</li>
+      <li>Other patients never see your data. Data is disclosed only when required by law.</li>
+    </ul>
+    <h2>4. How data is stored and protected</h2>
+    <ul>
+      <li>Data is kept on a secured server, and all traffic between the app and the server is encrypted (HTTPS).</li>
+      <li>Access is limited by account type: each user sees only what concerns them.</li>
+      <li>Sign-in tokens are kept in the device&#x27;s secure storage; in the web version they are kept in a protected cookie the page cannot read.</li>
+      <li>Voice messages downloaded to the device are deleted from it on log out.</li>
+      <li>The database is backed up daily to protect it from loss.</li>
+    </ul>
+    <h2>5. Data retention and account deletion</h2>
+    <ul>
+      <li>Data is kept for as long as the account exists.</li>
+      <li>You can delete your account at any time in the app: Settings → Delete account.</li>
+      <li>Deleting a patient account permanently deletes all of that patient&#x27;s data: the account, case, sessions, attacks, confirmations and the messages they sent, and signs out all sessions and removes notification tokens.</li>
+      <li>Deleting a doctor or engineer account deletes the account; patients&#x27; medical case records and case chats remain (without the deleted user&#x27;s name) because they are part of the patients&#x27; treatment files.</li>
+      <li>Copies of deleted data remain in backups for at most 14 days and are then deleted automatically.</li>
+      <li>You can also request deletion of your account, or access to or correction of your data, through &quot;Contact &amp; support&quot; in the app.</li>
+    </ul>
+    <h2>6. No selling, no advertising</h2>
+    <p>We do not sell or rent your data or share it with anyone for advertising or marketing, and the app shows no ads.</p>
+    <h2>7. Changes to this policy</h2>
+    <p>We may update this policy when the app or legal requirements change. The date of the last update is shown at the top of this page, and we will tell you in the app about any significant change. Continuing to use the app after an update means you accept the updated policy.</p>
+    <p class="muted">See the <a href="/account-deletion/">account deletion page</a> for details.</p>
   </section>
 </main>
 </body>

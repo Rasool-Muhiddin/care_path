@@ -127,4 +127,7 @@ class PrivacyPolicyPageTests(APITestCase):
         content = response.content.decode()
         self.assertIn("سياسة الخصوصية", content)
         self.assertIn("Privacy policy", content)
-        self.assertIn("TODO(publisher)", content)
+        self.assertIn("حذف الحساب", content)
+        self.assertIn("Last updated", content)
+        # لا اسم لأي جهة ناشرة/مطوّرة في السياسة
+        self.assertNotIn("Tera", content)
